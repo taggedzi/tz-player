@@ -35,8 +35,8 @@ class PlaylistPane(Static):
         ("up", "cursor_up", "Up"),
         ("shift+up", "move_selection_up", "Move up"),
         ("shift+down", "move_selection_down", "Move down"),
-        ("s", "toggle_selection", "Select"),
-        ("x", "remove_selected", "Remove"),
+        ("v", "toggle_selection", "Select"),
+        ("delete", "remove_selected", "Remove"),
     ]
 
     class SelectionChanged(Message):
@@ -113,7 +113,7 @@ class PlaylistPane(Static):
             return
         if event.chain >= 2 and self._is_table_event(event.widget):
             app = cast("TzPlayerApp", self.app)
-            app.action_play_pause()
+            self.run_worker(app.action_play_pause(), exclusive=True)
         if self._is_table_event(event.widget):
             self.focus()
 
@@ -132,6 +132,13 @@ class PlaylistPane(Static):
 
     def focus_find(self) -> None:
         self._find_input.focus()
+
+    def get_cursor_track_id(self) -> int | None:
+        return self.cursor_track_id
+
+    def set_playing_track_id(self, track_id: int | None) -> None:
+        self.playing_track_id = track_id
+        self._update_table()
 
     async def refresh_view(self) -> None:
         if self.store is None or self.playlist_id is None:

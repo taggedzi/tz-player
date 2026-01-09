@@ -65,6 +65,23 @@ class PlaylistStore:
             self._fetch_window_sync, playlist_id, offset, limit
         )
 
+    async def fetch_track(self, playlist_id: int, track_id: int) -> PlaylistRow | None:
+        return await asyncio.to_thread(self._fetch_track_sync, playlist_id, track_id)
+
+    async def get_next_track_id(
+        self, playlist_id: int, track_id: int, *, wrap: bool
+    ) -> int | None:
+        return await asyncio.to_thread(
+            self._get_next_track_id_sync, playlist_id, track_id, wrap
+        )
+
+    async def get_prev_track_id(
+        self, playlist_id: int, track_id: int, *, wrap: bool
+    ) -> int | None:
+        return await asyncio.to_thread(
+            self._get_prev_track_id_sync, playlist_id, track_id, wrap
+        )
+
     async def move_selection(
         self,
         playlist_id: int,
@@ -227,6 +244,126 @@ class PlaylistStore:
             )
             for row in rows
         ]
+
+    def _fetch_track_sync(self, playlist_id: int, track_id: int) -> PlaylistRow | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT
+                    playlist_items.track_id,
+                    playlist_items.pos_key,
+                    tracks.path,
+                    track_meta.title,
+                    track_meta.artist,
+                    track_meta.album,
+                    track_meta.year,
+                    track_meta.duration_ms
+                FROM playlist_items
+                JOIN tracks ON tracks.id = playlist_items.track_id
+                LEFT JOIN track_meta ON track_meta.track_id = tracks.id
+                WHERE playlist_items.playlist_id = ? AND playlist_items.track_id = ?
+                LIMIT 1
+                """,
+                (playlist_id, track_id),
+            ).fetchone()
+        if row is None:
+            return None
+        return PlaylistRow(
+            track_id=int(row["track_id"]),
+            pos_key=int(row["pos_key"]),
+            path=Path(row["path"]),
+            title=row["title"],
+            artist=row["artist"],
+            album=row["album"],
+            year=row["year"],
+            duration_ms=row["duration_ms"],
+        )
+
+    def _get_next_track_id_sync(
+        self, playlist_id: int, track_id: int, wrap: bool
+    ) -> int | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT pos_key
+                FROM playlist_items
+                WHERE playlist_id = ? AND track_id = ?
+                """,
+                (playlist_id, track_id),
+            ).fetchone()
+            if row is None:
+                return None
+            pos_key = int(row["pos_key"])
+            next_row = conn.execute(
+                """
+                SELECT track_id
+                FROM playlist_items
+                WHERE playlist_id = ? AND pos_key > ?
+                ORDER BY pos_key ASC
+                LIMIT 1
+                """,
+                (playlist_id, pos_key),
+            ).fetchone()
+            if next_row is not None:
+                return int(next_row["track_id"])
+            if not wrap:
+                return None
+            wrap_row = conn.execute(
+                """
+                SELECT track_id
+                FROM playlist_items
+                WHERE playlist_id = ?
+                ORDER BY pos_key ASC
+                LIMIT 1
+                """,
+                (playlist_id,),
+            ).fetchone()
+            if wrap_row is None:
+                return None
+            return int(wrap_row["track_id"])
+
+    def _get_prev_track_id_sync(
+        self, playlist_id: int, track_id: int, wrap: bool
+    ) -> int | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT pos_key
+                FROM playlist_items
+                WHERE playlist_id = ? AND track_id = ?
+                """,
+                (playlist_id, track_id),
+            ).fetchone()
+            if row is None:
+                return None
+            pos_key = int(row["pos_key"])
+            prev_row = conn.execute(
+                """
+                SELECT track_id
+                FROM playlist_items
+                WHERE playlist_id = ? AND pos_key < ?
+                ORDER BY pos_key DESC
+                LIMIT 1
+                """,
+                (playlist_id, pos_key),
+            ).fetchone()
+            if prev_row is not None:
+                return int(prev_row["track_id"])
+            if not wrap:
+                return None
+            wrap_row = conn.execute(
+                """
+                SELECT track_id
+                FROM playlist_items
+                WHERE playlist_id = ?
+                ORDER BY pos_key DESC
+                LIMIT 1
+                """,
+                (playlist_id,),
+            ).fetchone()
+            if wrap_row is None:
+                return None
+            return int(wrap_row["track_id"])
 
     def _move_selection_sync(
         self,
