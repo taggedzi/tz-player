@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import sqlite3
 from dataclasses import dataclass
@@ -12,6 +13,7 @@ from typing import Literal
 from tz_player.db.schema import create_schema
 
 POS_STEP = 10_000
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -40,6 +42,9 @@ class PlaylistStore:
 
     async def create_playlist(self, name: str) -> int:
         return await asyncio.to_thread(self._create_playlist_sync, name)
+
+    async def ensure_playlist(self, name: str) -> int:
+        return await asyncio.to_thread(self._ensure_playlist_sync, name)
 
     async def clear_playlist(self, playlist_id: int) -> None:
         await asyncio.to_thread(self._clear_playlist_sync, playlist_id)
@@ -89,9 +94,29 @@ class PlaylistStore:
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as conn:
             create_schema(conn)
+            journal_mode = conn.execute("PRAGMA journal_mode").fetchone()[0]
+            foreign_keys = conn.execute("PRAGMA foreign_keys").fetchone()[0]
+            logger.info(
+                "SQLite pragmas: journal_mode=%s foreign_keys=%s",
+                journal_mode,
+                foreign_keys,
+            )
 
     def _create_playlist_sync(self, name: str) -> int:
         with self._connect() as conn:
+            cursor = conn.execute("INSERT INTO playlists (name) VALUES (?)", (name,))
+            if cursor.lastrowid is None:
+                raise RuntimeError("Failed to create playlist row.")
+            return int(cursor.lastrowid)
+
+    def _ensure_playlist_sync(self, name: str) -> int:
+        with self._connect() as conn:
+            cursor = conn.execute(
+                "SELECT id FROM playlists WHERE name = ? LIMIT 1", (name,)
+            )
+            row = cursor.fetchone()
+            if row is not None:
+                return int(row["id"])
             cursor = conn.execute("INSERT INTO playlists (name) VALUES (?)", (name,))
             if cursor.lastrowid is None:
                 raise RuntimeError("Failed to create playlist row.")

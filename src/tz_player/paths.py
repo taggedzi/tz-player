@@ -13,7 +13,7 @@ DEFAULT_APP_NAME = "tz-player"
 @lru_cache(maxsize=4)
 def get_app_dirs(app_name: str = DEFAULT_APP_NAME) -> AppDirs:
     """Return platform-specific app directories."""
-    return AppDirs(app_name)
+    return AppDirs(app_name, appauthor=False)
 
 
 def _ensure_dir(path: Path) -> Path:

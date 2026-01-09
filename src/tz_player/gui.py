@@ -1,4 +1,4 @@
-"""GUI entry point placeholder for tz-player."""
+"""GUI entry point for tz-player."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import logging
 from pathlib import Path
 
 from . import __version__
+from .app import TzPlayerApp
 from .logging_utils import setup_logging
 from .paths import log_dir
 
@@ -41,8 +42,8 @@ def main() -> int:
         level=level,
         log_file=Path(args.log_file) if args.log_file else None,
     )
-    logging.getLogger(__name__).info("Starting tz-player GUI placeholder")
-    print("Add a GUI toolkit (PySide6, Tkinter, etc.) and wire it here.")
+    logging.getLogger(__name__).info("Starting tz-player GUI")
+    TzPlayerApp().run()
     return 0
 
 

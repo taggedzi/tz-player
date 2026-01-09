@@ -18,8 +18,8 @@ def lint(session: nox.Session) -> None:
 def lint_fix(session: nox.Session) -> None:
     """Apply ruff fixes and formatting."""
     session.install("ruff")
-    session.run("ruff", "format", ".")
     session.run("ruff", "check", "--fix", ".")
+    session.run("ruff", "format", ".")
 
 
 @nox.session
@@ -38,9 +38,8 @@ def tests(session: nox.Session) -> None:
 
 @nox.session(python=False)
 def local(session: nox.Session) -> None:
-    session.run("ruff", "check", ".", external=True)
     session.run("ruff", "check", "--fix", ".", external=True)
-    session.run("ruff", "format", "--check", ".", external=True)
+    session.run("ruff", "format", ".", external=True)
 
     session.run("mypy", "src", external=True)
 

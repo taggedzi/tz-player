@@ -17,7 +17,8 @@ def test_paths_use_platformdirs_and_create_dirs(tmp_path, monkeypatch) -> None:
     data_dir = tmp_path / "data"
     config_dir = tmp_path / "config"
 
-    def fake_app_dirs(app_name: str) -> FakeAppDirs:
+    def fake_app_dirs(app_name: str, appauthor: bool | None = None) -> FakeAppDirs:
+        assert appauthor is False
         return FakeAppDirs(data_dir, config_dir)
 
     monkeypatch.setattr(paths, "AppDirs", fake_app_dirs)
