@@ -9,9 +9,10 @@ from typing import Literal
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
-from textual.events import MouseScrollDown, MouseScrollUp
+from textual.events import Click, MouseScrollDown, MouseScrollUp
 from textual.message import Message
 from textual.widgets import Button, DataTable, Input, Select, Static
+from textual.widget import Widget
 
 from tz_player.services.playlist_store import PlaylistRow, PlaylistStore
 from tz_player.ui.modals.confirm import ConfirmModal
@@ -104,6 +105,19 @@ class PlaylistPane(Static):
         event.stop()
         await self._scroll(-1)
 
+    async def on_click(self, event: Click) -> None:
+        if event.widget is None:
+            return
+        if event.chain >= 2 and self._is_table_event(event.widget):
+            self.app.action_play_pause()
+        if self._is_table_event(event.widget):
+            self.focus()
+
+    def _is_table_event(self, widget: Widget) -> bool:
+        if widget is self._table:
+            return True
+        return self._table in widget.ancestors
+
     async def configure(
         self, store: PlaylistStore, playlist_id: int, playing_track_id: int | None
     ) -> None:
@@ -168,6 +182,19 @@ class PlaylistPane(Static):
 
     async def action_cursor_up(self) -> None:
         await self._move_cursor(-1)
+
+    async def on_data_table_cell_selected(self, event: DataTable.CellSelected) -> None:
+        if event.data_table is not self._table:
+            return
+        row_index = event.coordinate.row
+        if row_index < 0 or row_index >= len(self._rows):
+            return
+        track_id = self._rows[row_index].track_id
+        self.cursor_track_id = track_id
+        if event.coordinate.column == 0:
+            await self.action_toggle_selection()
+        else:
+            self._update_table()
 
     async def _move_cursor(self, delta: int) -> None:
         if not self._rows:
