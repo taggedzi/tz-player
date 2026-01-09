@@ -5,19 +5,22 @@ from __future__ import annotations
 import asyncio
 import logging
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal, cast
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.events import Click, MouseScrollDown, MouseScrollUp
 from textual.message import Message
-from textual.widgets import Button, DataTable, Input, Select, Static
 from textual.widget import Widget
+from textual.widgets import Button, DataTable, Input, Select, Static
 
 from tz_player.services.playlist_store import PlaylistRow, PlaylistStore
 from tz_player.ui.modals.confirm import ConfirmModal
 from tz_player.ui.modals.error import ErrorModal
 from tz_player.ui.modals.path_input import PathInputModal
+
+if TYPE_CHECKING:
+    from tz_player.app import TzPlayerApp
 
 logger = logging.getLogger(__name__)
 
@@ -109,7 +112,8 @@ class PlaylistPane(Static):
         if event.widget is None:
             return
         if event.chain >= 2 and self._is_table_event(event.widget):
-            self.app.action_play_pause()
+            app = cast("TzPlayerApp", self.app)
+            app.action_play_pause()
         if self._is_table_event(event.widget):
             self.focus()
 
