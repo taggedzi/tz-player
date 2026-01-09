@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Literal, cast
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
+from textual.coordinate import Coordinate
 from textual.events import Click, MouseScrollDown, MouseScrollUp
 from textual.message import Message
 from textual.widget import Widget
@@ -218,7 +219,7 @@ class PlaylistPane(Static):
         if self.cursor_track_id is not None:
             for index, row in enumerate(self._rows):
                 if row.track_id == self.cursor_track_id:
-                    self._table.cursor_coordinate = (index, 0)
+                    self._table.cursor_coordinate = Coordinate(index, 0)
                     break
         self._suspend_selection = False
         self._count_label.update(f"{self.total_count} tracks")
