@@ -21,6 +21,7 @@ from tz_player.ui.modals.path_input import PathInputModal
 
 if TYPE_CHECKING:
     from tz_player.app import TzPlayerApp
+    from tz_player.services.metadata_service import MetadataService
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,7 @@ class PlaylistPane(Static):
     BINDINGS = [
         ("down", "cursor_down", "Down"),
         ("up", "cursor_up", "Up"),
+        ("enter", "play_selected", "Play"),
         ("shift+up", "move_selection_up", "Move up"),
         ("shift+down", "move_selection_down", "Move down"),
         ("v", "toggle_selection", "Select"),
@@ -56,6 +58,9 @@ class PlaylistPane(Static):
         self.window_offset = 0
         self.limit = 10
         self._rows: list[PlaylistRow] = []
+        self.metadata_service: MetadataService | None = None
+        self._metadata_pending: set[int] = set()
+        self._suspend_selection = False
 
         self._table: DataTable = DataTable(id="playlist-table")
         self._actions = Select(
@@ -64,6 +69,8 @@ class PlaylistPane(Static):
                 ("Add folder...", "add_folder"),
                 ("Remove selected", "remove_selected"),
                 ("Clear playlist", "clear_playlist"),
+                ("Refresh metadata (selected)", "refresh_metadata_selected"),
+                ("Refresh metadata (all)", "refresh_metadata_all"),
             ],
             prompt="Actions",
             id="playlist-actions",
@@ -117,26 +124,47 @@ class PlaylistPane(Static):
         if self._is_table_event(event.widget):
             self.focus()
 
+    async def on_key(self, event) -> None:
+        if event.key == "enter":
+            event.stop()
+            await self.action_play_selected()
+
     def _is_table_event(self, widget: Widget) -> bool:
         if widget is self._table:
             return True
         return self._table in widget.ancestors
 
     async def configure(
-        self, store: PlaylistStore, playlist_id: int, playing_track_id: int | None
+        self,
+        store: PlaylistStore,
+        playlist_id: int,
+        playing_track_id: int | None,
+        metadata_service: MetadataService | None = None,
     ) -> None:
         self.store = store
         self.playlist_id = playlist_id
         self.playing_track_id = playing_track_id
+        self.metadata_service = metadata_service
         await self.refresh_view()
 
     def focus_find(self) -> None:
         self._find_input.focus()
 
     def get_cursor_track_id(self) -> int | None:
+        if not self._rows:
+            return None
+        row_index = self._table.cursor_row
+        if 0 <= row_index < len(self._rows):
+            track_id = self._rows[row_index].track_id
+            if track_id != self.cursor_track_id:
+                self.cursor_track_id = track_id
+                self._update_table()
+            return track_id
         return self.cursor_track_id
 
     def set_playing_track_id(self, track_id: int | None) -> None:
+        if track_id == self.playing_track_id:
+            return
         self.playing_track_id = track_id
         self._update_table()
 
@@ -155,6 +183,7 @@ class PlaylistPane(Static):
             if self.cursor_track_id is None and self._rows:
                 self.cursor_track_id = self._rows[0].track_id
             self._update_table()
+            self._request_visible_metadata()
         except Exception as exc:  # pragma: no cover - UI safety net
             logger.exception("Failed to refresh playlist: %s", exc)
             await self._show_error("Failed to refresh playlist. See log file.")
@@ -165,17 +194,33 @@ class PlaylistPane(Static):
         self.limit = max(5, visible + 2)
 
     def _update_table(self) -> None:
+        self._suspend_selection = True
         self._table.clear()
         for row in self._rows:
             marker = self._marker_for(row.track_id)
-            title = row.title or row.path.name
+            if row.meta_valid:
+                title = row.title or row.path.name
+                artist = row.artist or ""
+                album = row.album or ""
+                duration = _format_duration(row.duration_ms)
+            else:
+                title = row.path.name
+                artist = ""
+                album = ""
+                duration = ""
             self._table.add_row(
                 marker,
                 title,
-                row.artist or "",
-                row.album or "",
-                _format_duration(row.duration_ms),
+                artist,
+                album,
+                duration,
             )
+        if self.cursor_track_id is not None:
+            for index, row in enumerate(self._rows):
+                if row.track_id == self.cursor_track_id:
+                    self._table.cursor_coordinate = (index, 0)
+                    break
+        self._suspend_selection = False
         self._count_label.update(f"{self.total_count} tracks")
 
     def _marker_for(self, track_id: int) -> str:
@@ -194,8 +239,14 @@ class PlaylistPane(Static):
     async def action_cursor_up(self) -> None:
         await self._move_cursor(-1)
 
+    async def action_play_selected(self) -> None:
+        app = cast("TzPlayerApp", self.app)
+        self.run_worker(app.action_play_selected(), exclusive=True)
+
     async def on_data_table_cell_selected(self, event: DataTable.CellSelected) -> None:
         if event.data_table is not self._table:
+            return
+        if self._suspend_selection:
             return
         row_index = event.coordinate.row
         if row_index < 0 or row_index >= len(self._rows):
@@ -287,6 +338,10 @@ class PlaylistPane(Static):
             self.run_worker(self._remove_selected(), exclusive=True)
         elif action == "clear_playlist":
             self.run_worker(self._clear_playlist(), exclusive=True)
+        elif action == "refresh_metadata_selected":
+            self.run_worker(self._refresh_metadata_selected(), exclusive=True)
+        elif action == "refresh_metadata_all":
+            self.run_worker(self._refresh_metadata_all(), exclusive=True)
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "reorder-up":
@@ -342,6 +397,32 @@ class PlaylistPane(Static):
         await self._run_store_action("clear playlist", self.store.clear_playlist)
         self.selected_track_ids.clear()
 
+    async def _refresh_metadata_selected(self) -> None:
+        if self.store is None or self.playlist_id is None:
+            return
+        if not self.selected_track_ids:
+            return
+        try:
+            logger.info("Playlist action: refresh metadata (selected)")
+            await self.store.invalidate_metadata(self.selected_track_ids)
+            await self.refresh_view()
+            self._metadata_pending.difference_update(self.selected_track_ids)
+        except Exception as exc:
+            logger.exception("Playlist action failed: %s", exc)
+            await self._show_error("Action failed. See log file.")
+
+    async def _refresh_metadata_all(self) -> None:
+        if self.store is None or self.playlist_id is None:
+            return
+        try:
+            logger.info("Playlist action: refresh metadata (all)")
+            await self.store.invalidate_metadata()
+            await self.refresh_view()
+            self._metadata_pending.clear()
+        except Exception as exc:
+            logger.exception("Playlist action failed: %s", exc)
+            await self._show_error("Action failed. See log file.")
+
     async def _run_store_action(self, label: str, func, *args) -> None:
         if self.store is None or self.playlist_id is None:
             return
@@ -365,6 +446,26 @@ class PlaylistPane(Static):
     async def _show_error(self, message: str) -> None:
         self.app.push_screen(ErrorModal(message))
 
+    def _request_visible_metadata(self) -> None:
+        if self.metadata_service is None:
+            return
+        needed = [row.track_id for row in self._rows if _needs_metadata(row)]
+        pending = [
+            track_id for track_id in needed if track_id not in self._metadata_pending
+        ]
+        if not pending:
+            return
+        self._metadata_pending.update(pending)
+        self.run_worker(self._ensure_metadata(pending), exclusive=False)
+
+    async def _ensure_metadata(self, track_ids: list[int]) -> None:
+        if self.metadata_service is None:
+            return
+        try:
+            await self.metadata_service.ensure_metadata(track_ids)
+        finally:
+            self._metadata_pending.difference_update(track_ids)
+
 
 def _parse_paths(text: str) -> list[Path]:
     parts = [part.strip().strip('"') for part in text.replace("\n", ";").split(";")]
@@ -387,3 +488,16 @@ def _format_duration(duration_ms: int | None) -> str:
     seconds = duration_ms // 1000
     minutes, seconds = divmod(seconds, 60)
     return f"{minutes}:{seconds:02d}"
+
+
+def _needs_metadata(row: PlaylistRow) -> bool:
+    if row.meta_valid is None:
+        return True
+    if row.meta_valid is False:
+        return row.meta_error is None
+    return (
+        row.title is None
+        or row.artist is None
+        or row.album is None
+        or row.duration_ms is None
+    )

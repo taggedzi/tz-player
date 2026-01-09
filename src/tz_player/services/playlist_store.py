@@ -6,6 +6,7 @@ import asyncio
 import logging
 import os
 import sqlite3
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -26,6 +27,41 @@ class PlaylistRow:
     album: str | None
     year: int | None
     duration_ms: int | None
+    meta_valid: bool | None
+    meta_error: str | None
+
+
+@dataclass(frozen=True)
+class TrackRecord:
+    track_id: int
+    path: Path
+    mtime_ns: int | None
+    size_bytes: int | None
+
+
+@dataclass(frozen=True)
+class TrackMeta:
+    title: str | None
+    artist: str | None
+    album: str | None
+    year: int | None
+    duration_ms: int | None
+    meta_valid: bool
+    meta_error: str | None
+    mtime_ns: int | None
+    size_bytes: int | None
+
+
+@dataclass(frozen=True)
+class TrackMetaSnapshot:
+    track_id: int
+    title: str | None
+    artist: str | None
+    album: str | None
+    year: int | None
+    duration_ms: int | None
+    meta_valid: bool
+    meta_error: str | None
 
 
 class PlaylistStore:
@@ -98,6 +134,20 @@ class PlaylistStore:
 
     async def renumber_playlist(self, playlist_id: int) -> None:
         await asyncio.to_thread(self._renumber_playlist_sync, playlist_id)
+
+    async def get_tracks_basic(self, track_ids: list[int]) -> list[TrackRecord]:
+        return await asyncio.to_thread(self._get_tracks_basic_sync, track_ids)
+
+    async def get_track_meta_snapshot(
+        self, track_ids: list[int]
+    ) -> dict[int, TrackMetaSnapshot]:
+        return await asyncio.to_thread(self._get_track_meta_snapshot_sync, track_ids)
+
+    async def upsert_track_meta(self, track_id: int, meta: TrackMeta) -> None:
+        await asyncio.to_thread(self._upsert_track_meta_sync, track_id, meta)
+
+    async def mark_meta_invalid(self, track_id: int, error: str | None = None) -> None:
+        await asyncio.to_thread(self._mark_meta_invalid_sync, track_id, error)
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self._db_path, timeout=30)
@@ -221,7 +271,9 @@ class PlaylistStore:
                     track_meta.artist,
                     track_meta.album,
                     track_meta.year,
-                    track_meta.duration_ms
+                    track_meta.duration_ms,
+                    track_meta.meta_valid,
+                    track_meta.meta_error
                 FROM playlist_items
                 JOIN tracks ON tracks.id = playlist_items.track_id
                 LEFT JOIN track_meta ON track_meta.track_id = tracks.id
@@ -241,6 +293,8 @@ class PlaylistStore:
                 album=row["album"],
                 year=row["year"],
                 duration_ms=row["duration_ms"],
+                meta_valid=_coerce_meta_valid(row["meta_valid"]),
+                meta_error=row["meta_error"],
             )
             for row in rows
         ]
@@ -257,7 +311,9 @@ class PlaylistStore:
                     track_meta.artist,
                     track_meta.album,
                     track_meta.year,
-                    track_meta.duration_ms
+                    track_meta.duration_ms,
+                    track_meta.meta_valid,
+                    track_meta.meta_error
                 FROM playlist_items
                 JOIN tracks ON tracks.id = playlist_items.track_id
                 LEFT JOIN track_meta ON track_meta.track_id = tracks.id
@@ -277,6 +333,8 @@ class PlaylistStore:
             album=row["album"],
             year=row["year"],
             duration_ms=row["duration_ms"],
+            meta_valid=_coerce_meta_valid(row["meta_valid"]),
+            meta_error=row["meta_error"],
         )
 
     def _get_next_track_id_sync(
@@ -430,11 +488,15 @@ class PlaylistStore:
     def _invalidate_metadata_sync(self, track_ids: set[int] | None) -> None:
         with self._connect() as conn:
             if not track_ids:
-                conn.execute("UPDATE track_meta SET meta_valid = 0")
+                conn.execute("UPDATE track_meta SET meta_valid = 0, meta_error = NULL")
                 return
             placeholders = ", ".join("?" for _ in track_ids)
             conn.execute(
-                f"UPDATE track_meta SET meta_valid = 0 WHERE track_id IN ({placeholders})",
+                f"""
+                UPDATE track_meta
+                SET meta_valid = 0, meta_error = NULL
+                WHERE track_id IN ({placeholders})
+                """,
                 list(track_ids),
             )
 
@@ -464,6 +526,133 @@ class PlaylistStore:
                 updates,
             )
 
+    def _get_tracks_basic_sync(self, track_ids: list[int]) -> list[TrackRecord]:
+        if not track_ids:
+            return []
+        placeholders = ", ".join("?" for _ in track_ids)
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT id, path, mtime_ns, size_bytes
+                FROM tracks
+                WHERE id IN ({placeholders})
+                """,
+                track_ids,
+            ).fetchall()
+        return [
+            TrackRecord(
+                track_id=int(row["id"]),
+                path=Path(row["path"]),
+                mtime_ns=row["mtime_ns"],
+                size_bytes=row["size_bytes"],
+            )
+            for row in rows
+        ]
+
+    def _get_track_meta_snapshot_sync(
+        self, track_ids: list[int]
+    ) -> dict[int, TrackMetaSnapshot]:
+        if not track_ids:
+            return {}
+        placeholders = ", ".join("?" for _ in track_ids)
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT track_id, title, artist, album, year, duration_ms, meta_valid, meta_error
+                FROM track_meta
+                WHERE track_id IN ({placeholders})
+                """,
+                track_ids,
+            ).fetchall()
+        snapshots = {}
+        for row in rows:
+            track_id = int(row["track_id"])
+            snapshots[track_id] = TrackMetaSnapshot(
+                track_id=track_id,
+                title=row["title"],
+                artist=row["artist"],
+                album=row["album"],
+                year=row["year"],
+                duration_ms=row["duration_ms"],
+                meta_valid=bool(row["meta_valid"]),
+                meta_error=row["meta_error"],
+            )
+        return snapshots
+
+    def _upsert_track_meta_sync(self, track_id: int, meta: TrackMeta) -> None:
+        now = int(time.time())
+        with self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            conn.execute(
+                """
+                INSERT INTO track_meta (
+                    track_id,
+                    title,
+                    artist,
+                    album,
+                    year,
+                    duration_ms,
+                    meta_loaded_at,
+                    meta_valid,
+                    meta_error
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(track_id) DO UPDATE SET
+                    title = excluded.title,
+                    artist = excluded.artist,
+                    album = excluded.album,
+                    year = excluded.year,
+                    duration_ms = excluded.duration_ms,
+                    meta_loaded_at = excluded.meta_loaded_at,
+                    meta_valid = excluded.meta_valid,
+                    meta_error = excluded.meta_error
+                """,
+                (
+                    track_id,
+                    meta.title,
+                    meta.artist,
+                    meta.album,
+                    meta.year,
+                    meta.duration_ms,
+                    now,
+                    int(meta.meta_valid),
+                    meta.meta_error,
+                ),
+            )
+            conn.execute(
+                """
+                UPDATE tracks
+                SET mtime_ns = ?, size_bytes = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (meta.mtime_ns, meta.size_bytes, now, track_id),
+            )
+
+    def _mark_meta_invalid_sync(self, track_id: int, error: str | None) -> None:
+        now = int(time.time())
+        with self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            conn.execute(
+                """
+                INSERT INTO track_meta (
+                    track_id,
+                    meta_loaded_at,
+                    meta_valid,
+                    meta_error
+                )
+                VALUES (?, ?, 0, ?)
+                ON CONFLICT(track_id) DO UPDATE SET
+                    meta_loaded_at = excluded.meta_loaded_at,
+                    meta_valid = excluded.meta_valid,
+                    meta_error = excluded.meta_error
+                """,
+                (track_id, now, error),
+            )
+            conn.execute(
+                "UPDATE tracks SET updated_at = ? WHERE id = ?",
+                (now, track_id),
+            )
+
 
 def _normalize_path(path: Path) -> str:
     return os.path.normcase(str(path.expanduser().resolve(strict=False)))
@@ -475,6 +664,12 @@ def _stat_path(path: Path) -> tuple[int | None, int | None]:
     except OSError:
         return None, None
     return stat.st_mtime_ns, stat.st_size
+
+
+def _coerce_meta_valid(value: int | None) -> bool | None:
+    if value is None:
+        return None
+    return bool(int(value))
 
 
 def _get_track_id(conn: sqlite3.Connection, path_norm: str) -> int | None:

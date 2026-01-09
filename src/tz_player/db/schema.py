@@ -52,6 +52,7 @@ SCHEMA_STATEMENTS = [
     "CREATE INDEX IF NOT EXISTS idx_track_meta_title ON track_meta(title)",
     "CREATE INDEX IF NOT EXISTS idx_track_meta_artist ON track_meta(artist)",
     "CREATE INDEX IF NOT EXISTS idx_track_meta_album ON track_meta(album)",
+    "CREATE INDEX IF NOT EXISTS idx_track_meta_valid ON track_meta(meta_valid)",
     "CREATE INDEX IF NOT EXISTS idx_playlist_items_playlist_pos ON playlist_items(playlist_id, pos_key)",
     "CREATE INDEX IF NOT EXISTS idx_playlist_items_track ON playlist_items(track_id)",
 ]

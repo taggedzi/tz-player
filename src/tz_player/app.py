@@ -18,6 +18,7 @@ from . import __version__
 from .events import PlayerStateChanged, TrackChanged
 from .logging_utils import setup_logging
 from .paths import db_path, log_dir, state_path
+from .services.metadata_service import MetadataService
 from .services.player_service import PlayerService, PlayerState, TrackInfo
 from .services.playlist_store import PlaylistStore
 from .state_store import AppState, load_state, save_state
@@ -121,6 +122,7 @@ class TzPlayerApp(App):
         self.player_service: PlayerService | None = None
         self.player_state = PlayerState()
         self.current_track: TrackInfo | None = None
+        self.metadata_service: MetadataService | None = None
         self._state_save_task: asyncio.Task[None] | None = None
         self._last_persisted: (
             tuple[int | None, int | None, int, float, str, bool] | None
@@ -164,10 +166,18 @@ class TzPlayerApp(App):
                 prev_track_provider=self._prev_track_provider,
                 initial_state=self.player_state,
             )
+            self.metadata_service = MetadataService(
+                self.store, on_metadata_updated=self._handle_metadata_updated
+            )
             await self.player_service.start()
             self._last_persisted = self._state_tuple(self.player_state)
             pane = self.query_one(PlaylistPane)
-            await pane.configure(self.store, playlist_id, self.state.current_track_id)
+            await pane.configure(
+                self.store,
+                playlist_id,
+                self.state.current_track_id,
+                self.metadata_service,
+            )
             pane.focus()
             self._update_status_pane()
             self._update_current_track_pane()
@@ -196,6 +206,14 @@ class TzPlayerApp(App):
             await self.player_service.play_track(self.playlist_id, cursor_id)
             return
         await self.player_service.toggle_pause()
+
+    async def action_play_selected(self) -> None:
+        if self.player_service is None or self.playlist_id is None:
+            return
+        cursor_id = self.query_one(PlaylistPane).get_cursor_track_id()
+        if cursor_id is None:
+            return
+        await self.player_service.play_track(self.playlist_id, cursor_id)
 
     async def action_quit(self) -> None:
         self.exit()
@@ -285,6 +303,17 @@ class TzPlayerApp(App):
         elif isinstance(event, TrackChanged):
             self.current_track = event.track_info
             self._update_current_track_pane()
+            track_id = self.player_state.track_id
+            if (
+                track_id is not None
+                and self.current_track is not None
+                and _track_needs_metadata(self.current_track)
+                and self.metadata_service is not None
+            ):
+                self.run_worker(
+                    self.metadata_service.ensure_metadata([track_id]),
+                    exclusive=False,
+                )
 
     async def _track_info_provider(
         self, playlist_id: int, track_id: int
@@ -292,6 +321,15 @@ class TzPlayerApp(App):
         row = await self.store.fetch_track(playlist_id, track_id)
         if row is None:
             return None
+        if not row.meta_valid:
+            return TrackInfo(
+                title=None,
+                artist=None,
+                album=None,
+                year=None,
+                path=str(row.path),
+                duration_ms=None,
+            )
         return TrackInfo(
             title=row.title,
             artist=row.artist,
@@ -333,7 +371,22 @@ class TzPlayerApp(App):
         title = self.current_track.title or Path(self.current_track.path).name
         artist = self.current_track.artist or "Unknown artist"
         album = self.current_track.album or "Unknown album"
-        pane.update(f"{title}\n{artist}\n{album}")
+        duration = _format_time(self.current_track.duration_ms or 0)
+        pane.update(f"{title}\n{artist}\n{album}\n{duration}")
+
+    async def _handle_metadata_updated(self, track_ids: list[int]) -> None:
+        pane = self.query_one(PlaylistPane)
+        await pane.refresh_view()
+        if self.player_state.track_id in track_ids:
+            await self._refresh_current_track_info()
+
+    async def _refresh_current_track_info(self) -> None:
+        if self.playlist_id is None or self.player_state.track_id is None:
+            return
+        self.current_track = await self._track_info_provider(
+            self.playlist_id, self.player_state.track_id
+        )
+        self._update_current_track_pane()
 
     def _player_state_from_appstate(self, playlist_id: int) -> PlayerState:
         repeat_mode = _repeat_from_state(self.state.repeat_mode)
@@ -397,6 +450,15 @@ def _repeat_from_state(value: str) -> Literal["OFF", "ONE", "ALL"]:
     if value in {"OFF", "ONE", "ALL"}:
         return cast(Literal["OFF", "ONE", "ALL"], value)
     return "OFF"
+
+
+def _track_needs_metadata(track: TrackInfo) -> bool:
+    return (
+        track.title is None
+        or track.artist is None
+        or track.album is None
+        or track.duration_ms is None
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
