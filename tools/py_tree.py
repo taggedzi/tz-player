@@ -17,8 +17,9 @@ import ast
 import dataclasses
 import os
 import sys
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Optional
 
 
 # ----------------------------
@@ -27,8 +28,8 @@ from typing import Dict, Iterable, List, Optional, Tuple
 def _try_import_rich():
     try:
         from rich.console import Console  # type: ignore
-        from rich.tree import Tree  # type: ignore
         from rich.text import Text  # type: ignore
+        from rich.tree import Tree  # type: ignore
 
         return Console, Tree, Text
     except Exception:
@@ -68,9 +69,9 @@ class Item:
 class ClassInfo:
     name: str
     span: Span
-    methods: List[Item] = dataclasses.field(default_factory=list)
-    attrs_class: List[Item] = dataclasses.field(default_factory=list)
-    attrs_instance: List[Item] = dataclasses.field(default_factory=list)
+    methods: list[Item] = dataclasses.field(default_factory=list)
+    attrs_class: list[Item] = dataclasses.field(default_factory=list)
+    attrs_instance: list[Item] = dataclasses.field(default_factory=list)
 
 
 # ----------------------------
@@ -90,13 +91,13 @@ def node_span(node: ast.AST) -> Span:
 
 
 def safe_read_text(path: str) -> str:
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         return f.read()
 
 
-def dedupe_items(items: Iterable[Item]) -> List[Item]:
+def dedupe_items(items: Iterable[Item]) -> list[Item]:
     # Dedupe by stable key (fixes your "unhashable Item" issue).
-    seen: Dict[Tuple[str, int, int], Item] = {}
+    seen: dict[tuple[str, int, int], Item] = {}
     for it in items:
         key = (it.name, it.span.start, it.span.end)
         # Keep first occurrence; you can change this if you prefer "latest wins".
@@ -110,10 +111,10 @@ def dedupe_items(items: Iterable[Item]) -> List[Item]:
 # ----------------------------
 class Analyzer(ast.NodeVisitor):
     def __init__(self) -> None:
-        self.classes: List[ClassInfo] = []
-        self.module_functions: List[Item] = []
-        self._class_stack: List[ClassInfo] = []
-        self._func_stack: List[ast.FunctionDef | ast.AsyncFunctionDef] = []
+        self.classes: list[ClassInfo] = []
+        self.module_functions: list[Item] = []
+        self._class_stack: list[ClassInfo] = []
+        self._func_stack: list[ast.FunctionDef | ast.AsyncFunctionDef] = []
 
     def current_class(self) -> Optional[ClassInfo]:
         return self._class_stack[-1] if self._class_stack else None
@@ -126,9 +127,18 @@ class Analyzer(ast.NodeVisitor):
         self.generic_visit(node)
 
         # Dedupe + sort
-        ci.methods = sorted(dedupe_items(ci.methods), key=lambda it: (it.name, it.span.start, it.span.end))
-        ci.attrs_class = sorted(dedupe_items(ci.attrs_class), key=lambda it: (it.name, it.span.start, it.span.end))
-        ci.attrs_instance = sorted(dedupe_items(ci.attrs_instance), key=lambda it: (it.name, it.span.start, it.span.end))
+        ci.methods = sorted(
+            dedupe_items(ci.methods),
+            key=lambda it: (it.name, it.span.start, it.span.end),
+        )
+        ci.attrs_class = sorted(
+            dedupe_items(ci.attrs_class),
+            key=lambda it: (it.name, it.span.start, it.span.end),
+        )
+        ci.attrs_instance = sorted(
+            dedupe_items(ci.attrs_instance),
+            key=lambda it: (it.name, it.span.start, it.span.end),
+        )
 
         self._class_stack.pop()
         self.classes.append(ci)
@@ -157,7 +167,7 @@ class Analyzer(ast.NodeVisitor):
         targets = [node.target]
         self._handle_assign_like(node, targets=targets)
 
-    def _handle_assign_like(self, node: ast.AST, targets: List[ast.expr]) -> None:
+    def _handle_assign_like(self, node: ast.AST, targets: list[ast.expr]) -> None:
         ci = self.current_class()
         if ci is None:
             return
@@ -173,10 +183,14 @@ class Analyzer(ast.NodeVisitor):
                 continue
 
             # instance attribute: self.NAME = ...
-            if isinstance(t, ast.Attribute) and in_method:
-                if isinstance(t.value, ast.Name) and t.value.id == "self":
-                    ci.attrs_instance.append(Item(name=t.attr, span=node_span(node)))
-                    continue
+            if (
+                isinstance(t, ast.Attribute)
+                and in_method
+                and isinstance(t.value, ast.Name)
+                and t.value.id == "self"
+            ):
+                ci.attrs_instance.append(Item(name=t.attr, span=node_span(node)))
+                continue
 
         self.generic_visit(node)
 
@@ -203,8 +217,8 @@ def _label(name: str, kind: str, span: Span, show_lines: bool) -> str:
 
 def render_rich(
     path: str,
-    classes: List[ClassInfo],
-    module_functions: List[Item],
+    classes: list[ClassInfo],
+    module_functions: list[Item],
     *,
     show_lines: bool,
     include_private: bool,
@@ -212,7 +226,12 @@ def render_rich(
     group: bool,
 ) -> int:
     console = Console()
-    root = RichTree(RichText(_label(os.path.relpath(path), "file", Span(0, 0), False), style=_style_for("file")))
+    root = RichTree(
+        RichText(
+            _label(os.path.relpath(path), "file", Span(0, 0), False),
+            style=_style_for("file"),
+        )
+    )
 
     def ok_name(n: str) -> bool:
         return include_private or not is_private(n)
@@ -222,16 +241,33 @@ def render_rich(
         if group:
             mn = root.add(RichText("module functions", style=_style_for("group")))
             for m in module_functions:
-                mn.add(RichText(_label(m.name + "()", "method", m.span, show_lines), style=_style_for("method")))
+                mn.add(
+                    RichText(
+                        _label(m.name + "()", "method", m.span, show_lines),
+                        style=_style_for("method"),
+                    )
+                )
         else:
             for m in module_functions:
-                root.add(RichText(_label("function " + m.name + "()", "method", m.span, show_lines), style=_style_for("method")))
+                root.add(
+                    RichText(
+                        _label(
+                            "function " + m.name + "()", "method", m.span, show_lines
+                        ),
+                        style=_style_for("method"),
+                    )
+                )
 
     for ci in sorted(classes, key=lambda c: (c.name, c.span.start, c.span.end)):
         if not include_private and is_private(ci.name):
             continue
 
-        class_node = root.add(RichText(_label(f"class {ci.name}", "class", ci.span, show_lines), style=_style_for("class")))
+        class_node = root.add(
+            RichText(
+                _label(f"class {ci.name}", "class", ci.span, show_lines),
+                style=_style_for("class"),
+            )
+        )
 
         if only == "classes":
             continue
@@ -244,24 +280,65 @@ def render_rich(
             if group:
                 mn = class_node.add(RichText("methods", style=_style_for("group")))
                 for m in methods:
-                    mn.add(RichText(_label(m.name + "()", "method", m.span, show_lines), style=_style_for("method")))
+                    mn.add(
+                        RichText(
+                            _label(m.name + "()", "method", m.span, show_lines),
+                            style=_style_for("method"),
+                        )
+                    )
             else:
                 for m in methods:
-                    class_node.add(RichText(_label("method " + m.name + "()", "method", m.span, show_lines), style=_style_for("method")))
+                    class_node.add(
+                        RichText(
+                            _label(
+                                "method " + m.name + "()", "method", m.span, show_lines
+                            ),
+                            style=_style_for("method"),
+                        )
+                    )
 
         if only in ("all", "attrs"):
             if group:
                 cn = class_node.add(RichText("class attrs", style=_style_for("group")))
                 for a in cattrs:
-                    cn.add(RichText(_label(a.name, "attr_class", a.span, show_lines), style=_style_for("attr_class")))
-                inn = class_node.add(RichText("instance attrs", style=_style_for("group")))
+                    cn.add(
+                        RichText(
+                            _label(a.name, "attr_class", a.span, show_lines),
+                            style=_style_for("attr_class"),
+                        )
+                    )
+                inn = class_node.add(
+                    RichText("instance attrs", style=_style_for("group"))
+                )
                 for a in iattrs:
-                    inn.add(RichText(_label("self." + a.name, "attr_inst", a.span, show_lines), style=_style_for("attr_inst")))
+                    inn.add(
+                        RichText(
+                            _label("self." + a.name, "attr_inst", a.span, show_lines),
+                            style=_style_for("attr_inst"),
+                        )
+                    )
             else:
                 for a in cattrs:
-                    class_node.add(RichText(_label("class_attr " + a.name, "attr_class", a.span, show_lines), style=_style_for("attr_class")))
+                    class_node.add(
+                        RichText(
+                            _label(
+                                "class_attr " + a.name, "attr_class", a.span, show_lines
+                            ),
+                            style=_style_for("attr_class"),
+                        )
+                    )
                 for a in iattrs:
-                    class_node.add(RichText(_label("inst_attr self." + a.name, "attr_inst", a.span, show_lines), style=_style_for("attr_inst")))
+                    class_node.add(
+                        RichText(
+                            _label(
+                                "inst_attr self." + a.name,
+                                "attr_inst",
+                                a.span,
+                                show_lines,
+                            ),
+                            style=_style_for("attr_inst"),
+                        )
+                    )
 
     console.print(root)
     return 0
@@ -269,8 +346,8 @@ def render_rich(
 
 def render_plain(
     path: str,
-    classes: List[ClassInfo],
-    module_functions: List[Item],
+    classes: list[ClassInfo],
+    module_functions: list[Item],
     *,
     show_lines: bool,
     include_private: bool,
@@ -290,8 +367,10 @@ def render_plain(
         if group:
             line("├── module functions")
             for i, m in enumerate(module_functions):
-                is_last = (i == len(module_functions) - 1)
-                line(f"│   {'└──' if is_last else '├──'} {m.name}(){m.span.fmt(show_lines)}")
+                is_last = i == len(module_functions) - 1
+                line(
+                    f"│   {'└──' if is_last else '├──'} {m.name}(){m.span.fmt(show_lines)}"
+                )
         else:
             for m in module_functions:
                 line(f"├── function {m.name}(){m.span.fmt(show_lines)}")
@@ -310,20 +389,23 @@ def render_plain(
         iattrs = [a for a in ci.attrs_instance if ok_name(a.name)]
 
         # Helper to print children with nice branch chars
-        def print_group(title: str, items: List[str], last_group: bool) -> None:
+        def print_group(title: str, items: list[str], last_group: bool) -> None:
             prefix = "    "
             line(f"{prefix}{'└──' if last_group else '├──'} {title}")
             for i, it in enumerate(items):
-                is_last = (i == len(items) - 1)
+                is_last = i == len(items) - 1
                 stem = "        " if last_group else "    │   "
                 line(f"{stem}{'└──' if is_last else '├──'} {it}")
 
-        child_blocks: List[Tuple[str, List[str]]] = []
+        child_blocks: list[tuple[str, list[str]]] = []
 
         if only in ("all", "methods"):
             if group:
                 child_blocks.append(
-                    ("methods", [f"{m.name}(){m.span.fmt(show_lines)}" for m in methods])
+                    (
+                        "methods",
+                        [f"{m.name}(){m.span.fmt(show_lines)}" for m in methods],
+                    )
                 )
             else:
                 for m in methods:
@@ -332,10 +414,16 @@ def render_plain(
         if only in ("all", "attrs"):
             if group:
                 child_blocks.append(
-                    ("class attrs", [f"{a.name}{a.span.fmt(show_lines)}" for a in cattrs])
+                    (
+                        "class attrs",
+                        [f"{a.name}{a.span.fmt(show_lines)}" for a in cattrs],
+                    )
                 )
                 child_blocks.append(
-                    ("instance attrs", [f"self.{a.name}{a.span.fmt(show_lines)}" for a in iattrs])
+                    (
+                        "instance attrs",
+                        [f"self.{a.name}{a.span.fmt(show_lines)}" for a in iattrs],
+                    )
                 )
             else:
                 for a in cattrs:
@@ -356,15 +444,31 @@ def render_plain(
 # CLI
 # ----------------------------
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(description="Print a tree of classes/methods/attributes in a Python file.")
+    p = argparse.ArgumentParser(
+        description="Print a tree of classes/methods/attributes in a Python file."
+    )
     p.add_argument("path", help="Path to a .py file")
 
-    p.add_argument("--lines", dest="lines", action="store_true", help="Show line spans [start-end]")
-    p.add_argument("--no-lines", dest="lines", action="store_false", help="Do not show line spans")
+    p.add_argument(
+        "--lines", dest="lines", action="store_true", help="Show line spans [start-end]"
+    )
+    p.add_argument(
+        "--no-lines", dest="lines", action="store_false", help="Do not show line spans"
+    )
     p.set_defaults(lines=False)
 
-    p.add_argument("--private", dest="private", action="store_true", help="Include private members (default)")
-    p.add_argument("--no-private", dest="private", action="store_false", help="Exclude private members (_x, __dunder__)")
+    p.add_argument(
+        "--private",
+        dest="private",
+        action="store_true",
+        help="Include private members (default)",
+    )
+    p.add_argument(
+        "--no-private",
+        dest="private",
+        action="store_false",
+        help="Exclude private members (_x, __dunder__)",
+    )
     p.set_defaults(private=True)
 
     p.add_argument(
@@ -374,8 +478,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="Limit output to certain element types",
     )
 
-    p.add_argument("--group", dest="group", action="store_true", help="Group into Methods / Class attrs / Instance attrs (default)")
-    p.add_argument("--no-group", dest="group", action="store_false", help="Do not group; print flat children")
+    p.add_argument(
+        "--group",
+        dest="group",
+        action="store_true",
+        help="Group into Methods / Class attrs / Instance attrs (default)",
+    )
+    p.add_argument(
+        "--no-group",
+        dest="group",
+        action="store_false",
+        help="Do not group; print flat children",
+    )
     p.set_defaults(group=True)
 
     p.add_argument(
@@ -389,7 +503,7 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
-def main(argv: List[str]) -> int:
+def main(argv: list[str]) -> int:
     args = build_parser().parse_args(argv)
     path = args.path
 
@@ -397,7 +511,10 @@ def main(argv: List[str]) -> int:
         print(f"error: not a file: {path}", file=sys.stderr)
         return 2
     if not path.lower().endswith(".py"):
-        print("warning: file does not end with .py; attempting parse anyway", file=sys.stderr)
+        print(
+            "warning: file does not end with .py; attempting parse anyway",
+            file=sys.stderr,
+        )
 
     try:
         source = safe_read_text(path)
