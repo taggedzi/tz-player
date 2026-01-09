@@ -9,7 +9,7 @@ def test_state_roundtrip(tmp_path) -> None:
     path = tmp_path / "state.json"
     state = AppState(
         playlist_id=1,
-        current_track_id=2,
+        current_item_id=2,
         volume=0.5,
         speed=1.1,
         repeat_mode="one",
@@ -22,6 +22,13 @@ def test_state_roundtrip(tmp_path) -> None:
     save_state(path, state)
     loaded = load_state(path)
     assert loaded == state
+
+
+def test_state_backwards_track_id(tmp_path) -> None:
+    path = tmp_path / "state.json"
+    path.write_text('{"current_track_id": 5}', encoding="utf-8")
+    state = load_state(path)
+    assert state.current_item_id == 5
 
 
 def test_state_corrupt_json_defaults(tmp_path, caplog) -> None:

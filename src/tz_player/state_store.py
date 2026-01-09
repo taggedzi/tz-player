@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 @dataclass(frozen=True)
 class AppState:
     playlist_id: int | None = None
-    current_track_id: int | None = None
+    current_item_id: int | None = None
     volume: float = 1.0
     speed: float = 1.0
     repeat_mode: str = "off"
@@ -45,7 +45,9 @@ def _coerce_state(data: dict[str, Any]) -> AppState:
 
     return AppState(
         playlist_id=_int_or_none(data.get("playlist_id")),
-        current_track_id=_int_or_none(data.get("current_track_id")),
+        current_item_id=_int_or_none(data.get("current_item_id"))
+        if "current_item_id" in data
+        else _int_or_none(data.get("current_track_id")),
         volume=_float_or_default(data.get("volume"), 1.0),
         speed=_float_or_default(data.get("speed"), 1.0),
         repeat_mode=_str_or_default(data.get("repeat_mode"), "off"),

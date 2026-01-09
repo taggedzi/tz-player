@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class PlaylistRow:
+    item_id: int
     track_id: int
     pos_key: int
     path: Path
@@ -88,8 +89,8 @@ class PlaylistStore:
     async def add_tracks(self, playlist_id: int, paths: list[Path]) -> int:
         return await asyncio.to_thread(self._add_tracks_sync, playlist_id, paths)
 
-    async def remove_tracks(self, playlist_id: int, track_ids: set[int]) -> int:
-        return await asyncio.to_thread(self._remove_tracks_sync, playlist_id, track_ids)
+    async def remove_items(self, playlist_id: int, item_ids: set[int]) -> int:
+        return await asyncio.to_thread(self._remove_items_sync, playlist_id, item_ids)
 
     async def count(self, playlist_id: int) -> int:
         return await asyncio.to_thread(self._count_sync, playlist_id)
@@ -101,21 +102,30 @@ class PlaylistStore:
             self._fetch_window_sync, playlist_id, offset, limit
         )
 
-    async def fetch_track(self, playlist_id: int, track_id: int) -> PlaylistRow | None:
-        return await asyncio.to_thread(self._fetch_track_sync, playlist_id, track_id)
+    async def get_item_row(
+        self, playlist_id: int, item_id: int
+    ) -> PlaylistRow | None:
+        return await asyncio.to_thread(self._get_item_row_sync, playlist_id, item_id)
 
-    async def get_next_track_id(
-        self, playlist_id: int, track_id: int, *, wrap: bool
-    ) -> int | None:
+    async def fetch_rows_by_track_ids(
+        self, playlist_id: int, track_ids: list[int]
+    ) -> list[PlaylistRow]:
         return await asyncio.to_thread(
-            self._get_next_track_id_sync, playlist_id, track_id, wrap
+            self._fetch_rows_by_track_ids_sync, playlist_id, track_ids
         )
 
-    async def get_prev_track_id(
-        self, playlist_id: int, track_id: int, *, wrap: bool
+    async def get_next_item_id(
+        self, playlist_id: int, item_id: int, *, wrap: bool
     ) -> int | None:
         return await asyncio.to_thread(
-            self._get_prev_track_id_sync, playlist_id, track_id, wrap
+            self._get_next_item_id_sync, playlist_id, item_id, wrap
+        )
+
+    async def get_prev_item_id(
+        self, playlist_id: int, item_id: int, *, wrap: bool
+    ) -> int | None:
+        return await asyncio.to_thread(
+            self._get_prev_item_id_sync, playlist_id, item_id, wrap
         )
 
     async def move_selection(
@@ -134,6 +144,13 @@ class PlaylistStore:
 
     async def renumber_playlist(self, playlist_id: int) -> None:
         await asyncio.to_thread(self._renumber_playlist_sync, playlist_id)
+
+    async def get_track_id_for_item(
+        self, playlist_id: int, item_id: int
+    ) -> int | None:
+        return await asyncio.to_thread(
+            self._get_track_id_for_item_sync, playlist_id, item_id
+        )
 
     async def get_tracks_basic(self, track_ids: list[int]) -> list[TrackRecord]:
         return await asyncio.to_thread(self._get_tracks_basic_sync, track_ids)
@@ -234,16 +251,16 @@ class PlaylistStore:
                 added += 1
         return added
 
-    def _remove_tracks_sync(self, playlist_id: int, track_ids: set[int]) -> int:
-        if not track_ids:
+    def _remove_items_sync(self, playlist_id: int, item_ids: set[int]) -> int:
+        if not item_ids:
             return 0
-        placeholders = ", ".join("?" for _ in track_ids)
-        params: list[int] = [playlist_id, *track_ids]
+        placeholders = ", ".join("?" for _ in item_ids)
+        params: list[int] = [playlist_id, *item_ids]
         with self._connect() as conn:
             cursor = conn.execute(
                 f"""
                 DELETE FROM playlist_items
-                WHERE playlist_id = ? AND track_id IN ({placeholders})
+                WHERE playlist_id = ? AND id IN ({placeholders})
                 """,
                 params,
             )
@@ -264,6 +281,7 @@ class PlaylistStore:
             rows = conn.execute(
                 """
                 SELECT
+                    playlist_items.id AS item_id,
                     playlist_items.track_id,
                     playlist_items.pos_key,
                     tracks.path,
@@ -285,6 +303,7 @@ class PlaylistStore:
             ).fetchall()
         return [
             PlaylistRow(
+                item_id=int(row["item_id"]),
                 track_id=int(row["track_id"]),
                 pos_key=int(row["pos_key"]),
                 path=Path(row["path"]),
@@ -299,11 +318,12 @@ class PlaylistStore:
             for row in rows
         ]
 
-    def _fetch_track_sync(self, playlist_id: int, track_id: int) -> PlaylistRow | None:
+    def _get_item_row_sync(self, playlist_id: int, item_id: int) -> PlaylistRow | None:
         with self._connect() as conn:
             row = conn.execute(
                 """
                 SELECT
+                    playlist_items.id AS item_id,
                     playlist_items.track_id,
                     playlist_items.pos_key,
                     tracks.path,
@@ -317,14 +337,15 @@ class PlaylistStore:
                 FROM playlist_items
                 JOIN tracks ON tracks.id = playlist_items.track_id
                 LEFT JOIN track_meta ON track_meta.track_id = tracks.id
-                WHERE playlist_items.playlist_id = ? AND playlist_items.track_id = ?
+                WHERE playlist_items.playlist_id = ? AND playlist_items.id = ?
                 LIMIT 1
                 """,
-                (playlist_id, track_id),
+                (playlist_id, item_id),
             ).fetchone()
         if row is None:
             return None
         return PlaylistRow(
+            item_id=int(row["item_id"]),
             track_id=int(row["track_id"]),
             pos_key=int(row["pos_key"]),
             path=Path(row["path"]),
@@ -337,24 +358,72 @@ class PlaylistStore:
             meta_error=row["meta_error"],
         )
 
-    def _get_next_track_id_sync(
-        self, playlist_id: int, track_id: int, wrap: bool
+    def _fetch_rows_by_track_ids_sync(
+        self, playlist_id: int, track_ids: list[int]
+    ) -> list[PlaylistRow]:
+        if not track_ids:
+            return []
+        placeholders = ", ".join("?" for _ in track_ids)
+        params: list[int] = [playlist_id, *track_ids]
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT
+                    playlist_items.id AS item_id,
+                    playlist_items.track_id,
+                    playlist_items.pos_key,
+                    tracks.path,
+                    track_meta.title,
+                    track_meta.artist,
+                    track_meta.album,
+                    track_meta.year,
+                    track_meta.duration_ms,
+                    track_meta.meta_valid,
+                    track_meta.meta_error
+                FROM playlist_items
+                JOIN tracks ON tracks.id = playlist_items.track_id
+                LEFT JOIN track_meta ON track_meta.track_id = tracks.id
+                WHERE playlist_items.playlist_id = ?
+                  AND playlist_items.track_id IN ({placeholders})
+                ORDER BY playlist_items.pos_key
+                """,
+                params,
+            ).fetchall()
+        return [
+            PlaylistRow(
+                item_id=int(row["item_id"]),
+                track_id=int(row["track_id"]),
+                pos_key=int(row["pos_key"]),
+                path=Path(row["path"]),
+                title=row["title"],
+                artist=row["artist"],
+                album=row["album"],
+                year=row["year"],
+                duration_ms=row["duration_ms"],
+                meta_valid=_coerce_meta_valid(row["meta_valid"]),
+                meta_error=row["meta_error"],
+            )
+            for row in rows
+        ]
+
+    def _get_next_item_id_sync(
+        self, playlist_id: int, item_id: int, wrap: bool
     ) -> int | None:
         with self._connect() as conn:
             row = conn.execute(
                 """
                 SELECT pos_key
                 FROM playlist_items
-                WHERE playlist_id = ? AND track_id = ?
+                WHERE playlist_id = ? AND id = ?
                 """,
-                (playlist_id, track_id),
+                (playlist_id, item_id),
             ).fetchone()
             if row is None:
                 return None
             pos_key = int(row["pos_key"])
             next_row = conn.execute(
                 """
-                SELECT track_id
+                SELECT id
                 FROM playlist_items
                 WHERE playlist_id = ? AND pos_key > ?
                 ORDER BY pos_key ASC
@@ -363,12 +432,12 @@ class PlaylistStore:
                 (playlist_id, pos_key),
             ).fetchone()
             if next_row is not None:
-                return int(next_row["track_id"])
+                return int(next_row["id"])
             if not wrap:
                 return None
             wrap_row = conn.execute(
                 """
-                SELECT track_id
+                SELECT id
                 FROM playlist_items
                 WHERE playlist_id = ?
                 ORDER BY pos_key ASC
@@ -378,26 +447,26 @@ class PlaylistStore:
             ).fetchone()
             if wrap_row is None:
                 return None
-            return int(wrap_row["track_id"])
+            return int(wrap_row["id"])
 
-    def _get_prev_track_id_sync(
-        self, playlist_id: int, track_id: int, wrap: bool
+    def _get_prev_item_id_sync(
+        self, playlist_id: int, item_id: int, wrap: bool
     ) -> int | None:
         with self._connect() as conn:
             row = conn.execute(
                 """
                 SELECT pos_key
                 FROM playlist_items
-                WHERE playlist_id = ? AND track_id = ?
+                WHERE playlist_id = ? AND id = ?
                 """,
-                (playlist_id, track_id),
+                (playlist_id, item_id),
             ).fetchone()
             if row is None:
                 return None
             pos_key = int(row["pos_key"])
             prev_row = conn.execute(
                 """
-                SELECT track_id
+                SELECT id
                 FROM playlist_items
                 WHERE playlist_id = ? AND pos_key < ?
                 ORDER BY pos_key DESC
@@ -406,12 +475,12 @@ class PlaylistStore:
                 (playlist_id, pos_key),
             ).fetchone()
             if prev_row is not None:
-                return int(prev_row["track_id"])
+                return int(prev_row["id"])
             if not wrap:
                 return None
             wrap_row = conn.execute(
                 """
-                SELECT track_id
+                SELECT id
                 FROM playlist_items
                 WHERE playlist_id = ?
                 ORDER BY pos_key DESC
@@ -421,7 +490,7 @@ class PlaylistStore:
             ).fetchone()
             if wrap_row is None:
                 return None
-            return int(wrap_row["track_id"])
+            return int(wrap_row["id"])
 
     def _move_selection_sync(
         self,
@@ -440,7 +509,7 @@ class PlaylistStore:
             conn.execute("BEGIN IMMEDIATE")
             rows = conn.execute(
                 """
-                SELECT track_id, pos_key
+                SELECT id, pos_key
                 FROM playlist_items
                 WHERE playlist_id = ?
                 ORDER BY pos_key
@@ -449,41 +518,57 @@ class PlaylistStore:
             ).fetchall()
             if not rows:
                 return
-            track_ids = [int(row["track_id"]) for row in rows]
+            item_ids = [int(row["id"]) for row in rows]
             pos_keys = [int(row["pos_key"]) for row in rows]
 
             if direction == "up":
-                for index in range(1, len(track_ids)):
+                for index in range(1, len(item_ids)):
                     if (
-                        track_ids[index] in selection_ids
-                        and track_ids[index - 1] not in selection_ids
+                        item_ids[index] in selection_ids
+                        and item_ids[index - 1] not in selection_ids
                     ):
-                        track_ids[index - 1], track_ids[index] = (
-                            track_ids[index],
-                            track_ids[index - 1],
+                        item_ids[index - 1], item_ids[index] = (
+                            item_ids[index],
+                            item_ids[index - 1],
                         )
             else:
-                for index in range(len(track_ids) - 2, -1, -1):
+                for index in range(len(item_ids) - 2, -1, -1):
                     if (
-                        track_ids[index] in selection_ids
-                        and track_ids[index + 1] not in selection_ids
+                        item_ids[index] in selection_ids
+                        and item_ids[index + 1] not in selection_ids
                     ):
-                        track_ids[index + 1], track_ids[index] = (
-                            track_ids[index],
-                            track_ids[index + 1],
+                        item_ids[index + 1], item_ids[index] = (
+                            item_ids[index],
+                            item_ids[index + 1],
                         )
 
             updates = [
-                (pos_keys[i], playlist_id, track_ids[i]) for i in range(len(track_ids))
+                (pos_keys[i], playlist_id, item_ids[i]) for i in range(len(item_ids))
             ]
             conn.executemany(
                 """
                 UPDATE playlist_items
                 SET pos_key = ?
-                WHERE playlist_id = ? AND track_id = ?
+                WHERE playlist_id = ? AND id = ?
                 """,
                 updates,
             )
+
+    def _get_track_id_for_item_sync(
+        self, playlist_id: int, item_id: int
+    ) -> int | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT track_id
+                FROM playlist_items
+                WHERE playlist_id = ? AND id = ?
+                """,
+                (playlist_id, item_id),
+            ).fetchone()
+        if row is None:
+            return None
+        return int(row["track_id"])
 
     def _invalidate_metadata_sync(self, track_ids: set[int] | None) -> None:
         with self._connect() as conn:
@@ -505,7 +590,7 @@ class PlaylistStore:
             conn.execute("BEGIN IMMEDIATE")
             rows = conn.execute(
                 """
-                SELECT track_id
+                SELECT id
                 FROM playlist_items
                 WHERE playlist_id = ?
                 ORDER BY pos_key
@@ -515,13 +600,13 @@ class PlaylistStore:
             updates = []
             next_pos = POS_STEP
             for row in rows:
-                updates.append((next_pos, playlist_id, int(row["track_id"])))
+                updates.append((next_pos, playlist_id, int(row["id"])))
                 next_pos += POS_STEP
             conn.executemany(
                 """
                 UPDATE playlist_items
                 SET pos_key = ?
-                WHERE playlist_id = ? AND track_id = ?
+                WHERE playlist_id = ? AND id = ?
                 """,
                 updates,
             )

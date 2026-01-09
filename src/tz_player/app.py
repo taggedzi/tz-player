@@ -26,6 +26,7 @@ from .ui.modals.error import ErrorModal
 from .ui.playlist_pane import PlaylistPane
 
 logger = logging.getLogger(__name__)
+METADATA_REFRESH_DEBOUNCE = 0.2
 
 
 class TzPlayerApp(App):
@@ -62,7 +63,7 @@ class TzPlayerApp(App):
         width: 1fr;
     }
 
-    #playlist-table {
+    #playlist-viewport {
         height: 1fr;
     }
 
@@ -123,6 +124,8 @@ class TzPlayerApp(App):
         self.player_state = PlayerState()
         self.current_track: TrackInfo | None = None
         self.metadata_service: MetadataService | None = None
+        self._metadata_refresh_task: asyncio.Task[None] | None = None
+        self._metadata_pending_ids: set[int] = set()
         self._state_save_task: asyncio.Task[None] | None = None
         self._last_persisted: (
             tuple[int | None, int | None, int, float, str, bool] | None
@@ -175,7 +178,7 @@ class TzPlayerApp(App):
             await pane.configure(
                 self.store,
                 playlist_id,
-                self.state.current_track_id,
+                self.state.current_item_id,
                 self.metadata_service,
             )
             pane.focus()
@@ -199,21 +202,21 @@ class TzPlayerApp(App):
     async def action_play_pause(self) -> None:
         if self.player_service is None or self.playlist_id is None:
             return
-        if self.player_state.track_id is None:
-            cursor_id = self.query_one(PlaylistPane).get_cursor_track_id()
+        if self.player_state.item_id is None:
+            cursor_id = self.query_one(PlaylistPane).get_cursor_item_id()
             if cursor_id is None:
                 return
-            await self.player_service.play_track(self.playlist_id, cursor_id)
+            await self.player_service.play_item(self.playlist_id, cursor_id)
             return
         await self.player_service.toggle_pause()
 
     async def action_play_selected(self) -> None:
         if self.player_service is None or self.playlist_id is None:
             return
-        cursor_id = self.query_one(PlaylistPane).get_cursor_track_id()
+        cursor_id = self.query_one(PlaylistPane).get_cursor_item_id()
         if cursor_id is None:
             return
-        await self.player_service.play_track(self.playlist_id, cursor_id)
+        await self.player_service.play_item(self.playlist_id, cursor_id)
 
     async def action_quit(self) -> None:
         self.exit()
@@ -292,33 +295,37 @@ class TzPlayerApp(App):
         if isinstance(event, PlayerStateChanged):
             self.player_state = event.state
             playing_id = (
-                event.state.track_id
+                event.state.item_id
                 if event.state.status in {"playing", "paused"}
                 else None
             )
-            self.query_one(PlaylistPane).set_playing_track_id(playing_id)
+            self.query_one(PlaylistPane).set_playing_item_id(playing_id)
             self._update_status_pane()
             if self._state_tuple(self.player_state) != self._last_persisted:
                 await self._schedule_state_save()
         elif isinstance(event, TrackChanged):
             self.current_track = event.track_info
             self._update_current_track_pane()
-            track_id = self.player_state.track_id
+            item_id = self.player_state.item_id
             if (
-                track_id is not None
+                item_id is not None
                 and self.current_track is not None
                 and _track_needs_metadata(self.current_track)
                 and self.metadata_service is not None
             ):
-                self.run_worker(
-                    self.metadata_service.ensure_metadata([track_id]),
-                    exclusive=False,
+                track_id = await self.store.get_track_id_for_item(
+                    self.playlist_id or 0, item_id
                 )
+                if track_id is not None:
+                    self.run_worker(
+                        self.metadata_service.ensure_metadata([track_id]),
+                        exclusive=False,
+                    )
 
     async def _track_info_provider(
-        self, playlist_id: int, track_id: int
+        self, playlist_id: int, item_id: int
     ) -> TrackInfo | None:
-        row = await self.store.fetch_track(playlist_id, track_id)
+        row = await self.store.get_item_row(playlist_id, item_id)
         if row is None:
             return None
         if not row.meta_valid:
@@ -340,14 +347,14 @@ class TzPlayerApp(App):
         )
 
     async def _next_track_provider(
-        self, playlist_id: int, track_id: int, wrap: bool
+        self, playlist_id: int, item_id: int, wrap: bool
     ) -> int | None:
-        return await self.store.get_next_track_id(playlist_id, track_id, wrap=wrap)
+        return await self.store.get_next_item_id(playlist_id, item_id, wrap=wrap)
 
     async def _prev_track_provider(
-        self, playlist_id: int, track_id: int, wrap: bool
+        self, playlist_id: int, item_id: int, wrap: bool
     ) -> int | None:
-        return await self.store.get_prev_track_id(playlist_id, track_id, wrap=wrap)
+        return await self.store.get_prev_item_id(playlist_id, item_id, wrap=wrap)
 
     def _update_status_pane(self) -> None:
         status = self.player_state.status
@@ -376,17 +383,41 @@ class TzPlayerApp(App):
 
     async def _handle_metadata_updated(self, track_ids: list[int]) -> None:
         pane = self.query_one(PlaylistPane)
-        await pane.refresh_view()
-        if self.player_state.track_id in track_ids:
-            await self._refresh_current_track_info()
+        pane.mark_metadata_done(track_ids)
+        self._metadata_pending_ids.update(track_ids)
+        if self._metadata_refresh_task is None:
+            self._metadata_refresh_task = asyncio.create_task(
+                self._refresh_metadata_debounced()
+            )
+        if self.player_state.item_id is not None:
+            current_track_id = await self.store.get_track_id_for_item(
+                self.playlist_id or 0, self.player_state.item_id
+            )
+            if current_track_id in track_ids:
+                await self._refresh_current_track_info()
 
     async def _refresh_current_track_info(self) -> None:
-        if self.playlist_id is None or self.player_state.track_id is None:
+        if self.playlist_id is None or self.player_state.item_id is None:
             return
         self.current_track = await self._track_info_provider(
-            self.playlist_id, self.player_state.track_id
+            self.playlist_id, self.player_state.item_id
         )
         self._update_current_track_pane()
+
+    async def _refresh_metadata_debounced(self) -> None:
+        try:
+            await asyncio.sleep(METADATA_REFRESH_DEBOUNCE)
+            pane = self.query_one(PlaylistPane)
+            to_process = set(self._metadata_pending_ids)
+            if to_process:
+                await pane.refresh_visible_rows(to_process)
+                self._metadata_pending_ids.difference_update(to_process)
+        finally:
+            self._metadata_refresh_task = None
+            if self._metadata_pending_ids:
+                self._metadata_refresh_task = asyncio.create_task(
+                    self._refresh_metadata_debounced()
+                )
 
     def _player_state_from_appstate(self, playlist_id: int) -> PlayerState:
         repeat_mode = _repeat_from_state(self.state.repeat_mode)
@@ -395,7 +426,7 @@ class TzPlayerApp(App):
             volume = volume * 100
         return PlayerState(
             playlist_id=playlist_id,
-            track_id=self.state.current_track_id,
+            item_id=self.state.current_item_id,
             volume=int(volume),
             speed=self.state.speed,
             repeat_mode=repeat_mode,
@@ -413,7 +444,7 @@ class TzPlayerApp(App):
             self.state = replace(
                 self.state,
                 playlist_id=self.player_state.playlist_id,
-                current_track_id=self.player_state.track_id,
+                current_item_id=self.player_state.item_id,
                 volume=float(self.player_state.volume),
                 speed=self.player_state.speed,
                 repeat_mode=self.player_state.repeat_mode.lower(),
@@ -429,7 +460,7 @@ class TzPlayerApp(App):
     ) -> tuple[int | None, int | None, int, float, str, bool]:
         return (
             state.playlist_id,
-            state.track_id,
+            state.item_id,
             state.volume,
             state.speed,
             state.repeat_mode,

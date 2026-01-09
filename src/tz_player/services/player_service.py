@@ -31,7 +31,7 @@ class TrackInfo:
 class PlayerState:
     status: STATUS = "idle"
     playlist_id: int | None = None
-    track_id: int | None = None
+    item_id: int | None = None
     position_ms: int = 0
     duration_ms: int = 0
     volume: int = 100
@@ -87,19 +87,19 @@ class PlayerService:
             await self._task
         self._task = None
 
-    async def play_track(self, playlist_id: int, track_id: int) -> None:
+    async def play_item(self, playlist_id: int, item_id: int) -> None:
         async with self._lock:
             self._state = replace(
                 self._state,
                 status="loading",
                 playlist_id=playlist_id,
-                track_id=track_id,
+                item_id=item_id,
                 position_ms=0,
                 duration_ms=0,
                 error=None,
             )
         await self._emit_state()
-        track_info = await self._track_info_provider(playlist_id, track_id)
+        track_info = await self._track_info_provider(playlist_id, item_id)
         duration_ms = (
             track_info.duration_ms
             if track_info and track_info.duration_ms is not None
@@ -187,36 +187,36 @@ class PlayerService:
             return
         async with self._lock:
             playlist_id = self._state.playlist_id
-            track_id = self._state.track_id
+            item_id = self._state.item_id
             repeat_mode = self._state.repeat_mode
-        if playlist_id is None or track_id is None:
+        if playlist_id is None or item_id is None:
             return
         wrap = repeat_mode == "ALL"
-        next_id = await self._next_track_provider(playlist_id, track_id, wrap)
+        next_id = await self._next_track_provider(playlist_id, item_id, wrap)
         if next_id is None:
             await self.stop()
             return
-        await self.play_track(playlist_id, next_id)
+        await self.play_item(playlist_id, next_id)
 
     async def previous_track(self) -> None:
         if self._prev_track_provider is None:
             return
         async with self._lock:
             playlist_id = self._state.playlist_id
-            track_id = self._state.track_id
+            item_id = self._state.item_id
             repeat_mode = self._state.repeat_mode
             position_ms = self._state.position_ms
-        if playlist_id is None or track_id is None:
+        if playlist_id is None or item_id is None:
             return
         if position_ms > 3000:
             await self.seek_ratio(0.0)
             return
         wrap = repeat_mode == "ALL"
-        prev_id = await self._prev_track_provider(playlist_id, track_id, wrap)
+        prev_id = await self._prev_track_provider(playlist_id, item_id, wrap)
         if prev_id is None:
             await self.stop()
             return
-        await self.play_track(playlist_id, prev_id)
+        await self.play_item(playlist_id, prev_id)
 
     async def _ticker_loop(self) -> None:
         try:

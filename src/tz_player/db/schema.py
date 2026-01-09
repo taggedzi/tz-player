@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import sqlite3
 
-SCHEMA_STATEMENTS = [
+SCHEMA_VERSION = 2
+
+SCHEMA_V1_STATEMENTS = [
     """
     CREATE TABLE IF NOT EXISTS tracks (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -60,5 +62,48 @@ SCHEMA_STATEMENTS = [
 
 def create_schema(conn: sqlite3.Connection) -> None:
     """Create all schema objects in the supplied connection."""
-    for statement in SCHEMA_STATEMENTS:
+    version = conn.execute("PRAGMA user_version").fetchone()[0]
+    if version == 0:
+        _create_schema_v1(conn)
+        conn.execute("PRAGMA user_version = 1")
+        version = 1
+    if version == 1:
+        _migrate_v1_to_v2(conn)
+        conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+
+
+def _create_schema_v1(conn: sqlite3.Connection) -> None:
+    for statement in SCHEMA_V1_STATEMENTS:
         conn.execute(statement)
+
+
+def _migrate_v1_to_v2(conn: sqlite3.Connection) -> None:
+    conn.execute("BEGIN IMMEDIATE")
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS playlist_items_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            playlist_id INTEGER NOT NULL,
+            track_id INTEGER NOT NULL,
+            pos_key INTEGER NOT NULL,
+            added_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+            FOREIGN KEY(playlist_id) REFERENCES playlists(id) ON DELETE CASCADE,
+            FOREIGN KEY(track_id) REFERENCES tracks(id) ON DELETE CASCADE
+        )
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO playlist_items_new (playlist_id, track_id, pos_key, added_at)
+        SELECT playlist_id, track_id, pos_key, added_at
+        FROM playlist_items
+        """
+    )
+    conn.execute("DROP TABLE playlist_items")
+    conn.execute("ALTER TABLE playlist_items_new RENAME TO playlist_items")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_playlist_items_playlist_pos ON playlist_items(playlist_id, pos_key)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_playlist_items_playlist_track ON playlist_items(playlist_id, track_id)"
+    )

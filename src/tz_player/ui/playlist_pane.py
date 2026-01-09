@@ -9,16 +9,20 @@ from typing import TYPE_CHECKING, Literal, cast
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
-from textual.coordinate import Coordinate
-from textual.events import Click, MouseScrollDown, MouseScrollUp
 from textual.message import Message
-from textual.widget import Widget
-from textual.widgets import Button, DataTable, Input, Select, Static
+from textual.widgets import Button, Input, Select, Static
 
+from tz_player.events import (
+    PlaylistJumpRequested,
+    PlaylistRowClicked,
+    PlaylistRowDoubleClicked,
+    PlaylistScrollRequested,
+)
 from tz_player.services.playlist_store import PlaylistRow, PlaylistStore
 from tz_player.ui.modals.confirm import ConfirmModal
 from tz_player.ui.modals.error import ErrorModal
 from tz_player.ui.modals.path_input import PathInputModal
+from tz_player.ui.playlist_viewport import PlaylistViewport
 
 if TYPE_CHECKING:
     from tz_player.app import TzPlayerApp
@@ -27,6 +31,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 MEDIA_EXTENSIONS = {".mp3", ".flac", ".wav", ".m4a", ".ogg"}
+DEBUG_VIEWPORT = False
 
 
 class PlaylistPane(Static):
@@ -52,18 +57,16 @@ class PlaylistPane(Static):
         self.can_focus = True
         self.store: PlaylistStore | None = None
         self.playlist_id: int | None = None
-        self.cursor_track_id: int | None = None
-        self.playing_track_id: int | None = None
-        self.selected_track_ids: set[int] = set()
+        self.cursor_item_id: int | None = None
+        self.playing_item_id: int | None = None
+        self.selected_item_ids: set[int] = set()
         self.total_count = 0
         self.window_offset = 0
         self.limit = 10
         self._rows: list[PlaylistRow] = []
         self.metadata_service: MetadataService | None = None
         self._metadata_pending: set[int] = set()
-        self._suspend_selection = False
-
-        self._table: DataTable = DataTable(id="playlist-table")
+        self._viewport = PlaylistViewport(id="playlist-viewport")
         self._actions = Select(
             options=[
                 ("Add files...", "add_files"),
@@ -88,7 +91,7 @@ class PlaylistPane(Static):
                 self._find_input,
                 id="playlist-top",
             ),
-            self._table,
+            self._viewport,
             Horizontal(
                 self._count_label,
                 Static("Repeat: off", id="repeat-placeholder"),
@@ -100,74 +103,73 @@ class PlaylistPane(Static):
         )
 
     def on_mount(self) -> None:
-        self._table.add_columns(" ", "Title", "Artist", "Album", "Duration")
-        self._table.show_header = True
+        self.limit = max(1, self._viewport.size.height)
+        self._update_viewport()
 
     async def on_resize(self) -> None:
         if self.store is None or self.playlist_id is None:
             return
         await self.refresh_view()
 
-    async def on_mouse_scroll_down(self, event: MouseScrollDown) -> None:
-        event.stop()
-        await self._scroll(1)
+    async def on_playlist_row_clicked(self, event: PlaylistRowClicked) -> None:
+        self.cursor_item_id = event.item_id
+        self._update_viewport()
+        self.focus()
 
-    async def on_mouse_scroll_up(self, event: MouseScrollUp) -> None:
-        event.stop()
-        await self._scroll(-1)
+    async def on_playlist_row_double_clicked(
+        self, event: PlaylistRowDoubleClicked
+    ) -> None:
+        app = cast("TzPlayerApp", self.app)
+        self.run_worker(app.action_play_pause(), exclusive=True)
 
-    async def on_click(self, event: Click) -> None:
-        if event.widget is None:
+    async def on_playlist_scroll_requested(
+        self, event: PlaylistScrollRequested
+    ) -> None:
+        await self._scroll(event.delta)
+
+    async def on_playlist_jump_requested(self, event: PlaylistJumpRequested) -> None:
+        target = self._clamp_offset(event.offset)
+        if target == self.window_offset:
             return
-        if event.chain >= 2 and self._is_table_event(event.widget):
-            app = cast("TzPlayerApp", self.app)
-            self.run_worker(app.action_play_pause(), exclusive=True)
-        if self._is_table_event(event.widget):
-            self.focus()
-
-    async def on_key(self, event) -> None:
-        if event.key == "enter":
-            event.stop()
-            await self.action_play_selected()
-
-    def _is_table_event(self, widget: Widget) -> bool:
-        if widget is self._table:
-            return True
-        return self._table in widget.ancestors
+        self.window_offset = target
+        await self._refresh_window()
 
     async def configure(
         self,
         store: PlaylistStore,
         playlist_id: int,
-        playing_track_id: int | None,
+        playing_item_id: int | None,
         metadata_service: MetadataService | None = None,
     ) -> None:
         self.store = store
         self.playlist_id = playlist_id
-        self.playing_track_id = playing_track_id
+        self.playing_item_id = playing_item_id
         self.metadata_service = metadata_service
         await self.refresh_view()
 
     def focus_find(self) -> None:
         self._find_input.focus()
 
-    def get_cursor_track_id(self) -> int | None:
-        if not self._rows:
-            return None
-        row_index = self._table.cursor_row
-        if 0 <= row_index < len(self._rows):
-            track_id = self._rows[row_index].track_id
-            if track_id != self.cursor_track_id:
-                self.cursor_track_id = track_id
-                self._update_table()
-            return track_id
-        return self.cursor_track_id
+    def get_cursor_item_id(self) -> int | None:
+        if self.cursor_item_id is None and self._rows:
+            self.cursor_item_id = self._rows[0].item_id
+            self._update_viewport()
+        return self.cursor_item_id
 
-    def set_playing_track_id(self, track_id: int | None) -> None:
-        if track_id == self.playing_track_id:
+    def get_visible_track_ids(self) -> set[int]:
+        return {row.track_id for row in self._rows}
+
+    def get_visible_item_ids(self) -> set[int]:
+        return {row.item_id for row in self._rows}
+
+    def mark_metadata_done(self, track_ids: list[int]) -> None:
+        self._metadata_pending.difference_update(track_ids)
+
+    def set_playing_item_id(self, item_id: int | None) -> None:
+        if item_id == self.playing_item_id:
             return
-        self.playing_track_id = track_id
-        self._update_table()
+        self.playing_item_id = item_id
+        self._update_viewport()
 
     async def refresh_view(self) -> None:
         if self.store is None or self.playlist_id is None:
@@ -175,15 +177,56 @@ class PlaylistPane(Static):
         await self._recompute_limit()
         try:
             self.total_count = await self.store.count(self.playlist_id)
-            self.window_offset = max(
-                0, min(self.window_offset, max(0, self.total_count - 1))
-            )
+            self.window_offset = self._clamp_offset(self.window_offset)
             self._rows = await self.store.fetch_window(
                 self.playlist_id, self.window_offset, self.limit
             )
-            if self.cursor_track_id is None and self._rows:
-                self.cursor_track_id = self._rows[0].track_id
-            self._update_table()
+            if self.cursor_item_id is None and self._rows:
+                self.cursor_item_id = self._rows[0].item_id
+            self._update_viewport()
+            self._request_visible_metadata()
+        except Exception as exc:  # pragma: no cover - UI safety net
+            logger.exception("Failed to refresh playlist: %s", exc)
+            await self._show_error("Failed to refresh playlist. See log file.")
+
+    async def refresh_window(self) -> None:
+        await self._refresh_window()
+
+    async def refresh_visible_rows(self, updated_track_ids: set[int]) -> None:
+        if self.store is None or self.playlist_id is None or not self._rows:
+            return
+        visible_track_ids = {row.track_id for row in self._rows}
+        to_refresh = list(updated_track_ids.intersection(visible_track_ids))
+        if not to_refresh:
+            return
+        try:
+            fresh_rows = await self.store.fetch_rows_by_track_ids(
+                self.playlist_id, to_refresh
+            )
+        except Exception as exc:  # pragma: no cover - UI safety net
+            logger.exception("Failed to refresh playlist: %s", exc)
+            await self._show_error("Failed to refresh playlist. See log file.")
+            return
+        if not fresh_rows:
+            return
+        row_index_map = {row.item_id: index for index, row in enumerate(self._rows)}
+        for row in fresh_rows:
+            index = row_index_map.get(row.item_id)
+            if index is None:
+                continue
+            self._rows[index] = row
+        self._update_viewport()
+
+    async def _refresh_window(self) -> None:
+        if self.store is None or self.playlist_id is None:
+            return
+        try:
+            self._rows = await self.store.fetch_window(
+                self.playlist_id, self.window_offset, self.limit
+            )
+            if self.cursor_item_id is None and self._rows:
+                self.cursor_item_id = self._rows[0].item_id
+            self._update_viewport()
             self._request_visible_metadata()
         except Exception as exc:  # pragma: no cover - UI safety net
             logger.exception("Failed to refresh playlist: %s", exc)
@@ -191,48 +234,33 @@ class PlaylistPane(Static):
 
     async def _recompute_limit(self) -> None:
         await asyncio.sleep(0)
-        visible = max(3, self._table.size.height - 2)
-        self.limit = max(5, visible + 2)
+        visible = max(1, self._viewport.size.height)
+        self.limit = visible
 
-    def _update_table(self) -> None:
-        self._suspend_selection = True
-        self._table.clear()
-        for row in self._rows:
-            marker = self._marker_for(row.track_id)
-            if row.meta_valid:
-                title = row.title or row.path.name
-                artist = row.artist or ""
-                album = row.album or ""
-                duration = _format_duration(row.duration_ms)
-            else:
-                title = row.path.name
-                artist = ""
-                album = ""
-                duration = ""
-            self._table.add_row(
-                marker,
-                title,
-                artist,
-                album,
-                duration,
+    def _update_viewport(self) -> None:
+        if DEBUG_VIEWPORT:
+            cursor_in_rows = any(
+                row.item_id == self.cursor_item_id for row in self._rows
             )
-        if self.cursor_track_id is not None:
-            for index, row in enumerate(self._rows):
-                if row.track_id == self.cursor_track_id:
-                    self._table.cursor_coordinate = Coordinate(index, 0)
-                    break
-        self._suspend_selection = False
+            logger.info(
+                "viewport offset=%s limit=%s total=%s max_offset=%s cursor_in_rows=%s",
+                self.window_offset,
+                self.limit,
+                self.total_count,
+                self._max_offset(),
+                cursor_in_rows,
+            )
+        self._viewport.update_model(
+            rows=self._rows,
+            total_count=self.total_count,
+            offset=self.window_offset,
+            limit=self.limit,
+            cursor_item_id=self.cursor_item_id,
+            selected_item_ids=self.selected_item_ids,
+            playing_item_id=self.playing_item_id,
+        )
         self._count_label.update(f"{self.total_count} tracks")
 
-    def _marker_for(self, track_id: int) -> str:
-        marker = ""
-        if track_id == self.playing_track_id:
-            marker += "▶"
-        if track_id == self.cursor_track_id:
-            marker += ">"
-        if track_id in self.selected_track_ids:
-            marker += "✓"
-        return marker or " "
 
     async def action_cursor_down(self) -> None:
         await self._move_cursor(1)
@@ -244,51 +272,58 @@ class PlaylistPane(Static):
         app = cast("TzPlayerApp", self.app)
         self.run_worker(app.action_play_selected(), exclusive=True)
 
-    async def on_data_table_cell_selected(self, event: DataTable.CellSelected) -> None:
-        if event.data_table is not self._table:
-            return
-        if self._suspend_selection:
-            return
-        row_index = event.coordinate.row
-        if row_index < 0 or row_index >= len(self._rows):
-            return
-        track_id = self._rows[row_index].track_id
-        self.cursor_track_id = track_id
-        if event.coordinate.column == 0:
-            await self.action_toggle_selection()
-        else:
-            self._update_table()
-
     async def _move_cursor(self, delta: int) -> None:
         if not self._rows:
             return
-        track_ids = [row.track_id for row in self._rows]
-        if self.cursor_track_id not in track_ids:
-            self.cursor_track_id = track_ids[0]
-            self._update_table()
+
+        item_ids = [row.item_id for row in self._rows]
+
+        # If cursor isn't in the current window, snap it sensibly
+        if self.cursor_item_id not in item_ids:
+            # Choose closest end based on direction of travel
+            self.cursor_item_id = item_ids[-1] if delta > 0 else item_ids[0]
+            self._update_viewport()
             return
-        idx = track_ids.index(self.cursor_track_id)
+
+        idx = item_ids.index(self.cursor_item_id)
         next_idx = idx + delta
-        if 0 <= next_idx < len(track_ids):
-            self.cursor_track_id = track_ids[next_idx]
-            self._update_table()
+
+        # Move within current window
+        if 0 <= next_idx < len(item_ids):
+            self.cursor_item_id = item_ids[next_idx]
+            self._update_viewport()
             return
-        new_offset = self.window_offset + delta
-        if new_offset < 0 or new_offset >= self.total_count:
+
+        # Need to scroll the window; preserve screen-row position
+        new_offset = self._clamp_offset(self.window_offset + delta)
+        if new_offset == self.window_offset:
             return
+
         self.window_offset = new_offset
-        await self.refresh_view()
+        await self._refresh_window()
+
+        # After refresh, keep cursor at same screen row (idx clamped)
+        if self._rows:
+            new_ids = [row.item_id for row in self._rows]
+            pinned_idx = min(max(idx, 0), len(new_ids) - 1)
+            self.cursor_item_id = new_ids[pinned_idx]
+            self._update_viewport()
+
 
     async def _scroll(self, delta: int) -> None:
         if self.total_count == 0:
             return
-        new_offset = max(
-            0, min(self.window_offset + delta, max(0, self.total_count - 1))
-        )
+        new_offset = self._clamp_offset(self.window_offset + delta)
         if new_offset == self.window_offset:
             return
         self.window_offset = new_offset
-        await self.refresh_view()
+        await self._refresh_window()
+
+    def _max_offset(self) -> int:
+        return max(0, self.total_count - self.limit)
+
+    def _clamp_offset(self, value: int) -> int:
+        return max(0, min(value, self._max_offset()))
 
     async def action_move_selection_up(self) -> None:
         await self._move_selection("up")
@@ -306,8 +341,8 @@ class PlaylistPane(Static):
             await self.store.move_selection(
                 self.playlist_id,
                 direction,
-                sorted(self.selected_track_ids),
-                self.cursor_track_id,
+                sorted(self.selected_item_ids),
+                self.cursor_item_id,
             )
             await self.refresh_view()
         except Exception as exc:
@@ -315,14 +350,14 @@ class PlaylistPane(Static):
             await self._show_error("Failed to reorder selection. See log file.")
 
     async def action_toggle_selection(self) -> None:
-        if self.cursor_track_id is None:
+        if self.cursor_item_id is None:
             return
-        if self.cursor_track_id in self.selected_track_ids:
-            self.selected_track_ids.remove(self.cursor_track_id)
+        if self.cursor_item_id in self.selected_item_ids:
+            self.selected_item_ids.remove(self.cursor_item_id)
         else:
-            self.selected_track_ids.add(self.cursor_track_id)
-        self._update_table()
-        self.post_message(self.SelectionChanged(len(self.selected_track_ids)))
+            self.selected_item_ids.add(self.cursor_item_id)
+        self._update_viewport()
+        self.post_message(self.SelectionChanged(len(self.selected_item_ids)))
 
     async def on_select_changed(self, event: Select.Changed) -> None:
         if event.select.id != "playlist-actions":
@@ -379,15 +414,15 @@ class PlaylistPane(Static):
     async def _remove_selected(self) -> None:
         if self.store is None:
             return
-        if not self.selected_track_ids:
+        if not self.selected_item_ids:
             return
         confirmed = await self._confirm("Remove selected tracks?")
         if not confirmed:
             return
         await self._run_store_action(
-            "remove selected", self.store.remove_tracks, self.selected_track_ids
+            "remove selected", self.store.remove_items, self.selected_item_ids
         )
-        self.selected_track_ids.clear()
+        self.selected_item_ids.clear()
 
     async def _clear_playlist(self) -> None:
         if self.store is None:
@@ -396,18 +431,25 @@ class PlaylistPane(Static):
         if not confirmed:
             return
         await self._run_store_action("clear playlist", self.store.clear_playlist)
-        self.selected_track_ids.clear()
+        self.selected_item_ids.clear()
 
     async def _refresh_metadata_selected(self) -> None:
         if self.store is None or self.playlist_id is None:
             return
-        if not self.selected_track_ids:
+        if not self.selected_item_ids:
             return
         try:
             logger.info("Playlist action: refresh metadata (selected)")
-            await self.store.invalidate_metadata(self.selected_track_ids)
+            track_ids = await asyncio.gather(
+                *[
+                    self.store.get_track_id_for_item(self.playlist_id, item_id)
+                    for item_id in self.selected_item_ids
+                ]
+            )
+            selected_track_ids = {track_id for track_id in track_ids if track_id}
+            await self.store.invalidate_metadata(selected_track_ids)
             await self.refresh_view()
-            self._metadata_pending.difference_update(self.selected_track_ids)
+            self._metadata_pending.difference_update(selected_track_ids)
         except Exception as exc:
             logger.exception("Playlist action failed: %s", exc)
             await self._show_error("Action failed. See log file.")
@@ -481,14 +523,6 @@ def _scan_media_files(folder: Path) -> list[Path]:
         if path.is_file() and path.suffix.lower() in MEDIA_EXTENSIONS:
             files.append(path)
     return files
-
-
-def _format_duration(duration_ms: int | None) -> str:
-    if not duration_ms:
-        return ""
-    seconds = duration_ms // 1000
-    minutes, seconds = divmod(seconds, 60)
-    return f"{minutes}:{seconds:02d}"
 
 
 def _needs_metadata(row: PlaylistRow) -> bool:
