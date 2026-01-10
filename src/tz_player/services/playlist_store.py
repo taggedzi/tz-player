@@ -102,9 +102,7 @@ class PlaylistStore:
             self._fetch_window_sync, playlist_id, offset, limit
         )
 
-    async def get_item_row(
-        self, playlist_id: int, item_id: int
-    ) -> PlaylistRow | None:
+    async def get_item_row(self, playlist_id: int, item_id: int) -> PlaylistRow | None:
         return await asyncio.to_thread(self._get_item_row_sync, playlist_id, item_id)
 
     async def fetch_rows_by_track_ids(
@@ -145,9 +143,7 @@ class PlaylistStore:
     async def renumber_playlist(self, playlist_id: int) -> None:
         await asyncio.to_thread(self._renumber_playlist_sync, playlist_id)
 
-    async def get_track_id_for_item(
-        self, playlist_id: int, item_id: int
-    ) -> int | None:
+    async def get_track_id_for_item(self, playlist_id: int, item_id: int) -> int | None:
         return await asyncio.to_thread(
             self._get_track_id_for_item_sync, playlist_id, item_id
         )
@@ -554,9 +550,7 @@ class PlaylistStore:
                 updates,
             )
 
-    def _get_track_id_for_item_sync(
-        self, playlist_id: int, item_id: int
-    ) -> int | None:
+    def _get_track_id_for_item_sync(self, playlist_id: int, item_id: int) -> int | None:
         with self._connect() as conn:
             row = conn.execute(
                 """

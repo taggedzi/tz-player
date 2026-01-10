@@ -5,7 +5,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from rich.text import Text
-from textual.events import Click, MouseDown, MouseMove, MouseScrollDown, MouseScrollUp, MouseUp
+from textual.events import (
+    Click,
+    MouseDown,
+    MouseMove,
+    MouseScrollDown,
+    MouseScrollUp,
+    MouseUp,
+)
 from textual.geometry import Offset
 from textual.widget import Widget
 
@@ -52,8 +59,17 @@ class PlaylistViewport(Widget):
         self.refresh()
 
     def render(self) -> Text:
-        width = max(1, self.size.width)
-        height = max(1, self.size.height)
+        size = self.size
+        fallback_size = getattr(self, "_size", None)
+        width = size.width
+        height = size.height
+        if (width <= 0 or height <= 0) and fallback_size is not None:
+            width = fallback_size.width if width <= 0 else width
+            height = fallback_size.height if height <= 0 else height
+        if height <= 0:
+            height = max(1, self._model.limit or len(self._model.rows))
+        width = max(1, width)
+        height = max(1, height)
         text_width = max(0, width - 1)
 
         scroll_chars = _render_scrollbar(
@@ -75,10 +91,7 @@ class PlaylistViewport(Widget):
                 )
                 title = _title_for(row)
                 artist = row.artist or ""
-                if artist:
-                    content = f"{title} - {artist}"
-                else:
-                    content = title
+                content = f"{title} - {artist}" if artist else title
                 line = _truncate(f"{marker} {content}", text_width)
             else:
                 line = "".ljust(text_width)

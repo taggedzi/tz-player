@@ -261,7 +261,6 @@ class PlaylistPane(Static):
         )
         self._count_label.update(f"{self.total_count} tracks")
 
-
     async def action_cursor_down(self) -> None:
         await self._move_cursor(1)
 
@@ -308,7 +307,6 @@ class PlaylistPane(Static):
             pinned_idx = min(max(idx, 0), len(new_ids) - 1)
             self.cursor_item_id = new_ids[pinned_idx]
             self._update_viewport()
-
 
     async def _scroll(self, delta: int) -> None:
         if self.total_count == 0:
