@@ -10,10 +10,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from tz_player.services.vlc_backend import VLCPlaybackBackend
-
 
 async def _run(path: Path) -> None:
+    from tz_player.services.vlc_backend import VLCPlaybackBackend
+
     backend = VLCPlaybackBackend()
 
     async def _handler(event) -> None:

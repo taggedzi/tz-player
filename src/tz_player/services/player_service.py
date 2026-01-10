@@ -121,9 +121,7 @@ class PlayerService:
             )
         except Exception as exc:
             async with self._lock:
-                self._state = replace(
-                    self._state, status="error", error=str(exc)
-                )
+                self._state = replace(self._state, status="error", error=str(exc))
             await self._emit_state()
             return
         async with self._lock:
@@ -262,10 +260,10 @@ class PlayerService:
                     self._state = replace(self._state, duration_ms=event.duration_ms)
                     emit = True
             elif isinstance(event, StateChanged):
-                if (
-                    event.status == "loading"
-                    and self._state.status in {"playing", "paused"}
-                ):
+                if event.status == "loading" and self._state.status in {
+                    "playing",
+                    "paused",
+                }:
                     return
                 if event.status != self._state.status:
                     self._state = replace(self._state, status=event.status)

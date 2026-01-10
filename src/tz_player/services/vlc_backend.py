@@ -5,9 +5,9 @@ from __future__ import annotations
 import asyncio
 import queue
 import threading
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Coroutine
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 from .playback_backend import (
     BackendError,
@@ -108,7 +108,7 @@ class VLCPlaybackBackend:
 
     def _thread_main(self, ready_future: asyncio.Future[None]) -> None:
         try:
-            import vlc
+            import vlc  # type: ignore[import-untyped]
 
             instance = vlc.Instance()
             player = instance.media_player_new()
@@ -205,7 +205,10 @@ class VLCPlaybackBackend:
     def _emit_event(self, event: BackendEvent) -> None:
         if self._handler is None or self._loop is None:
             return
-        asyncio.run_coroutine_threadsafe(self._handler(event), self._loop)
+        coro = self._handler(event)
+        asyncio.run_coroutine_threadsafe(
+            cast(Coroutine[Any, Any, None], coro), self._loop
+        )
 
     def _notify_future_result(
         self, future: asyncio.Future[Any] | None, value: Any

@@ -21,8 +21,8 @@ from .paths import db_path, log_dir, state_path
 from .services.fake_backend import FakePlaybackBackend
 from .services.metadata_service import MetadataService
 from .services.player_service import PlayerService, PlayerState, TrackInfo
-from .services.vlc_backend import VLCPlaybackBackend
 from .services.playlist_store import PlaylistStore
+from .services.vlc_backend import VLCPlaybackBackend
 from .state_store import AppState, load_state, save_state
 from .ui.modals.error import ErrorModal
 from .ui.playlist_pane import PlaylistPane
@@ -527,9 +527,7 @@ def _track_needs_metadata(track: TrackInfo) -> bool:
     )
 
 
-def _resolve_backend_name(
-    cli_backend: str | None, state_backend: str | None
-) -> str:
+def _resolve_backend_name(cli_backend: str | None, state_backend: str | None) -> str:
     if cli_backend in {"fake", "vlc"}:
         return cli_backend
     if state_backend in {"fake", "vlc"}:
