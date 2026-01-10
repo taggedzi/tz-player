@@ -24,6 +24,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--quiet", action="store_true", help="Only show warnings and errors"
     )
     parser.add_argument("--log-file", help="Write logs to a file path")
+    parser.add_argument(
+        "--backend",
+        choices=("fake", "vlc"),
+        help="Playback backend to use (fake or vlc).",
+    )
     return parser
 
 

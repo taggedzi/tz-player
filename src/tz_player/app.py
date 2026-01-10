@@ -18,8 +18,10 @@ from . import __version__
 from .events import PlayerStateChanged, TrackChanged
 from .logging_utils import setup_logging
 from .paths import db_path, log_dir, state_path
+from .services.fake_backend import FakePlaybackBackend
 from .services.metadata_service import MetadataService
 from .services.player_service import PlayerService, PlayerState, TrackInfo
+from .services.vlc_backend import VLCPlaybackBackend
 from .services.playlist_store import PlaylistStore
 from .state_store import AppState, load_state, save_state
 from .ui.modals.error import ErrorModal
@@ -114,12 +116,15 @@ class TzPlayerApp(App):
         ("q", "quit", "Quit"),
     ]
 
-    def __init__(self, *, auto_init: bool = True) -> None:
+    def __init__(
+        self, *, auto_init: bool = True, backend_name: str | None = None
+    ) -> None:
         super().__init__()
         self.store = PlaylistStore(db_path())
         self.state = AppState()
         self.playlist_id: int | None = None
         self._auto_init = auto_init
+        self._backend_name = backend_name
         self.player_service: PlayerService | None = None
         self.player_state = PlayerState()
         self.current_track: TrackInfo | None = None
@@ -155,6 +160,11 @@ class TzPlayerApp(App):
     async def _initialize_state(self) -> None:
         try:
             self.state = await asyncio.to_thread(load_state, state_path())
+            backend_name = _resolve_backend_name(
+                self._backend_name, self.state.playback_backend
+            )
+            self.state = replace(self.state, playback_backend=backend_name)
+            await asyncio.to_thread(save_state, state_path(), self.state)
             await self.store.initialize()
             playlist_id = await self.store.ensure_playlist("Default")
             if self.state.playlist_id != playlist_id:
@@ -162,9 +172,11 @@ class TzPlayerApp(App):
                 await asyncio.to_thread(save_state, state_path(), self.state)
             self.playlist_id = playlist_id
             self.player_state = self._player_state_from_appstate(playlist_id)
+            backend = _build_backend(backend_name)
             self.player_service = PlayerService(
                 emit_event=self._handle_player_event,
                 track_info_provider=self._track_info_provider,
+                backend=backend,
                 next_track_provider=self._next_track_provider,
                 prev_track_provider=self._prev_track_provider,
                 initial_state=self.player_state,
@@ -172,7 +184,29 @@ class TzPlayerApp(App):
             self.metadata_service = MetadataService(
                 self.store, on_metadata_updated=self._handle_metadata_updated
             )
-            await self.player_service.start()
+            try:
+                await self.player_service.start()
+            except Exception as exc:
+                logger.exception("Failed to start backend %s: %s", backend_name, exc)
+                if backend_name != "fake":
+                    backend_name = "fake"
+                    self.state = replace(self.state, playback_backend=backend_name)
+                    await asyncio.to_thread(save_state, state_path(), self.state)
+                    backend = _build_backend(backend_name)
+                    self.player_service = PlayerService(
+                        emit_event=self._handle_player_event,
+                        track_info_provider=self._track_info_provider,
+                        backend=backend,
+                        next_track_provider=self._next_track_provider,
+                        prev_track_provider=self._prev_track_provider,
+                        initial_state=self.player_state,
+                    )
+                    await self.player_service.start()
+                    await self.push_screen(
+                        ErrorModal("VLC backend unavailable; using fake backend.")
+                    )
+                else:
+                    raise
             self._last_persisted = self._state_tuple(self.player_state)
             pane = self.query_one(PlaylistPane)
             await pane.configure(
@@ -449,6 +483,7 @@ class TzPlayerApp(App):
                 speed=self.player_state.speed,
                 repeat_mode=self.player_state.repeat_mode.lower(),
                 shuffle=self.player_state.shuffle,
+                playback_backend=self.state.playback_backend,
             )
             self._last_persisted = self._state_tuple(self.player_state)
             await asyncio.to_thread(save_state, state_path(), self.state)
@@ -492,6 +527,23 @@ def _track_needs_metadata(track: TrackInfo) -> bool:
     )
 
 
+def _resolve_backend_name(
+    cli_backend: str | None, state_backend: str | None
+) -> str:
+    if cli_backend in {"fake", "vlc"}:
+        return cli_backend
+    if state_backend in {"fake", "vlc"}:
+        return state_backend
+    return "fake"
+
+
+def _build_backend(name: str) -> FakePlaybackBackend | VLCPlaybackBackend:
+    logger.info("Playback backend selected: %s", name)
+    if name == "vlc":
+        return VLCPlaybackBackend()
+    return FakePlaybackBackend()
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="tz-player", description="TaggedZ's command line music player."
@@ -504,6 +556,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--quiet", action="store_true", help="Only show warnings and errors"
     )
     parser.add_argument("--log-file", help="Write logs to a file path")
+    parser.add_argument(
+        "--backend",
+        choices=("fake", "vlc"),
+        help="Playback backend to use (fake or vlc).",
+    )
     return parser
 
 
@@ -523,7 +580,7 @@ def main() -> None:
         log_file=Path(args.log_file) if args.log_file else None,
     )
     logging.getLogger(__name__).info("Starting tz-player TUI")
-    TzPlayerApp().run()
+    TzPlayerApp(backend_name=args.backend).run()
 
 
 if __name__ == "__main__":

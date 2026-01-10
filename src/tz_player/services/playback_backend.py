@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Literal, Protocol
 
-BackendStatus = str
+BackendStatus = Literal["idle", "loading", "playing", "paused", "stopped", "error"]
 
 
 @dataclass(frozen=True)
@@ -35,6 +36,10 @@ class BackendError(BackendEvent):
 
 
 class PlaybackBackend(Protocol):
+    def set_event_handler(
+        self, handler: Callable[[BackendEvent], Awaitable[None]]
+    ) -> None: ...
+
     async def start(self) -> None: ...
 
     async def shutdown(self) -> None: ...

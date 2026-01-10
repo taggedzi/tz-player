@@ -19,6 +19,7 @@ class AppState:
     speed: float = 1.0
     repeat_mode: str = "off"
     shuffle: bool = False
+    playback_backend: str = "fake"
     visualizer_id: str | None = None
     ansi_enabled: bool = True
     log_level: str = "INFO"
@@ -52,6 +53,7 @@ def _coerce_state(data: dict[str, Any]) -> AppState:
         speed=_float_or_default(data.get("speed"), 1.0),
         repeat_mode=_str_or_default(data.get("repeat_mode"), "off"),
         shuffle=_bool_or_default(data.get("shuffle"), False),
+        playback_backend=_str_or_default(data.get("playback_backend"), "fake"),
         visualizer_id=data.get("visualizer_id")
         if isinstance(data.get("visualizer_id"), str)
         else None,

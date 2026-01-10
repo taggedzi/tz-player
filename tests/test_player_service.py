@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import replace
 
+from tz_player.services.fake_backend import FakePlaybackBackend
 from tz_player.services.player_service import PlayerService, PlayerState, TrackInfo
 
 
@@ -33,7 +34,7 @@ def test_play_progresses_and_pause_freezes() -> None:
         service = PlayerService(
             emit_event=emit_event,
             track_info_provider=_track_info_provider,
-            tick_interval_ms=50,
+            backend=FakePlaybackBackend(tick_interval_ms=50),
         )
         await service.start()
         await service.play_item(1, 1)
@@ -56,7 +57,7 @@ def test_stop_resets_position() -> None:
         service = PlayerService(
             emit_event=emit_event,
             track_info_provider=_track_info_provider,
-            tick_interval_ms=50,
+            backend=FakePlaybackBackend(tick_interval_ms=50),
         )
         await service.start()
         await service.play_item(1, 1)
@@ -76,7 +77,7 @@ def test_seek_and_clamps() -> None:
         service = PlayerService(
             emit_event=emit_event,
             track_info_provider=_track_info_provider,
-            tick_interval_ms=50,
+            backend=FakePlaybackBackend(tick_interval_ms=50),
         )
         await service.start()
         await service.play_item(1, 1)
@@ -97,7 +98,7 @@ def test_volume_speed_repeat_shuffle() -> None:
         service = PlayerService(
             emit_event=emit_event,
             track_info_provider=_track_info_provider,
-            tick_interval_ms=50,
+            backend=FakePlaybackBackend(tick_interval_ms=50),
             initial_state=PlayerState(volume=50, speed=1.0),
         )
         await service.start()
@@ -156,9 +157,9 @@ def test_next_prev_navigation() -> None:
         service = PlayerService(
             emit_event=emit_event,
             track_info_provider=track_info,
+            backend=FakePlaybackBackend(tick_interval_ms=50),
             next_track_provider=next_provider,
             prev_track_provider=prev_provider,
-            tick_interval_ms=50,
             initial_state=PlayerState(playlist_id=1, item_id=2),
         )
         await service.start()
@@ -192,8 +193,8 @@ def test_prev_restart_threshold() -> None:
         service = PlayerService(
             emit_event=emit_event,
             track_info_provider=track_info,
+            backend=FakePlaybackBackend(tick_interval_ms=50),
             prev_track_provider=prev_provider,
-            tick_interval_ms=50,
             initial_state=PlayerState(playlist_id=1, item_id=2, position_ms=4000),
         )
         await service.start()
@@ -233,9 +234,9 @@ def test_wrap_and_stop_at_ends() -> None:
         service = PlayerService(
             emit_event=emit_event,
             track_info_provider=track_info,
+            backend=FakePlaybackBackend(tick_interval_ms=50),
             next_track_provider=next_provider,
             prev_track_provider=prev_provider,
-            tick_interval_ms=50,
             initial_state=PlayerState(playlist_id=1, item_id=3, repeat_mode="ALL"),
         )
         await service.start()

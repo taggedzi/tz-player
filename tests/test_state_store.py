@@ -14,6 +14,7 @@ def test_state_roundtrip(tmp_path) -> None:
         speed=1.1,
         repeat_mode="one",
         shuffle=True,
+        playback_backend="vlc",
         visualizer_id="bars",
         ansi_enabled=False,
         log_level="DEBUG",
