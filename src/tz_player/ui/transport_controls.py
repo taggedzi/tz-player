@@ -6,12 +6,12 @@ from typing import Literal
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
-from textual.events import Click, Key
 from textual.message import Message
 from textual.widget import Widget
 from textual.widgets import Static
 
 from tz_player.services.player_service import PlayerState
+from tz_player.ui.text_button import TextButton, TextButtonPressed
 
 
 class TransportAction(Message):
@@ -55,35 +55,44 @@ class TransportControls(Widget):
         width: 8;
     }
 
-    TransportControls .transport-button {
-        background: $panel;
-        color: $text;
-        height: 1;
-        padding: 0 1;
-        content-align: center middle;
-    }
-
-    TransportControls .transport-button:focus {
-        background: $boost;
-        color: $text;
+    TransportControls .text-button {
+        width: 100%;
     }
     """
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self._track_counter = Static("Track: 0000/0000", id="track-counter")
-        self._repeat_button = TransportButton(
-            "R:OFF", toggle="repeat", id="repeat-indicator"
+        self._repeat_button = TextButton(
+            "R:OFF",
+            action="repeat",
+            id="repeat-indicator",
         )
-        self._shuffle_button = TransportButton(
-            "S:OFF", toggle="shuffle", id="shuffle-indicator"
+        self._shuffle_button = TextButton(
+            "S:OFF",
+            action="shuffle",
+            id="shuffle-indicator",
         )
-        self._prev_button = TransportButton("<<", action="prev", id="transport-prev")
-        self._play_button = TransportButton(
-            "PLAY", action="toggle_play", id="transport-play"
+        self._prev_button = TextButton(
+            "<<",
+            action="prev",
+            id="transport-prev",
         )
-        self._stop_button = TransportButton("STOP", action="stop", id="transport-stop")
-        self._next_button = TransportButton(">>", action="next", id="transport-next")
+        self._play_button = TextButton(
+            "PLAY",
+            action="toggle_play",
+            id="transport-play",
+        )
+        self._stop_button = TextButton(
+            "STOP",
+            action="stop",
+            id="transport-stop",
+        )
+        self._next_button = TextButton(
+            ">>",
+            action="next",
+            id="transport-next",
+        )
 
     def compose(self) -> ComposeResult:
         yield Vertical(
@@ -122,35 +131,11 @@ class TransportControls(Widget):
         self._shuffle_button.update(f"S:{shuffle_text} ")
         self._play_button.update("PAUSE" if state.status == "playing" else "PLAY")
 
-
-class TransportButton(Static):
-    def __init__(
-        self,
-        label: str,
-        *,
-        action: Literal["prev", "toggle_play", "stop", "next"] | None = None,
-        toggle: Literal["repeat", "shuffle"] | None = None,
-        **kwargs,
-    ) -> None:
-        super().__init__(label, classes="transport-button", **kwargs)
-        self.action = action
-        self.toggle = toggle
-        self.can_focus = True
-
-    def on_click(self, event: Click) -> None:
-        self._emit()
-        event.stop()
-
-    def on_key(self, event: Key) -> None:
-        if event.key not in {"enter", "space"}:
-            return
-        self._emit()
-        event.stop()
-
-    def _emit(self) -> None:
-        if self.action is not None:
-            self.post_message(TransportAction(self.action))
-        elif self.toggle == "repeat":
+    def on_text_button_pressed(self, event: TextButtonPressed) -> None:
+        action = event.action
+        if action == "repeat":
             self.post_message(ToggleRepeat())
-        elif self.toggle == "shuffle":
+        elif action == "shuffle":
             self.post_message(ToggleShuffle())
+        elif action in {"prev", "toggle_play", "stop", "next"}:
+            self.post_message(TransportAction(action))

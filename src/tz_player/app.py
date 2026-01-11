@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Literal, cast
 
 from textual.app import App, ComposeResult
-from textual.containers import Horizontal, Vertical
+from textual.containers import Container, Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Footer, Header, Static
 
@@ -27,6 +27,7 @@ from .state_store import AppState, load_state, save_state
 from .ui.modals.error import ErrorModal
 from .ui.playlist_pane import PlaylistPane
 from .ui.status_pane import StatusPane
+from .ui.actions_menu import ActionsMenuPopup
 
 logger = logging.getLogger(__name__)
 METADATA_REFRESH_DEBOUNCE = 0.2
@@ -49,7 +50,7 @@ class TzPlayerApp(App):
     }
 
     #playlist-top {
-        height: 3;
+        height: 1;
         content-align: left middle;
     }
 
@@ -58,16 +59,26 @@ class TzPlayerApp(App):
     }
 
     #playlist-actions {
-        width: 20;
+        width: 12;
+        height: 1;
         margin-right: 1;
+        text-wrap: nowrap;
+        overflow: hidden;
     }
 
     #reorder-up, #reorder-down {
+        width: 2;
+        height: 1;
         margin-right: 1;
     }
 
     #playlist-find {
         width: 1fr;
+        height: 1;
+        border: none;
+        padding: 0 1;
+        background: $panel;
+        color: $text;
     }
 
     #playlist-viewport {
@@ -104,6 +115,7 @@ class TzPlayerApp(App):
         border: solid white;
         width: 60%;
     }
+
     """
     BINDINGS = [
         ("escape", "dismiss_modal", "Dismiss"),
@@ -163,6 +175,7 @@ class TzPlayerApp(App):
         )
         yield StatusPane(id="status-pane")
         yield Footer()
+        # Overlay layer removed due to layout conflicts with Textual 0.59
 
     def on_mount(self) -> None:
         if self._auto_init:
@@ -261,6 +274,24 @@ class TzPlayerApp(App):
             await self.player_service.play_item(self.playlist_id, cursor_id)
             return
         await self.player_service.toggle_pause()
+
+    def on_mouse_down(self, event) -> None:
+        popup = self.query(ActionsMenuPopup)
+        if not popup:
+            return
+        menu = popup.first()
+        if not menu.contains_point(event.screen_x, event.screen_y):
+            menu.dismiss()
+            event.stop()
+
+    def on_key(self, event) -> None:
+        if event.key != "escape":
+            return
+        popup = self.query(ActionsMenuPopup)
+        if not popup:
+            return
+        popup.first().dismiss()
+        event.stop()
 
     async def action_play_selected(self) -> None:
         if self.player_service is None or self.playlist_id is None:

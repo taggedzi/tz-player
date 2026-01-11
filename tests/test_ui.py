@@ -11,6 +11,7 @@ import tz_player.paths as paths
 from tz_player.app import TzPlayerApp
 from tz_player.services.player_service import PlayerState
 from tz_player.services.playlist_store import PlaylistRow, PlaylistStore
+from tz_player.ui.actions_menu import ActionsMenuButton, ActionsMenuPopup
 from tz_player.ui.playlist_pane import PlaylistPane
 from tz_player.ui.playlist_viewport import PlaylistViewport
 from tz_player.ui.status_pane import StatusPane
@@ -69,6 +70,58 @@ def test_playlist_pane_empty_db(tmp_path) -> None:
             await asyncio.sleep(0)
             await pane.configure(store, playlist_id, None)
             assert pane.total_count == 0
+            app.exit()
+
+    _run(run_app())
+
+
+def test_actions_menu_does_not_resize_header() -> None:
+    pane = PlaylistPane()
+
+    class PaneApp(App):
+        def compose(self) -> ComposeResult:
+            yield pane
+
+    app = PaneApp()
+
+    async def run_app() -> None:
+        async with app.run_test() as pilot:
+            await asyncio.sleep(0)
+            button = pane.query_one(ActionsMenuButton)
+            assert "Actions" in str(button.render())
+            header = pane.query_one("#playlist-top")
+            viewport = pane.query_one(PlaylistViewport)
+            header_height = header.size.height
+            viewport_height = viewport.size.height
+            await pane._open_actions_menu()
+            await asyncio.sleep(0)
+            assert app.query_one(ActionsMenuPopup)
+            assert header.size.height == header_height
+            assert viewport.size.height == viewport_height
+            await pilot.press("escape")
+            await asyncio.sleep(0)
+            app.exit()
+
+    _run(run_app())
+
+
+def test_actions_menu_dismisses_on_escape() -> None:
+    pane = PlaylistPane()
+
+    class PaneApp(App):
+        def compose(self) -> ComposeResult:
+            yield pane
+
+    app = PaneApp()
+
+    async def run_app() -> None:
+        async with app.run_test() as pilot:
+            await asyncio.sleep(0)
+            await pane._open_actions_menu()
+            assert app.query_one(ActionsMenuPopup)
+            await pilot.press("escape")
+            await asyncio.sleep(0)
+            assert app.query(ActionsMenuPopup).count == 0
             app.exit()
 
     _run(run_app())

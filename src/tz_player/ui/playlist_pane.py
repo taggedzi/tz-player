@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Literal, cast
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.message import Message
-from textual.widgets import Button, Input, Select, Static
+from textual.widgets import Input, Static
 
 from tz_player.events import (
     PlaylistJumpRequested,
@@ -29,6 +29,13 @@ from tz_player.ui.transport_controls import (
     TransportAction,
     TransportControls,
 )
+from tz_player.ui.actions_menu import (
+    ActionsMenuButton,
+    ActionsMenuDismissed,
+    ActionsMenuPopup,
+    ActionsMenuSelected,
+)
+from tz_player.ui.text_button import TextButton, TextButtonPressed
 
 if TYPE_CHECKING:
     from tz_player.app import TzPlayerApp
@@ -74,18 +81,8 @@ class PlaylistPane(Static):
         self.metadata_service: MetadataService | None = None
         self._metadata_pending: set[int] = set()
         self._viewport = PlaylistViewport(id="playlist-viewport")
-        self._actions = Select(
-            options=[
-                ("Add files...", "add_files"),
-                ("Add folder...", "add_folder"),
-                ("Remove selected", "remove_selected"),
-                ("Clear playlist", "clear_playlist"),
-                ("Refresh metadata (selected)", "refresh_metadata_selected"),
-                ("Refresh metadata (all)", "refresh_metadata_all"),
-            ],
-            prompt="Actions",
-            id="playlist-actions",
-        )
+        self._actions = ActionsMenuButton(id="playlist-actions")
+        self._actions_popup: ActionsMenuPopup | None = None
         self._find_input = Input(placeholder="Find...", id="playlist-find")
         self._transport_controls = TransportControls(id="playlist-bottom")
         self._last_player_state: PlayerState | None = None
@@ -94,8 +91,8 @@ class PlaylistPane(Static):
         yield Vertical(
             Horizontal(
                 self._actions,
-                Button("Up", id="reorder-up"),
-                Button("Down", id="reorder-down"),
+                TextButton("Up", action="reorder_up", id="reorder-up"),
+                TextButton("Down", action="reorder_down", id="reorder-down"),
                 self._find_input,
                 id="playlist-top",
             ),
@@ -419,13 +416,7 @@ class PlaylistPane(Static):
         self._update_viewport()
         self.post_message(self.SelectionChanged(len(self.selected_item_ids)))
 
-    async def on_select_changed(self, event: Select.Changed) -> None:
-        if event.select.id != "playlist-actions":
-            return
-        action = event.value
-        if action is None:
-            return
-        event.select.clear()
+    async def _handle_actions_menu(self, action: str) -> None:
         if action == "add_files":
             self.run_worker(self._add_files(), exclusive=True)
         elif action == "add_folder":
@@ -439,11 +430,33 @@ class PlaylistPane(Static):
         elif action == "refresh_metadata_all":
             self.run_worker(self._refresh_metadata_all(), exclusive=True)
 
-    async def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "reorder-up":
+    async def _open_actions_menu(self) -> None:
+        if self._actions_popup is not None:
+            self._actions_popup.dismiss()
+            self._actions_popup = None
+            return
+        button = self.query_one("#playlist-actions", ActionsMenuButton)
+        anchor = button.region
+        popup = ActionsMenuPopup(anchor)
+        self._actions_popup = popup
+        await self.app.mount(popup)
+
+    async def on_text_button_pressed(self, event: TextButtonPressed) -> None:
+        if event.action == "reorder_up":
             await self._move_selection("up")
-        elif event.button.id == "reorder-down":
+        elif event.action == "reorder_down":
             await self._move_selection("down")
+        elif event.action == "actions_menu":
+            await self._open_actions_menu()
+
+    async def on_actions_menu_selected(self, event: ActionsMenuSelected) -> None:
+        self._actions_popup = None
+        await self._handle_actions_menu(event.action)
+        self.focus()
+
+    def on_actions_menu_dismissed(self, event: ActionsMenuDismissed) -> None:
+        self._actions_popup = None
+        self.focus()
 
     async def _add_files(self) -> None:
         if self.store is None:
