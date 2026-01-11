@@ -81,7 +81,7 @@ class TzPlayerApp(App):
     }
 
     #status-pane {
-        height: 6;
+        height: 5;
         border: solid white;
         layout: vertical;
         padding: 0 1;

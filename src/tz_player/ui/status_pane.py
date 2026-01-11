@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from textual.app import ComposeResult
+from textual.containers import Horizontal
 from textual.widgets import Static
 from textual.widget import Widget
 
@@ -15,24 +16,49 @@ SPEED_STEP = 0.25
 
 
 class StatusPane(Widget):
+    DEFAULT_CSS = """
+    #time-row {
+        height: 1;
+    }
+
+    #time-bar {
+        width: 1fr;
+        min-width: 20;
+    }
+
+    #status-spacer {
+        width: 3;
+    }
+
+    #status-line {
+        width: auto;
+        max-width: 50;
+        overflow: hidden;
+    }
+    """
+
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
-        self._time_bar = SliderBar(name="time", label="TIME", key_step=0.01)
+        self._time_bar = SliderBar(
+            name="time", label="TIME", key_step=0.01, id="time-bar"
+        )
         self._volume_bar = SliderBar(name="volume", label="VOL", key_step=0.05)
         self._speed_bar = SliderBar(
             name="speed",
             label="SPD",
             key_step=SPEED_STEP / (SPEED_MAX - SPEED_MIN),
         )
+        self._status_spacer = Static("   ", id="status-spacer")
         self._status_line = Static("", id="status-line")
         self._player_service: PlayerService | None = None
         self._state: PlayerState | None = None
 
     def compose(self) -> ComposeResult:
-        yield self._time_bar
+        yield Horizontal(
+            self._time_bar, self._status_spacer, self._status_line, id="time-row"
+        )
         yield self._volume_bar
         yield self._speed_bar
-        yield self._status_line
 
     def set_player_service(self, player_service: PlayerService | None) -> None:
         self._player_service = player_service
