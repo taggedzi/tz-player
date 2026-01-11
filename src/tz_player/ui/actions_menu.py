@@ -92,7 +92,10 @@ class ActionsMenuPopup(Widget):
         labels = [option.prompt for option in self._menu.options]
         max_label = max((len(str(label)) for label in labels), default=10)
         menu_width = min(max_label + 4, max(12, self.app.size.width - 2))
-        menu_height = min(len(labels), max(4, self.app.size.height - 2))
+        menu_height = min(
+            max(len(labels) + 2, 6),
+            max(6, self.app.size.height - 2),
+        )
         screen_width = self.app.size.width
         screen_height = self.app.size.height
         anchor_x = self._anchor.x
