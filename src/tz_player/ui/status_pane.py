@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal
-from textual.widgets import Static
 from textual.widget import Widget
+from textual.widgets import Static
 
 from tz_player.services.player_service import PlayerService, PlayerState
 from tz_player.ui.slider_bar import SliderBar, SliderChanged
@@ -83,9 +83,7 @@ class StatusPane(Widget):
         self._status_line.update(
             f"Status: {state.status} | repeat {state.repeat_mode} | shuffle {shuffle}"
         )
-        pos_text, dur_text = format_time_pair_ms(
-            state.position_ms, state.duration_ms
-        )
+        pos_text, dur_text = format_time_pair_ms(state.position_ms, state.duration_ms)
         self._time_bar.set_value_text(f"{pos_text}/{dur_text}")
         if not self._time_bar.is_dragging:
             fraction = time_fraction(state.position_ms, state.duration_ms)
@@ -113,9 +111,7 @@ class StatusPane(Widget):
         elif event.name == "volume":
             volume = volume_from_fraction(event.fraction)
             self._volume_bar.set_value_text(str(volume))
-            self.run_worker(
-                self._player_service.set_volume(volume), exclusive=False
-            )
+            self.run_worker(self._player_service.set_volume(volume), exclusive=False)
         elif event.name == "speed":
             speed = speed_from_fraction(event.fraction)
             self._speed_bar.set_value_text(f"{speed:.2f}x")

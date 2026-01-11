@@ -172,15 +172,12 @@ class VLCPlaybackBackend:
             player.play()
             if start_ms:
                 player.set_time(int(start_ms))
-            self._emit_event(StateChanged("loading"))
-            self._emit_event(StateChanged("playing"))
             return None
         if name == "toggle_pause":
             player.pause()
             return None
         if name == "stop":
             player.stop()
-            self._emit_event(StateChanged("stopped"))
             return None
         if name == "seek_ms":
             (pos,) = cmd.args

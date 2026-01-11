@@ -23,10 +23,17 @@ from tz_player.ui.modals.confirm import ConfirmModal
 from tz_player.ui.modals.error import ErrorModal
 from tz_player.ui.modals.path_input import PathInputModal
 from tz_player.ui.playlist_viewport import PlaylistViewport
+from tz_player.ui.transport_controls import (
+    ToggleRepeat,
+    ToggleShuffle,
+    TransportAction,
+    TransportControls,
+)
 
 if TYPE_CHECKING:
     from tz_player.app import TzPlayerApp
     from tz_player.services.metadata_service import MetadataService
+    from tz_player.services.player_service import PlayerState
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +87,8 @@ class PlaylistPane(Static):
             id="playlist-actions",
         )
         self._find_input = Input(placeholder="Find...", id="playlist-find")
-        self._count_label = Static("0 tracks", id="playlist-count")
+        self._transport_controls = TransportControls(id="playlist-bottom")
+        self._last_player_state: PlayerState | None = None
 
     def compose(self) -> ComposeResult:
         yield Vertical(
@@ -92,13 +100,7 @@ class PlaylistPane(Static):
                 id="playlist-top",
             ),
             self._viewport,
-            Horizontal(
-                self._count_label,
-                Static("Repeat: off", id="repeat-placeholder"),
-                Static("Shuffle: off", id="shuffle-placeholder"),
-                Static("Transport: --:--", id="transport-placeholder"),
-                id="playlist-bottom",
-            ),
+            self._transport_controls,
             id="playlist-pane",
         )
 
@@ -114,6 +116,7 @@ class PlaylistPane(Static):
     async def on_playlist_row_clicked(self, event: PlaylistRowClicked) -> None:
         self.cursor_item_id = event.item_id
         self._update_viewport()
+        await self._refresh_transport_controls()
         self.focus()
 
     async def on_playlist_row_double_clicked(
@@ -171,6 +174,62 @@ class PlaylistPane(Static):
         self.playing_item_id = item_id
         self._update_viewport()
 
+    async def update_transport_controls(self, state: PlayerState) -> None:
+        self._last_player_state = state
+        await self._refresh_transport_controls()
+
+    async def on_transport_action(self, event: TransportAction) -> None:
+        app = cast("TzPlayerApp", self.app)
+        if event.action == "prev":
+            self.run_worker(app.action_previous_track(), exclusive=False)
+        elif event.action == "toggle_play":
+            self.run_worker(app.action_play_pause(), exclusive=False)
+        elif event.action == "stop":
+            self.run_worker(app.action_stop(), exclusive=False)
+        elif event.action == "next":
+            self.run_worker(app.action_next_track(), exclusive=False)
+
+    async def on_toggle_repeat(self, event: ToggleRepeat) -> None:
+        app = cast("TzPlayerApp", self.app)
+        self.run_worker(app.action_repeat_mode(), exclusive=False)
+        event.stop()
+
+    async def on_toggle_shuffle(self, event: ToggleShuffle) -> None:
+        app = cast("TzPlayerApp", self.app)
+        self.run_worker(app.action_shuffle(), exclusive=False)
+        event.stop()
+
+    async def _refresh_transport_controls(self) -> None:
+        if self._last_player_state is None:
+            return
+        if self.store is None or self.playlist_id is None:
+            self._transport_controls.update_from_state(
+                self._last_player_state,
+                total_count=0,
+                cursor_index=None,
+                playing_index=None,
+            )
+            return
+        cursor_index = None
+        if self.cursor_item_id is not None:
+            cursor_index = await self.store.get_item_index(
+                self.playlist_id, self.cursor_item_id
+            )
+        playing_index = None
+        if (
+            self._last_player_state.status in {"playing", "paused"}
+            and self._last_player_state.item_id is not None
+        ):
+            playing_index = await self.store.get_item_index(
+                self.playlist_id, self._last_player_state.item_id
+            )
+        self._transport_controls.update_from_state(
+            self._last_player_state,
+            total_count=self.total_count,
+            cursor_index=cursor_index,
+            playing_index=playing_index,
+        )
+
     async def refresh_view(self) -> None:
         if self.store is None or self.playlist_id is None:
             return
@@ -184,6 +243,7 @@ class PlaylistPane(Static):
             if self.cursor_item_id is None and self._rows:
                 self.cursor_item_id = self._rows[0].item_id
             self._update_viewport()
+            await self._refresh_transport_controls()
             self._request_visible_metadata()
         except Exception as exc:  # pragma: no cover - UI safety net
             logger.exception("Failed to refresh playlist: %s", exc)
@@ -259,7 +319,6 @@ class PlaylistPane(Static):
             selected_item_ids=self.selected_item_ids,
             playing_item_id=self.playing_item_id,
         )
-        self._count_label.update(f"{self.total_count} tracks")
 
     async def action_cursor_down(self) -> None:
         await self._move_cursor(1)
@@ -282,6 +341,7 @@ class PlaylistPane(Static):
             # Choose closest end based on direction of travel
             self.cursor_item_id = item_ids[-1] if delta > 0 else item_ids[0]
             self._update_viewport()
+            await self._refresh_transport_controls()
             return
 
         idx = item_ids.index(self.cursor_item_id)
@@ -291,6 +351,7 @@ class PlaylistPane(Static):
         if 0 <= next_idx < len(item_ids):
             self.cursor_item_id = item_ids[next_idx]
             self._update_viewport()
+            await self._refresh_transport_controls()
             return
 
         # Need to scroll the window; preserve screen-row position
@@ -307,6 +368,7 @@ class PlaylistPane(Static):
             pinned_idx = min(max(idx, 0), len(new_ids) - 1)
             self.cursor_item_id = new_ids[pinned_idx]
             self._update_viewport()
+            await self._refresh_transport_controls()
 
     async def _scroll(self, delta: int) -> None:
         if self.total_count == 0:

@@ -6,6 +6,11 @@ import asyncio
 from dataclasses import replace
 
 from tz_player.services.fake_backend import FakePlaybackBackend
+from tz_player.services.playback_backend import (
+    BackendError,
+    MediaChanged,
+    PositionUpdated,
+)
 from tz_player.services.player_service import PlayerService, PlayerState, TrackInfo
 
 
@@ -125,6 +130,28 @@ def test_volume_speed_repeat_shuffle() -> None:
     _run(run())
 
 
+def test_backend_event_handling_is_safe() -> None:
+    async def emit_event(_event: object) -> None:
+        return None
+
+    async def run() -> None:
+        service = PlayerService(
+            emit_event=emit_event,
+            track_info_provider=_track_info_provider,
+            backend=FakePlaybackBackend(tick_interval_ms=50),
+        )
+        await service._handle_backend_event(PositionUpdated(1000, 2000))
+        assert service.state.position_ms == 1000
+        assert service.state.duration_ms == 2000
+        await service._handle_backend_event(MediaChanged(3000))
+        assert service.state.duration_ms == 3000
+        await service._handle_backend_event(BackendError("boom"))
+        assert service.state.status == "error"
+        assert service.state.error == "boom"
+
+    _run(run())
+
+
 def test_next_prev_navigation() -> None:
     async def emit_event(_event: object) -> None:
         return None
@@ -167,6 +194,80 @@ def test_next_prev_navigation() -> None:
         assert service.state.item_id == 3
         await service.previous_track()
         assert service.state.item_id == 2
+        await service.shutdown()
+
+    _run(run())
+
+
+def test_shuffle_next_uses_shuffle_provider() -> None:
+    async def emit_event(_event: object) -> None:
+        return None
+
+    async def track_info(_playlist_id: int, item_id: int) -> TrackInfo:
+        return TrackInfo(
+            title=f"Song {item_id}",
+            artist=None,
+            album=None,
+            year=None,
+            path=f"/tmp/{item_id}.mp3",
+            duration_ms=400,
+        )
+
+    async def next_provider(_playlist_id: int, _item_id: int, wrap: bool) -> int | None:
+        return 2 if wrap else None
+
+    async def shuffle_provider(_playlist_id: int, _item_id: int) -> int | None:
+        return 3
+
+    async def run() -> None:
+        service = PlayerService(
+            emit_event=emit_event,
+            track_info_provider=track_info,
+            backend=FakePlaybackBackend(tick_interval_ms=50),
+            next_track_provider=next_provider,
+            shuffle_track_provider=shuffle_provider,
+            initial_state=PlayerState(playlist_id=1, item_id=1, shuffle=True),
+        )
+        await service.start()
+        await service.next_track()
+        assert service.state.item_id == 3
+        await service.shutdown()
+
+    _run(run())
+
+
+def test_shuffle_end_uses_shuffle_provider() -> None:
+    async def emit_event(_event: object) -> None:
+        return None
+
+    async def track_info(_playlist_id: int, item_id: int) -> TrackInfo:
+        return TrackInfo(
+            title=f"Song {item_id}",
+            artist=None,
+            album=None,
+            year=None,
+            path=f"/tmp/{item_id}.mp3",
+            duration_ms=400,
+        )
+
+    async def next_provider(_playlist_id: int, _item_id: int, wrap: bool) -> int | None:
+        return 2 if wrap else None
+
+    async def shuffle_provider(_playlist_id: int, _item_id: int) -> int | None:
+        return 3
+
+    async def run() -> None:
+        service = PlayerService(
+            emit_event=emit_event,
+            track_info_provider=track_info,
+            backend=FakePlaybackBackend(tick_interval_ms=50),
+            next_track_provider=next_provider,
+            shuffle_track_provider=shuffle_provider,
+            initial_state=PlayerState(playlist_id=1, item_id=1, shuffle=True),
+        )
+        await service.start()
+        await service._handle_track_end()
+        assert service.state.item_id == 3
         await service.shutdown()
 
     _run(run())

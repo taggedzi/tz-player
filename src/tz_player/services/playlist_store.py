@@ -148,6 +148,16 @@ class PlaylistStore:
             self._get_track_id_for_item_sync, playlist_id, item_id
         )
 
+    async def get_item_index(self, playlist_id: int, item_id: int) -> int | None:
+        return await asyncio.to_thread(self._get_item_index_sync, playlist_id, item_id)
+
+    async def get_random_item_id(
+        self, playlist_id: int, *, exclude_item_id: int | None = None
+    ) -> int | None:
+        return await asyncio.to_thread(
+            self._get_random_item_id_sync, playlist_id, exclude_item_id
+        )
+
     async def get_tracks_basic(self, track_ids: list[int]) -> list[TrackRecord]:
         return await asyncio.to_thread(self._get_tracks_basic_sync, track_ids)
 
@@ -563,6 +573,61 @@ class PlaylistStore:
         if row is None:
             return None
         return int(row["track_id"])
+
+    def _get_item_index_sync(self, playlist_id: int, item_id: int) -> int | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT pos_key
+                FROM playlist_items
+                WHERE playlist_id = ? AND id = ?
+                """,
+                (playlist_id, item_id),
+            ).fetchone()
+            if row is None:
+                return None
+            pos_key = int(row["pos_key"])
+            count_row = conn.execute(
+                """
+                SELECT COUNT(*) AS count
+                FROM playlist_items
+                WHERE playlist_id = ? AND pos_key <= ?
+                """,
+                (playlist_id, pos_key),
+            ).fetchone()
+        if count_row is None:
+            return None
+        return int(count_row["count"])
+
+    def _get_random_item_id_sync(
+        self, playlist_id: int, exclude_item_id: int | None
+    ) -> int | None:
+        with self._connect() as conn:
+            if exclude_item_id is None:
+                row = conn.execute(
+                    """
+                    SELECT id
+                    FROM playlist_items
+                    WHERE playlist_id = ?
+                    ORDER BY RANDOM()
+                    LIMIT 1
+                    """,
+                    (playlist_id,),
+                ).fetchone()
+            else:
+                row = conn.execute(
+                    """
+                    SELECT id
+                    FROM playlist_items
+                    WHERE playlist_id = ? AND id != ?
+                    ORDER BY RANDOM()
+                    LIMIT 1
+                    """,
+                    (playlist_id, exclude_item_id),
+                ).fetchone()
+        if row is None:
+            return None
+        return int(row["id"])
 
     def _invalidate_metadata_sync(self, track_ids: set[int] | None) -> None:
         with self._connect() as conn:

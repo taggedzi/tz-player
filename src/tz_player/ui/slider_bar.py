@@ -163,10 +163,7 @@ class SliderBar(Widget):
         if self._bar_length <= 0:
             return
         relative = x - self._bar_start
-        if self._bar_length == 1:
-            fraction = 0.0
-        else:
-            fraction = relative / (self._bar_length - 1)
+        fraction = 0.0 if self._bar_length == 1 else relative / (self._bar_length - 1)
         self._set_fraction(fraction, is_final=is_final)
 
     def _set_fraction(self, fraction: float, *, is_final: bool) -> None:

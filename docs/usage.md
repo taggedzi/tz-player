@@ -46,3 +46,8 @@ Status pane controls:
 - Click or drag the TIME bar to seek.
 - Click or drag the VOL and SPD bars to change volume and speed.
 - Time display shows MM:SS normally and switches to H:MM:SS for long tracks.
+
+Playlist footer:
+- Track counter shows `Track: ####/####` (current/total).
+- Repeat indicator shows `R:OFF|ONE|ALL` and shuffle shows `S:OFF|ON`.
+- Transport buttons allow Prev/Play/Pause/Stop/Next with mouse clicks.

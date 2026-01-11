@@ -48,9 +48,13 @@ class TzPlayerApp(App):
         min-width: 50%;
     }
 
-    #playlist-top, #playlist-bottom {
+    #playlist-top {
         height: 3;
         content-align: left middle;
+    }
+
+    #playlist-bottom {
+        height: 2;
     }
 
     #playlist-actions {
@@ -186,6 +190,7 @@ class TzPlayerApp(App):
                 backend=backend,
                 next_track_provider=self._next_track_provider,
                 prev_track_provider=self._prev_track_provider,
+                shuffle_track_provider=self._shuffle_track_provider,
                 initial_state=self.player_state,
             )
             self.metadata_service = MetadataService(
@@ -206,6 +211,7 @@ class TzPlayerApp(App):
                         backend=backend,
                         next_track_provider=self._next_track_provider,
                         prev_track_provider=self._prev_track_provider,
+                        shuffle_track_provider=self._shuffle_track_provider,
                         initial_state=self.player_state,
                     )
                     await self.player_service.start()
@@ -225,6 +231,7 @@ class TzPlayerApp(App):
             )
             pane.focus()
             self._update_status_pane()
+            await pane.update_transport_controls(self.player_state)
             self._update_current_track_pane()
         except Exception as exc:
             logger.exception("Failed to initialize app: %s", exc)
@@ -244,7 +251,10 @@ class TzPlayerApp(App):
     async def action_play_pause(self) -> None:
         if self.player_service is None or self.playlist_id is None:
             return
-        if self.player_state.item_id is None:
+        if (
+            self.player_state.status in {"idle", "stopped"}
+            or self.player_state.item_id is None
+        ):
             cursor_id = self.query_one(PlaylistPane).get_cursor_item_id()
             if cursor_id is None:
                 return
@@ -361,8 +371,10 @@ class TzPlayerApp(App):
                 if event.state.status in {"playing", "paused"}
                 else None
             )
-            self.query_one(PlaylistPane).set_playing_item_id(playing_id)
+            pane = self.query_one(PlaylistPane)
+            pane.set_playing_item_id(playing_id)
             self._update_status_pane()
+            await pane.update_transport_controls(self.player_state)
             if self._state_tuple(self.player_state) != self._last_persisted:
                 await self._schedule_state_save()
         elif isinstance(event, TrackChanged):
@@ -417,6 +429,11 @@ class TzPlayerApp(App):
         self, playlist_id: int, item_id: int, wrap: bool
     ) -> int | None:
         return await self.store.get_prev_item_id(playlist_id, item_id, wrap=wrap)
+
+    async def _shuffle_track_provider(
+        self, playlist_id: int, item_id: int
+    ) -> int | None:
+        return await self.store.get_random_item_id(playlist_id, exclude_item_id=item_id)
 
     def _update_status_pane(self) -> None:
         self.query_one(StatusPane).update_state(self.player_state)

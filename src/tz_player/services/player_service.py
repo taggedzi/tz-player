@@ -62,6 +62,8 @@ class PlayerService:
         | None = None,
         prev_track_provider: Callable[[int, int, bool], Awaitable[int | None]]
         | None = None,
+        shuffle_track_provider: Callable[[int, int], Awaitable[int | None]]
+        | None = None,
         default_duration_ms: int = 180_000,
         initial_state: PlayerState | None = None,
     ) -> None:
@@ -70,12 +72,14 @@ class PlayerService:
         self._backend = backend
         self._next_track_provider = next_track_provider
         self._prev_track_provider = prev_track_provider
+        self._shuffle_track_provider = shuffle_track_provider
         self._default_duration_ms = default_duration_ms
         self._state = initial_state or PlayerState()
         self._lock = asyncio.Lock()
         self._stop_requested = False
         self._poll_task: asyncio.Task[None] | None = None
         self._poll_interval = 0.25
+        self._end_handled_item_id: int | None = None
         self._backend.set_event_handler(self._handle_backend_event)
 
     @property
@@ -90,7 +94,7 @@ class PlayerService:
     async def shutdown(self) -> None:
         if self._poll_task is not None:
             self._poll_task.cancel()
-            with suppress(Exception):
+            with suppress(asyncio.CancelledError):
                 await self._poll_task
             self._poll_task = None
         with suppress(Exception):
@@ -107,6 +111,7 @@ class PlayerService:
                 duration_ms=0,
                 error=None,
             )
+            self._end_handled_item_id = None
         await self._emit_state()
         track_info = await self._track_info_provider(playlist_id, item_id)
         duration_ms = (
@@ -147,6 +152,10 @@ class PlayerService:
         async with self._lock:
             if self._state.status not in {"playing", "paused"}:
                 return
+            new_status: STATUS = (
+                "paused" if self._state.status == "playing" else "playing"
+            )
+            self._state = replace(self._state, status=new_status)
         await self._backend.toggle_pause()
         await self._emit_state()
 
@@ -154,6 +163,7 @@ class PlayerService:
         async with self._lock:
             self._stop_requested = True
             self._state = replace(self._state, status="stopped", position_ms=0)
+            self._end_handled_item_id = None
         await self._backend.stop()
         await self._emit_state()
 
@@ -227,15 +237,23 @@ class PlayerService:
         await self._emit_state()
 
     async def next_track(self) -> None:
-        if self._next_track_provider is None:
+        if self._next_track_provider is None and self._shuffle_track_provider is None:
             return
         async with self._lock:
             playlist_id = self._state.playlist_id
             item_id = self._state.item_id
             repeat_mode = self._state.repeat_mode
+            shuffle = self._state.shuffle
         if playlist_id is None or item_id is None:
             return
+        if shuffle and self._shuffle_track_provider is not None:
+            next_id = await self._shuffle_track_provider(playlist_id, item_id)
+            if next_id is not None:
+                await self.play_item(playlist_id, next_id)
+                return
         wrap = repeat_mode == "ALL"
+        if self._next_track_provider is None:
+            return
         next_id = await self._next_track_provider(playlist_id, item_id, wrap)
         if next_id is None:
             await self.stop()
@@ -296,7 +314,9 @@ class PlayerService:
                     and not self._stop_requested
                     and previous_status in {"playing", "paused"}
                     and self._state.item_id is not None
+                    and self._state.item_id != self._end_handled_item_id
                 ):
+                    self._end_handled_item_id = self._state.item_id
                     handle_end = True
                 if event.status == "stopped" and self._stop_requested:
                     self._stop_requested = False
@@ -313,11 +333,17 @@ class PlayerService:
             playlist_id = self._state.playlist_id
             item_id = self._state.item_id
             repeat_mode = self._state.repeat_mode
+            shuffle = self._state.shuffle
         if playlist_id is None or item_id is None:
             return
         if repeat_mode == "ONE":
             await self.play_item(playlist_id, item_id)
             return
+        if shuffle and self._shuffle_track_provider is not None:
+            next_id = await self._shuffle_track_provider(playlist_id, item_id)
+            if next_id is not None:
+                await self.play_item(playlist_id, next_id)
+                return
         if self._next_track_provider is None:
             await self.stop()
             return
@@ -350,12 +376,19 @@ class PlayerService:
                     if duration >= 0 and duration != self._state.duration_ms:
                         self._state = replace(self._state, duration_ms=duration)
                         emit = True
-                    if (
-                        position >= 0
-                        and abs(position - self._state.position_ms) >= 100
-                    ):
+                    if position >= 0 and abs(position - self._state.position_ms) >= 100:
                         self._state = replace(self._state, position_ms=position)
                         emit = True
+                    item_id = self._state.item_id
+                if (
+                    status == "playing"
+                    and duration > 0
+                    and position >= duration
+                    and item_id is not None
+                    and item_id != self._end_handled_item_id
+                ):
+                    self._end_handled_item_id = item_id
+                    await self._handle_track_end()
                 if emit:
                     await self._emit_state()
         except asyncio.CancelledError:

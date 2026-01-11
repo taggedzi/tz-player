@@ -14,6 +14,7 @@ from tz_player.services.playlist_store import PlaylistRow, PlaylistStore
 from tz_player.ui.playlist_pane import PlaylistPane
 from tz_player.ui.playlist_viewport import PlaylistViewport
 from tz_player.ui.status_pane import StatusPane
+from tz_player.ui.transport_controls import TransportControls
 
 
 class FakeAppDirs:
@@ -45,6 +46,7 @@ def test_app_mounts(tmp_path, monkeypatch) -> None:
         async with app.run_test():
             await asyncio.sleep(0)
             assert app.query_one(PlaylistPane)
+            assert app.query_one(TransportControls)
             app.exit()
 
     _run(run_app())
@@ -174,7 +176,7 @@ def test_status_pane_updates() -> None:
             assert pane._time_bar.value_text == "01:05/03:00"
             assert pane._volume_bar.value_text == "75"
             assert pane._speed_bar.value_text == "1.25x"
-            assert "playing" in str(pane._status_line.renderable)
+            assert "playing" in str(pane._status_line.render())
             app.exit()
 
     _run(run_app())
