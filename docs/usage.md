@@ -32,10 +32,16 @@ Current keys:
 - `n` / `p`: next/previous track
 - `x`: stop
 - `left` / `right`: seek -5s / +5s
+- `shift+left` / `shift+right`: seek -30s / +30s
 - `home` / `end`: seek to start/end
 - `-` / `+`: volume down/up
+- `shift+-` / `shift+=`: volume down/up by 10
 - `[` / `]`: speed down/up
 - `\`: speed reset to 1.0
 - `r`: cycle repeat mode
 - `s`: toggle shuffle
 - `escape`: dismiss modals
+
+Status pane controls:
+- Click or drag the TIME bar to seek.
+- Click or drag the VOL and SPD bars to change volume and speed.

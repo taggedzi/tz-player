@@ -9,9 +9,11 @@ from textual.app import App, ComposeResult
 
 import tz_player.paths as paths
 from tz_player.app import TzPlayerApp
+from tz_player.services.player_service import PlayerState
 from tz_player.services.playlist_store import PlaylistRow, PlaylistStore
 from tz_player.ui.playlist_pane import PlaylistPane
 from tz_player.ui.playlist_viewport import PlaylistViewport
+from tz_player.ui.status_pane import StatusPane
 
 
 class FakeAppDirs:
@@ -141,6 +143,38 @@ def test_playlist_cursor_pins_on_scroll(tmp_path) -> None:
             await pane._move_cursor(1)
             assert pane.window_offset == 1
             assert pane.cursor_item_id == 4
+            app.exit()
+
+    _run(run_app())
+
+
+def test_status_pane_updates() -> None:
+    pane = StatusPane()
+
+    class PaneApp(App):
+        def compose(self) -> ComposeResult:
+            yield pane
+
+    app = PaneApp()
+
+    async def run_app() -> None:
+        async with app.run_test():
+            await asyncio.sleep(0)
+            pane.update_state(
+                PlayerState(
+                    status="playing",
+                    position_ms=65_000,
+                    duration_ms=180_000,
+                    volume=75,
+                    speed=1.25,
+                    repeat_mode="ALL",
+                    shuffle=True,
+                )
+            )
+            assert pane._time_bar.value_text == "01:05/03:00"
+            assert pane._volume_bar.value_text == "75"
+            assert pane._speed_bar.value_text == "1.25x"
+            assert "playing" in str(pane._status_line.renderable)
             app.exit()
 
     _run(run_app())

@@ -26,6 +26,7 @@ from .services.vlc_backend import VLCPlaybackBackend
 from .state_store import AppState, load_state, save_state
 from .ui.modals.error import ErrorModal
 from .ui.playlist_pane import PlaylistPane
+from .ui.status_pane import StatusPane
 
 logger = logging.getLogger(__name__)
 METADATA_REFRESH_DEBOUNCE = 0.2
@@ -80,9 +81,14 @@ class TzPlayerApp(App):
     }
 
     #status-pane {
-        height: 3;
+        height: 6;
         border: solid white;
-        content-align: center middle;
+        layout: vertical;
+        padding: 0 1;
+    }
+
+    #status-line {
+        height: 1;
     }
 
     ModalScreen {
@@ -104,10 +110,14 @@ class TzPlayerApp(App):
         ("x", "stop", "Stop"),
         ("left", "seek_back", "Seek -5s"),
         ("right", "seek_forward", "Seek +5s"),
+        ("shift+left", "seek_back_big", "Seek -30s"),
+        ("shift+right", "seek_forward_big", "Seek +30s"),
         ("home", "seek_start", "Seek start"),
         ("end", "seek_end", "Seek end"),
         ("-", "volume_down", "Vol -"),
         ("+", "volume_up", "Vol +"),
+        ("shift+-", "volume_down_big", "Vol -10"),
+        ("shift+=", "volume_up_big", "Vol +10"),
         ("[", "speed_down", "Speed -"),
         ("]", "speed_up", "Speed +"),
         ("\\", "speed_reset", "Speed reset"),
@@ -147,10 +157,7 @@ class TzPlayerApp(App):
             ),
             id="main",
         )
-        yield Static(
-            "Status: idle | --:--/--:-- | vol 100 | speed 1.00x",
-            id="status-pane",
-        )
+        yield StatusPane(id="status-pane")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -207,6 +214,7 @@ class TzPlayerApp(App):
                     )
                 else:
                     raise
+            self.query_one(StatusPane).set_player_service(self.player_service)
             self._last_persisted = self._state_tuple(self.player_state)
             pane = self.query_one(PlaylistPane)
             await pane.configure(
@@ -280,6 +288,16 @@ class TzPlayerApp(App):
             return
         await self.player_service.seek_delta_ms(5000)
 
+    async def action_seek_back_big(self) -> None:
+        if self.player_service is None:
+            return
+        await self.player_service.seek_delta_ms(-30000)
+
+    async def action_seek_forward_big(self) -> None:
+        if self.player_service is None:
+            return
+        await self.player_service.seek_delta_ms(30000)
+
     async def action_seek_start(self) -> None:
         if self.player_service is None:
             return
@@ -299,6 +317,16 @@ class TzPlayerApp(App):
         if self.player_service is None:
             return
         await self.player_service.set_volume(self.player_state.volume + 5)
+
+    async def action_volume_down_big(self) -> None:
+        if self.player_service is None:
+            return
+        await self.player_service.set_volume(self.player_state.volume - 10)
+
+    async def action_volume_up_big(self) -> None:
+        if self.player_service is None:
+            return
+        await self.player_service.set_volume(self.player_state.volume + 10)
 
     async def action_speed_down(self) -> None:
         if self.player_service is None:
@@ -391,18 +419,7 @@ class TzPlayerApp(App):
         return await self.store.get_prev_item_id(playlist_id, item_id, wrap=wrap)
 
     def _update_status_pane(self) -> None:
-        status = self.player_state.status
-        pos = _format_time(self.player_state.position_ms)
-        dur = _format_time(self.player_state.duration_ms)
-        volume = self.player_state.volume
-        speed = self.player_state.speed
-        repeat_mode = self.player_state.repeat_mode
-        shuffle = "on" if self.player_state.shuffle else "off"
-        text = (
-            f"Status: {status} | {pos}/{dur} | vol {volume} | "
-            f"speed {speed:.2f}x | repeat {repeat_mode} | shuffle {shuffle}"
-        )
-        self.query_one("#status-pane", Static).update(text)
+        self.query_one(StatusPane).update_state(self.player_state)
 
     def _update_current_track_pane(self) -> None:
         pane = self.query_one("#current-track-pane", Static)

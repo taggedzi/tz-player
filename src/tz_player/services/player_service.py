@@ -156,6 +156,13 @@ class PlayerService:
         await self._backend.seek_ms(position)
         await self._emit_state()
 
+    async def seek_ms(self, position_ms: int) -> None:
+        async with self._lock:
+            position = _clamp(position_ms, 0, self._state.duration_ms)
+            self._state = replace(self._state, position_ms=position)
+        await self._backend.seek_ms(position)
+        await self._emit_state()
+
     async def seek_delta_ms(self, delta_ms: int) -> None:
         async with self._lock:
             position = self._state.position_ms + delta_ms
@@ -174,6 +181,13 @@ class PlayerService:
     async def change_speed(self, delta_steps: int) -> None:
         async with self._lock:
             speed = self._state.speed + delta_steps * 0.25
+            self._state = replace(self._state, speed=_clamp_float(speed, 0.5, 8.0))
+            speed = self._state.speed
+        await self._backend.set_speed(speed)
+        await self._emit_state()
+
+    async def set_speed(self, speed: float) -> None:
+        async with self._lock:
             self._state = replace(self._state, speed=_clamp_float(speed, 0.5, 8.0))
             speed = self._state.speed
         await self._backend.set_speed(speed)
