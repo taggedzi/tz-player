@@ -5,7 +5,7 @@ from __future__ import annotations
 from time import monotonic
 
 from rich.text import Text
-from textual.events import Key, MouseDown, MouseMove, MouseUp
+from textual.events import Blur, Key, MouseDown, MouseMove, MouseUp
 from textual.message import Message
 from textual.widget import Widget
 
@@ -50,6 +50,8 @@ class SliderBar(Widget):
         self.emit_interval = emit_interval
         self._dragging = False
         self._last_emit = 0.0
+        self._last_interaction = 0.0
+        self.drag_timeout = 0.5
         self._bar_start = 0
         self._bar_length = 0
         self.can_focus = True
@@ -59,10 +61,12 @@ class SliderBar(Widget):
         return self._dragging
 
     def set_fraction(self, fraction: float) -> None:
+        self._maybe_end_stale_drag()
         self.fraction = _clamp_fraction(fraction)
         self.refresh()
 
     def set_value_text(self, value_text: str) -> None:
+        self._maybe_end_stale_drag()
         self.value_text = value_text
         self.refresh()
 
@@ -88,6 +92,7 @@ class SliderBar(Widget):
             return
         self.focus()
         self._dragging = True
+        self._last_interaction = monotonic()
         self.capture_mouse()
         self._set_from_x(event.x, is_final=False)
         event.stop()
@@ -95,6 +100,7 @@ class SliderBar(Widget):
     def on_mouse_move(self, event: MouseMove) -> None:
         if not self._dragging:
             return
+        self._last_interaction = monotonic()
         self._set_from_x(event.x, is_final=False)
         event.stop()
 
@@ -102,8 +108,18 @@ class SliderBar(Widget):
         if not self._dragging:
             return
         self._dragging = False
+        self._last_interaction = monotonic()
         self.release_mouse()
         self._set_from_x(event.x, is_final=True)
+        event.stop()
+
+    def on_blur(self, event: Blur) -> None:
+        if not self._dragging:
+            return
+        self._dragging = False
+        self._last_interaction = monotonic()
+        self.release_mouse()
+        self.refresh()
         event.stop()
 
     def on_key(self, event: Key) -> None:
@@ -167,6 +183,14 @@ class SliderBar(Widget):
                 )
             )
         self.refresh()
+
+    def _maybe_end_stale_drag(self) -> None:
+        if not self._dragging or self._last_interaction <= 0:
+            return
+        if monotonic() - self._last_interaction <= self.drag_timeout:
+            return
+        self._dragging = False
+        self.release_mouse()
 
 
 def _clamp_fraction(value: float) -> float:

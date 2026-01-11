@@ -45,3 +45,4 @@ Current keys:
 Status pane controls:
 - Click or drag the TIME bar to seek.
 - Click or drag the VOL and SPD bars to change volume and speed.
+- Time display shows MM:SS normally and switches to H:MM:SS for long tracks.

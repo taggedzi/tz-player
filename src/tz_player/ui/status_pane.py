@@ -9,6 +9,7 @@ from textual.widget import Widget
 
 from tz_player.services.player_service import PlayerService, PlayerState
 from tz_player.ui.slider_bar import SliderBar, SliderChanged
+from tz_player.utils.time_format import format_time_pair_ms
 
 SPEED_MIN = 0.5
 SPEED_MAX = 8.0
@@ -31,9 +32,18 @@ class StatusPane(Widget):
     }
 
     #status-line {
-        width: auto;
-        max-width: 50;
+        height: 1;
+        width: 1fr;
         overflow: hidden;
+    }
+
+    #volume-row {
+        height: 1;
+    }
+
+    #vol-bar, #spd-bar {
+        width: 1fr;
+        min-width: 10;
     }
     """
 
@@ -42,23 +52,27 @@ class StatusPane(Widget):
         self._time_bar = SliderBar(
             name="time", label="TIME", key_step=0.01, id="time-bar"
         )
-        self._volume_bar = SliderBar(name="volume", label="VOL", key_step=0.05)
+        self._volume_bar = SliderBar(
+            name="volume", label="VOL", key_step=0.05, id="vol-bar"
+        )
         self._speed_bar = SliderBar(
             name="speed",
             label="SPD",
             key_step=SPEED_STEP / (SPEED_MAX - SPEED_MIN),
+            id="spd-bar",
         )
         self._status_spacer = Static("   ", id="status-spacer")
+        self._volume_spacer = Static("   ", id="status-spacer")
         self._status_line = Static("", id="status-line")
         self._player_service: PlayerService | None = None
         self._state: PlayerState | None = None
 
     def compose(self) -> ComposeResult:
+        yield self._time_bar
         yield Horizontal(
-            self._time_bar, self._status_spacer, self._status_line, id="time-row"
+            self._volume_bar, self._volume_spacer, self._speed_bar, id="volume-row"
         )
-        yield self._volume_bar
-        yield self._speed_bar
+        yield self._status_line
 
     def set_player_service(self, player_service: PlayerService | None) -> None:
         self._player_service = player_service
@@ -69,16 +83,13 @@ class StatusPane(Widget):
         self._status_line.update(
             f"Status: {state.status} | repeat {state.repeat_mode} | shuffle {shuffle}"
         )
+        pos_text, dur_text = format_time_pair_ms(
+            state.position_ms, state.duration_ms
+        )
+        self._time_bar.set_value_text(f"{pos_text}/{dur_text}")
         if not self._time_bar.is_dragging:
             fraction = time_fraction(state.position_ms, state.duration_ms)
-            pos_text = format_time_ms(
-                state.position_ms, unknown=state.duration_ms <= 0
-            )
-            dur_text = format_time_ms(
-                state.duration_ms, unknown=state.duration_ms <= 0
-            )
             self._time_bar.set_fraction(fraction)
-            self._time_bar.set_value_text(f"{pos_text}/{dur_text}")
         if not self._volume_bar.is_dragging:
             self._volume_bar.set_fraction(volume_fraction(state.volume))
             self._volume_bar.set_value_text(str(state.volume))
@@ -93,8 +104,7 @@ class StatusPane(Widget):
             duration_ms = max(0, self._state.duration_ms)
             position_ms = int(event.fraction * duration_ms) if duration_ms else 0
             position_ms = clamp_int(position_ms, 0, duration_ms)
-            pos_text = format_time_ms(position_ms, unknown=duration_ms <= 0)
-            dur_text = format_time_ms(duration_ms, unknown=duration_ms <= 0)
+            pos_text, dur_text = format_time_pair_ms(position_ms, duration_ms)
             self._time_bar.set_value_text(f"{pos_text}/{dur_text}")
             if event.is_final and duration_ms > 0:
                 self.run_worker(
@@ -111,17 +121,6 @@ class StatusPane(Widget):
             self._speed_bar.set_value_text(f"{speed:.2f}x")
             self.run_worker(self._player_service.set_speed(speed), exclusive=False)
         event.stop()
-
-
-def format_time_ms(value_ms: int, *, unknown: bool = False) -> str:
-    if unknown:
-        return "--:--"
-    total_seconds = max(0, value_ms) // 1000
-    hours, remainder = divmod(total_seconds, 3600)
-    minutes, seconds = divmod(remainder, 60)
-    if hours > 0:
-        return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
-    return f"{minutes:02d}:{seconds:02d}"
 
 
 def time_fraction(position_ms: int, duration_ms: int) -> float:

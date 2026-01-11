@@ -74,6 +74,8 @@ class PlayerService:
         self._state = initial_state or PlayerState()
         self._lock = asyncio.Lock()
         self._stop_requested = False
+        self._poll_task: asyncio.Task[None] | None = None
+        self._poll_interval = 0.25
         self._backend.set_event_handler(self._handle_backend_event)
 
     @property
@@ -82,8 +84,15 @@ class PlayerService:
 
     async def start(self) -> None:
         await self._backend.start()
+        if self._poll_task is None:
+            self._poll_task = asyncio.create_task(self._poll_position())
 
     async def shutdown(self) -> None:
+        if self._poll_task is not None:
+            self._poll_task.cancel()
+            with suppress(Exception):
+                await self._poll_task
+            self._poll_task = None
         with suppress(Exception):
             await self._backend.shutdown()
 
@@ -322,6 +331,35 @@ class PlayerService:
 
     async def _emit_state(self) -> None:
         await self._emit_event(PlayerStateChanged(self._state))
+
+    async def _poll_position(self) -> None:
+        try:
+            while True:
+                await asyncio.sleep(self._poll_interval)
+                async with self._lock:
+                    status = self._state.status
+                if status not in {"playing", "paused"}:
+                    continue
+                try:
+                    position = await self._backend.get_position_ms()
+                    duration = await self._backend.get_duration_ms()
+                except Exception:  # pragma: no cover - backend safety net
+                    continue
+                emit = False
+                async with self._lock:
+                    if duration >= 0 and duration != self._state.duration_ms:
+                        self._state = replace(self._state, duration_ms=duration)
+                        emit = True
+                    if (
+                        position >= 0
+                        and abs(position - self._state.position_ms) >= 100
+                    ):
+                        self._state = replace(self._state, position_ms=position)
+                        emit = True
+                if emit:
+                    await self._emit_state()
+        except asyncio.CancelledError:
+            return
 
 
 def _clamp(value: int, min_value: int, max_value: int) -> int:
