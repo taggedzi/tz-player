@@ -5,9 +5,10 @@ from __future__ import annotations
 from textual.app import ComposeResult
 from textual.geometry import Region
 from textual.message import Message
+from textual.widget import Widget
 from textual.widgets import OptionList
 from textual.widgets.option_list import Option
-from textual.widget import Widget
+
 from tz_player.ui.text_button import TextButton
 
 
@@ -71,9 +72,7 @@ class ActionsMenuPopup(Widget):
         self._place_menu()
         self._menu.focus()
 
-    def on_option_list_option_selected(
-        self, event: OptionList.OptionSelected
-    ) -> None:
+    def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
         option_id = event.option.id
         if option_id is not None:
             self.post_message(ActionsMenuSelected(str(option_id)))

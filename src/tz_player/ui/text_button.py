@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Literal
-
 from textual.events import Click, Key
 from textual.message import Message
 from textual.widgets import Static
@@ -30,6 +28,7 @@ class TextButton(Static):
         color: $text;
     }
     """
+
     def __init__(
         self,
         label: str,

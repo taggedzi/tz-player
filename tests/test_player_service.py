@@ -332,9 +332,7 @@ def test_shuffle_repeat_all_wraps() -> None:
             backend=FakePlaybackBackend(tick_interval_ms=50),
             playlist_item_ids_provider=_playlist_item_ids_provider([1, 2, 3, 4]),
             shuffle_random=random.Random(0),
-            initial_state=PlayerState(
-                playlist_id=1, item_id=1, repeat_mode="ALL"
-            ),
+            initial_state=PlayerState(playlist_id=1, item_id=1, repeat_mode="ALL"),
         )
         await service.start()
         await service.toggle_shuffle()

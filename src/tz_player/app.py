@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Literal, cast
 
 from textual.app import App, ComposeResult
-from textual.containers import Container, Horizontal, Vertical
+from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Footer, Header, Static
 
@@ -24,10 +24,10 @@ from .services.player_service import PlayerService, PlayerState, TrackInfo
 from .services.playlist_store import PlaylistStore
 from .services.vlc_backend import VLCPlaybackBackend
 from .state_store import AppState, load_state, save_state
+from .ui.actions_menu import ActionsMenuPopup
 from .ui.modals.error import ErrorModal
 from .ui.playlist_pane import PlaylistPane
 from .ui.status_pane import StatusPane
-from .ui.actions_menu import ActionsMenuPopup
 
 logger = logging.getLogger(__name__)
 METADATA_REFRESH_DEBOUNCE = 0.2

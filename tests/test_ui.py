@@ -121,7 +121,7 @@ def test_actions_menu_dismisses_on_escape() -> None:
             assert app.query_one(ActionsMenuPopup)
             await pilot.press("escape")
             await asyncio.sleep(0)
-            assert app.query(ActionsMenuPopup).count == 0
+            assert len(app.query(ActionsMenuPopup)) == 0
             app.exit()
 
     _run(run_app())

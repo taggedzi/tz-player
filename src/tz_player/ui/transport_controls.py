@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, cast
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
@@ -138,4 +138,8 @@ class TransportControls(Widget):
         elif action == "shuffle":
             self.post_message(ToggleShuffle())
         elif action in {"prev", "toggle_play", "stop", "next"}:
-            self.post_message(TransportAction(action))
+            self.post_message(
+                TransportAction(
+                    cast(Literal["prev", "toggle_play", "stop", "next"], action)
+                )
+            )
