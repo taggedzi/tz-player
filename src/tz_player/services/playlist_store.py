@@ -151,6 +151,9 @@ class PlaylistStore:
     async def get_item_index(self, playlist_id: int, item_id: int) -> int | None:
         return await asyncio.to_thread(self._get_item_index_sync, playlist_id, item_id)
 
+    async def list_item_ids(self, playlist_id: int) -> list[int]:
+        return await asyncio.to_thread(self._list_item_ids_sync, playlist_id)
+
     async def get_random_item_id(
         self, playlist_id: int, *, exclude_item_id: int | None = None
     ) -> int | None:
@@ -598,6 +601,19 @@ class PlaylistStore:
         if count_row is None:
             return None
         return int(count_row["count"])
+
+    def _list_item_ids_sync(self, playlist_id: int) -> list[int]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT id
+                FROM playlist_items
+                WHERE playlist_id = ?
+                ORDER BY pos_key ASC
+                """,
+                (playlist_id,),
+            ).fetchall()
+        return [int(row["id"]) for row in rows]
 
     def _get_random_item_id_sync(
         self, playlist_id: int, exclude_item_id: int | None

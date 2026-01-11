@@ -203,7 +203,7 @@ class TzPlayerApp(App):
                 backend=backend,
                 next_track_provider=self._next_track_provider,
                 prev_track_provider=self._prev_track_provider,
-                shuffle_track_provider=self._shuffle_track_provider,
+                playlist_item_ids_provider=self._playlist_item_ids_provider,
                 initial_state=self.player_state,
             )
             self.metadata_service = MetadataService(
@@ -224,7 +224,7 @@ class TzPlayerApp(App):
                         backend=backend,
                         next_track_provider=self._next_track_provider,
                         prev_track_provider=self._prev_track_provider,
-                        shuffle_track_provider=self._shuffle_track_provider,
+                        playlist_item_ids_provider=self._playlist_item_ids_provider,
                         initial_state=self.player_state,
                     )
                     await self.player_service.start()
@@ -392,7 +392,10 @@ class TzPlayerApp(App):
     async def action_shuffle(self) -> None:
         if self.player_service is None:
             return
-        await self.player_service.toggle_shuffle()
+        anchor_id = None
+        if self.player_state.item_id is None:
+            anchor_id = self.query_one(PlaylistPane).get_cursor_item_id()
+        await self.player_service.toggle_shuffle(anchor_item_id=anchor_id)
 
     async def _handle_player_event(self, event: object) -> None:
         if isinstance(event, PlayerStateChanged):
@@ -461,10 +464,8 @@ class TzPlayerApp(App):
     ) -> int | None:
         return await self.store.get_prev_item_id(playlist_id, item_id, wrap=wrap)
 
-    async def _shuffle_track_provider(
-        self, playlist_id: int, item_id: int
-    ) -> int | None:
-        return await self.store.get_random_item_id(playlist_id, exclude_item_id=item_id)
+    async def _playlist_item_ids_provider(self, playlist_id: int) -> list[int]:
+        return await self.store.list_item_ids(playlist_id)
 
     def _update_status_pane(self) -> None:
         self.query_one(StatusPane).update_state(self.player_state)

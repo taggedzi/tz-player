@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import random
 from collections.abc import Awaitable
 from contextlib import suppress
 from dataclasses import dataclass, replace
@@ -62,8 +63,8 @@ class PlayerService:
         | None = None,
         prev_track_provider: Callable[[int, int, bool], Awaitable[int | None]]
         | None = None,
-        shuffle_track_provider: Callable[[int, int], Awaitable[int | None]]
-        | None = None,
+        playlist_item_ids_provider: Callable[[int], Awaitable[list[int]]] | None = None,
+        shuffle_random: random.Random | None = None,
         default_duration_ms: int = 180_000,
         initial_state: PlayerState | None = None,
     ) -> None:
@@ -72,7 +73,8 @@ class PlayerService:
         self._backend = backend
         self._next_track_provider = next_track_provider
         self._prev_track_provider = prev_track_provider
-        self._shuffle_track_provider = shuffle_track_provider
+        self._playlist_item_ids_provider = playlist_item_ids_provider
+        self._shuffle_random = shuffle_random or random.Random()
         self._default_duration_ms = default_duration_ms
         self._state = initial_state or PlayerState()
         self._lock = asyncio.Lock()
@@ -80,6 +82,9 @@ class PlayerService:
         self._poll_task: asyncio.Task[None] | None = None
         self._poll_interval = 0.25
         self._end_handled_item_id: int | None = None
+        self._shuffle_order: list[int] = []
+        self._shuffle_index: int | None = None
+        self._shuffle_playlist_id: int | None = None
         self._backend.set_event_handler(self._handle_backend_event)
 
     @property
@@ -112,7 +117,10 @@ class PlayerService:
                 error=None,
             )
             self._end_handled_item_id = None
+            shuffle_enabled = self._state.shuffle
         await self._emit_state()
+        if shuffle_enabled:
+            await self._ensure_shuffle_position(playlist_id, item_id)
         track_info = await self._track_info_provider(playlist_id, item_id)
         duration_ms = (
             track_info.duration_ms
@@ -231,13 +239,26 @@ class PlayerService:
             self._state = replace(self._state, repeat_mode=next_mode)
         await self._emit_state()
 
-    async def toggle_shuffle(self) -> None:
+    async def toggle_shuffle(self, *, anchor_item_id: int | None = None) -> None:
         async with self._lock:
             self._state = replace(self._state, shuffle=not self._state.shuffle)
+            shuffle_enabled = self._state.shuffle
+            playlist_id = self._state.playlist_id
+            current_item_id = self._state.item_id
+        if shuffle_enabled and playlist_id is not None:
+            anchor = current_item_id or anchor_item_id
+            await self._rebuild_shuffle_order(playlist_id, anchor)
+        else:
+            self._clear_shuffle_order()
         await self._emit_state()
 
+    def _clear_shuffle_order(self) -> None:
+        self._shuffle_order = []
+        self._shuffle_index = None
+        self._shuffle_playlist_id = None
+
     async def next_track(self) -> None:
-        if self._next_track_provider is None and self._shuffle_track_provider is None:
+        if self._next_track_provider is None and self._playlist_item_ids_provider is None:
             return
         async with self._lock:
             playlist_id = self._state.playlist_id
@@ -246,8 +267,10 @@ class PlayerService:
             shuffle = self._state.shuffle
         if playlist_id is None or item_id is None:
             return
-        if shuffle and self._shuffle_track_provider is not None:
-            next_id = await self._shuffle_track_provider(playlist_id, item_id)
+        if shuffle:
+            next_id = await self._shuffle_step(
+                playlist_id, item_id, direction=1, wrap=repeat_mode == "ALL"
+            )
             if next_id is not None:
                 await self.play_item(playlist_id, next_id)
                 return
@@ -261,17 +284,29 @@ class PlayerService:
         await self.play_item(playlist_id, next_id)
 
     async def previous_track(self) -> None:
-        if self._prev_track_provider is None:
+        if self._prev_track_provider is None and self._playlist_item_ids_provider is None:
             return
         async with self._lock:
             playlist_id = self._state.playlist_id
             item_id = self._state.item_id
             repeat_mode = self._state.repeat_mode
             position_ms = self._state.position_ms
-        if playlist_id is None or item_id is None:
-            return
+            shuffle = self._state.shuffle
+            if playlist_id is None or item_id is None:
+                return
         if position_ms > 3000:
             await self.seek_ratio(0.0)
+            return
+        if shuffle:
+            prev_id = await self._shuffle_step(
+                playlist_id, item_id, direction=-1, wrap=repeat_mode == "ALL"
+            )
+            if prev_id is None:
+                await self.stop()
+                return
+            await self.play_item(playlist_id, prev_id)
+            return
+        if self._prev_track_provider is None:
             return
         wrap = repeat_mode == "ALL"
         prev_id = await self._prev_track_provider(playlist_id, item_id, wrap)
@@ -339,8 +374,10 @@ class PlayerService:
         if repeat_mode == "ONE":
             await self.play_item(playlist_id, item_id)
             return
-        if shuffle and self._shuffle_track_provider is not None:
-            next_id = await self._shuffle_track_provider(playlist_id, item_id)
+        if shuffle:
+            next_id = await self._shuffle_step(
+                playlist_id, item_id, direction=1, wrap=repeat_mode == "ALL"
+            )
             if next_id is not None:
                 await self.play_item(playlist_id, next_id)
                 return
@@ -354,6 +391,91 @@ class PlayerService:
             await self.stop()
             return
         await self.play_item(playlist_id, next_id)
+
+    async def _ensure_shuffle_position(self, playlist_id: int, item_id: int) -> None:
+        if self._playlist_item_ids_provider is None:
+            return
+        if not self._shuffle_order or self._shuffle_playlist_id != playlist_id:
+            await self._rebuild_shuffle_order(playlist_id, item_id)
+            return
+        if not self._sync_shuffle_index(item_id):
+            await self._rebuild_shuffle_order(playlist_id, item_id)
+
+    def _sync_shuffle_index(self, item_id: int) -> bool:
+        try:
+            index = self._shuffle_order.index(item_id)
+        except ValueError:
+            return False
+        self._shuffle_index = index
+        return True
+
+    async def _shuffle_step(
+        self,
+        playlist_id: int,
+        item_id: int,
+        *,
+        direction: int,
+        wrap: bool,
+    ) -> int | None:
+        if self._playlist_item_ids_provider is None:
+            return None
+        item_ids = await self._playlist_item_ids_provider(playlist_id)
+        if not item_ids:
+            self._clear_shuffle_order()
+            return None
+        item_id_set = set(item_ids)
+        if (
+            not self._shuffle_order
+            or self._shuffle_playlist_id != playlist_id
+            or set(self._shuffle_order) != item_id_set
+            or item_id not in item_id_set
+        ):
+            await self._rebuild_shuffle_order(
+                playlist_id, item_id, item_ids=item_ids
+            )
+        if not self._shuffle_order:
+            return None
+        if not self._sync_shuffle_index(item_id):
+            await self._rebuild_shuffle_order(
+                playlist_id, item_id, item_ids=item_ids
+            )
+            if not self._sync_shuffle_index(item_id):
+                return None
+        next_index = self._shuffle_index + direction
+        if 0 <= next_index < len(self._shuffle_order):
+            self._shuffle_index = next_index
+            return self._shuffle_order[next_index]
+        if wrap and self._shuffle_order:
+            self._shuffle_index = 0 if direction > 0 else len(self._shuffle_order) - 1
+            return self._shuffle_order[self._shuffle_index]
+        return None
+
+    async def _rebuild_shuffle_order(
+        self,
+        playlist_id: int,
+        anchor_item_id: int | None,
+        *,
+        item_ids: list[int] | None = None,
+    ) -> bool:
+        if self._playlist_item_ids_provider is None:
+            self._clear_shuffle_order()
+            return False
+        if item_ids is None:
+            item_ids = await self._playlist_item_ids_provider(playlist_id)
+        if not item_ids:
+            self._clear_shuffle_order()
+            self._shuffle_playlist_id = playlist_id
+            return False
+        anchor = anchor_item_id if anchor_item_id in item_ids else item_ids[0]
+        remaining = [item_id for item_id in item_ids if item_id != anchor]
+        self._shuffle_random.shuffle(remaining)
+        order = [anchor] + remaining
+        async with self._lock:
+            self._shuffle_order = order
+            self._shuffle_index = 0
+            self._shuffle_playlist_id = playlist_id
+        logger.debug("Shuffle order rebuilt with %d items.", len(order))
+        return True
 
     async def _emit_state(self) -> None:
         await self._emit_event(PlayerStateChanged(self._state))
