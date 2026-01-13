@@ -217,6 +217,7 @@ class PlaylistStore:
 
     def _clear_playlist_sync(self, playlist_id: int) -> None:
         with self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
             conn.execute(
                 "DELETE FROM playlist_items WHERE playlist_id = ?", (playlist_id,)
             )

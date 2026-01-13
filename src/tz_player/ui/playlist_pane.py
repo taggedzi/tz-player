@@ -86,6 +86,7 @@ class PlaylistPane(Static):
         self._find_input = Input(placeholder="Find...", id="playlist-find")
         self._transport_controls = TransportControls(id="playlist-bottom")
         self._last_player_state: PlayerState | None = None
+        self._refresh_gen = 0
 
     def compose(self) -> ComposeResult:
         yield Vertical(
@@ -145,6 +146,7 @@ class PlaylistPane(Static):
         self.playlist_id = playlist_id
         self.playing_item_id = playing_item_id
         self.metadata_service = metadata_service
+        self._bump_refresh_gen()
         await self.refresh_view()
 
     def focus_find(self) -> None:
@@ -232,16 +234,43 @@ class PlaylistPane(Static):
             return
         await self._recompute_limit()
         try:
+            gen = self._refresh_gen
+            logger.debug(
+                "Refreshing playlist pane after clear gen=%s offset=%s total_count(before)=%s",
+                gen,
+                self.window_offset,
+                self.total_count,
+            )
             self.total_count = await self.store.count(self.playlist_id)
+            if gen != self._refresh_gen:
+                logger.debug(
+                    "Refresh aborted due to gen change (before fetch) gen=%s current=%s",
+                    gen,
+                    self._refresh_gen,
+                )
+                return
             self.window_offset = self._clamp_offset(self.window_offset)
             self._rows = await self.store.fetch_window(
                 self.playlist_id, self.window_offset, self.limit
             )
+            if gen != self._refresh_gen:
+                logger.debug(
+                    "Refresh aborted due to gen change (after fetch) gen=%s current=%s",
+                    gen,
+                    self._refresh_gen,
+                )
+                return
             if self.cursor_item_id is None and self._rows:
                 self.cursor_item_id = self._rows[0].item_id
             self._update_viewport()
             await self._refresh_transport_controls()
             self._request_visible_metadata()
+            logger.debug(
+                "After refresh: rows=%s total_count=%s gen=%s",
+                len(self._rows),
+                self.total_count,
+                self._refresh_gen,
+            )
         except Exception as exc:  # pragma: no cover - UI safety net
             logger.exception("Failed to refresh playlist: %s", exc)
             await self._show_error("Failed to refresh playlist. See log file.")
@@ -257,9 +286,17 @@ class PlaylistPane(Static):
         if not to_refresh:
             return
         try:
+            gen = self._refresh_gen
             fresh_rows = await self.store.fetch_rows_by_track_ids(
                 self.playlist_id, to_refresh
             )
+            if gen != self._refresh_gen:
+                logger.debug(
+                    "Refresh visible rows aborted due to gen change gen=%s current=%s",
+                    gen,
+                    self._refresh_gen,
+                )
+                return
         except Exception as exc:  # pragma: no cover - UI safety net
             logger.exception("Failed to refresh playlist: %s", exc)
             await self._show_error("Failed to refresh playlist. See log file.")
@@ -278,9 +315,17 @@ class PlaylistPane(Static):
         if self.store is None or self.playlist_id is None:
             return
         try:
+            gen = self._refresh_gen
             self._rows = await self.store.fetch_window(
                 self.playlist_id, self.window_offset, self.limit
             )
+            if gen != self._refresh_gen:
+                logger.debug(
+                    "Refresh window aborted due to gen change gen=%s current=%s",
+                    gen,
+                    self._refresh_gen,
+                )
+                return
             if self.cursor_item_id is None and self._rows:
                 self.cursor_item_id = self._rows[0].item_id
             self._update_viewport()
@@ -424,6 +469,9 @@ class PlaylistPane(Static):
         elif action == "remove_selected":
             self.run_worker(self._remove_selected(), exclusive=True)
         elif action == "clear_playlist":
+            logger.debug(
+                "Handle action: clear_playlist playlist_id=%s", self.playlist_id
+            )
             self.run_worker(self._clear_playlist(), exclusive=True)
         elif action == "refresh_metadata_selected":
             self.run_worker(self._refresh_metadata_selected(), exclusive=True)
@@ -451,6 +499,7 @@ class PlaylistPane(Static):
 
     async def on_actions_menu_selected(self, event: ActionsMenuSelected) -> None:
         self._actions_popup = None
+        logger.debug("ActionsMenuSelected: action=%s", event.action)
         await self._handle_actions_menu(event.action)
         self.focus()
 
@@ -498,13 +547,31 @@ class PlaylistPane(Static):
         self.selected_item_ids.clear()
 
     async def _clear_playlist(self) -> None:
-        if self.store is None:
+        if self.store is None or self.playlist_id is None:
             return
         confirmed = await self._confirm("Clear the playlist?")
         if not confirmed:
             return
+        logger.debug("Clearing playlist in DB playlist_id=%s", self.playlist_id)
         await self._run_store_action("clear playlist", self.store.clear_playlist)
+        count_now = await self.store.count(self.playlist_id)
+        logger.debug(
+            "Cleared playlist in DB playlist_id=%s count_now=%s",
+            self.playlist_id,
+            count_now,
+        )
         self.selected_item_ids.clear()
+        self.cursor_item_id = None
+        self.playing_item_id = None
+        self.window_offset = 0
+        self.total_count = 0
+        self._rows = []
+        self._metadata_pending.clear()
+        self._bump_refresh_gen()
+        self._update_viewport()
+        await self._refresh_transport_controls()
+        app = cast("TzPlayerApp", self.app)
+        await app.handle_playlist_cleared()
 
     async def _refresh_metadata_selected(self) -> None:
         if self.store is None or self.playlist_id is None:
@@ -544,6 +611,7 @@ class PlaylistPane(Static):
             return
         try:
             logger.info("Playlist action: %s", label)
+            self._bump_refresh_gen()
             await func(self.playlist_id, *args)
             await self.refresh_view()
         except Exception as exc:
@@ -573,6 +641,9 @@ class PlaylistPane(Static):
             return
         self._metadata_pending.update(pending)
         self.run_worker(self._ensure_metadata(pending), exclusive=False)
+
+    def _bump_refresh_gen(self) -> None:
+        self._refresh_gen += 1
 
     async def _ensure_metadata(self, track_ids: list[int]) -> None:
         if self.metadata_service is None:

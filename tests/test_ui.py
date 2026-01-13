@@ -11,7 +11,11 @@ import tz_player.paths as paths
 from tz_player.app import TzPlayerApp
 from tz_player.services.player_service import PlayerState
 from tz_player.services.playlist_store import PlaylistRow, PlaylistStore
-from tz_player.ui.actions_menu import ActionsMenuButton, ActionsMenuPopup
+from tz_player.ui.actions_menu import (
+    ActionsMenuButton,
+    ActionsMenuPopup,
+    ActionsMenuSelected,
+)
 from tz_player.ui.playlist_pane import PlaylistPane
 from tz_player.ui.playlist_viewport import PlaylistViewport
 from tz_player.ui.status_pane import StatusPane
@@ -149,6 +153,52 @@ def test_playlist_pane_refresh_with_tracks(tmp_path) -> None:
             await pane.configure(store, playlist_id, None)
             assert pane.total_count == 2
             assert pane.query_one(PlaylistViewport)
+            app.exit()
+
+    _run(run_app())
+
+
+def test_clear_playlist_action_resets_state(tmp_path, monkeypatch) -> None:
+    _setup_dirs(tmp_path, monkeypatch)
+    app = TzPlayerApp(auto_init=False)
+
+    async def run_app() -> None:
+        await app.store.initialize()
+        playlist_id = await app.store.ensure_playlist("Default")
+        track = tmp_path / "track.mp3"
+        track.write_bytes(b"")
+        await app.store.add_tracks(playlist_id, [track, track])
+        async with app.run_test():
+            await asyncio.sleep(0)
+            pane = app.query_one(PlaylistPane)
+            await pane.configure(app.store, playlist_id, None)
+            await pane.update_transport_controls(PlayerState())
+            assert pane.total_count == 2
+            pane.selected_item_ids.add(pane._rows[0].item_id)
+
+            async def confirm(_message: str) -> bool:
+                return True
+
+            pane._confirm = confirm  # type: ignore[assignment]
+            tasks = []
+
+            def run_worker(coro, exclusive=False):  # type: ignore[no-untyped-def]
+                task = asyncio.create_task(coro)
+                tasks.append(task)
+                return task
+
+            pane.run_worker = run_worker  # type: ignore[assignment]
+            await app.on_actions_menu_selected(ActionsMenuSelected("clear_playlist"))
+            if tasks:
+                await asyncio.gather(*tasks)
+            assert pane.total_count == 0
+            assert pane._rows == []
+            assert pane.cursor_item_id is None
+            assert pane.selected_item_ids == set()
+            assert pane.playing_item_id is None
+            counter_text = str(pane._transport_controls._track_counter.render())
+            assert "0000/0000" in counter_text
+            assert await app.store.count(playlist_id) == 0
             app.exit()
 
     _run(run_app())

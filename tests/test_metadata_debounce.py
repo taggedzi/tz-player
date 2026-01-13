@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 
 import tz_player.app as app_module
+import tz_player.paths as paths
 from tz_player.app import TzPlayerApp
 from tz_player.ui.playlist_pane import PlaylistPane
 
@@ -20,7 +21,18 @@ def test_mark_metadata_done() -> None:
     assert pane._metadata_pending == {1, 3}
 
 
-def test_metadata_debounce_reschedules(monkeypatch) -> None:
+def test_metadata_debounce_reschedules(tmp_path, monkeypatch) -> None:
+    class FakeAppDirs:
+        def __init__(self, data_dir, config_dir) -> None:
+            self.user_data_dir = str(data_dir)
+            self.user_config_dir = str(config_dir)
+
+    def fake_app_dirs(app_name: str, appauthor: bool | None = None) -> FakeAppDirs:
+        return FakeAppDirs(tmp_path / "data", tmp_path / "config")
+
+    monkeypatch.setattr(paths, "AppDirs", fake_app_dirs)
+    paths.get_app_dirs.cache_clear()
+
     class FakePane:
         def __init__(self) -> None:
             self.updated: list[set[int]] = []

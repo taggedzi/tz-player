@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from textual.app import ComposeResult
 from textual.geometry import Region
 from textual.message import Message
@@ -10,6 +12,8 @@ from textual.widgets import OptionList
 from textual.widgets.option_list import Option
 
 from tz_player.ui.text_button import TextButton
+
+logger = logging.getLogger(__name__)
 
 
 class ActionsMenuButton(TextButton):
@@ -75,6 +79,7 @@ class ActionsMenuPopup(Widget):
     def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
         option_id = event.option.id
         if option_id is not None:
+            logger.debug("ActionsMenuSelected: action=%s", option_id)
             self.post_message(ActionsMenuSelected(str(option_id)))
         self.dismiss()
 

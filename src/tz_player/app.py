@@ -24,7 +24,7 @@ from .services.player_service import PlayerService, PlayerState, TrackInfo
 from .services.playlist_store import PlaylistStore
 from .services.vlc_backend import VLCPlaybackBackend
 from .state_store import AppState, load_state, save_state
-from .ui.actions_menu import ActionsMenuPopup
+from .ui.actions_menu import ActionsMenuDismissed, ActionsMenuPopup, ActionsMenuSelected
 from .ui.modals.error import ErrorModal
 from .ui.playlist_pane import PlaylistPane
 from .ui.status_pane import StatusPane
@@ -293,6 +293,18 @@ class TzPlayerApp(App):
         popup.first().dismiss()
         event.stop()
 
+    async def on_actions_menu_selected(self, event: ActionsMenuSelected) -> None:
+        logger.debug("ActionsMenuSelected: action=%s", event.action)
+        pane = self.query_one(PlaylistPane)
+        pane._actions_popup = None
+        await pane._handle_actions_menu(event.action)
+        pane.focus()
+
+    def on_actions_menu_dismissed(self, event: ActionsMenuDismissed) -> None:
+        pane = self.query_one(PlaylistPane)
+        pane._actions_popup = None
+        pane.focus()
+
     async def action_play_selected(self) -> None:
         if self.player_service is None or self.playlist_id is None:
             return
@@ -396,6 +408,16 @@ class TzPlayerApp(App):
         if self.player_state.item_id is None:
             anchor_id = self.query_one(PlaylistPane).get_cursor_item_id()
         await self.player_service.toggle_shuffle(anchor_item_id=anchor_id)
+
+    async def handle_playlist_cleared(self) -> None:
+        if self.player_service is not None:
+            await self.player_service.stop()
+        self.current_track = None
+        self._update_current_track_pane()
+        if self._metadata_refresh_task is not None:
+            self._metadata_refresh_task.cancel()
+            self._metadata_refresh_task = None
+        self._metadata_pending_ids.clear()
 
     async def _handle_player_event(self, event: object) -> None:
         if isinstance(event, PlayerStateChanged):
