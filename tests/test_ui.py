@@ -384,6 +384,134 @@ def test_playlist_cursor_pins_on_scroll(tmp_path) -> None:
     _run(run_app())
 
 
+def test_playlist_cursor_move_noop_on_empty_rows() -> None:
+    pane = PlaylistPane()
+
+    class PaneApp(App):
+        def compose(self) -> ComposeResult:
+            yield pane
+
+    app = PaneApp()
+
+    async def run_app() -> None:
+        async with app.run_test():
+            await asyncio.sleep(0)
+            pane._rows = []
+            pane.total_count = 0
+            pane.limit = 3
+            pane.window_offset = 0
+            pane.cursor_item_id = None
+            await pane._move_cursor(1)
+            await pane._move_cursor(-1)
+            assert pane.cursor_item_id is None
+            assert pane.window_offset == 0
+            app.exit()
+
+    _run(run_app())
+
+
+def test_playlist_cursor_clamps_at_top_boundary(tmp_path) -> None:
+    pane = PlaylistPane()
+
+    def make_row(item_id: int) -> PlaylistRow:
+        return PlaylistRow(
+            item_id=item_id,
+            track_id=item_id,
+            pos_key=item_id,
+            path=tmp_path / f"track_{item_id}.mp3",
+            title=f"Track {item_id}",
+            artist="Artist",
+            album="Album",
+            year=None,
+            duration_ms=120000,
+            meta_valid=True,
+            meta_error=None,
+        )
+
+    rows = [make_row(1), make_row(2), make_row(3)]
+
+    async def run_app() -> None:
+        refresh_calls = 0
+
+        async def fake_refresh() -> None:
+            nonlocal refresh_calls
+            refresh_calls += 1
+
+        pane._refresh_window = fake_refresh  # type: ignore[assignment]
+
+        class PaneApp(App):
+            def compose(self) -> ComposeResult:
+                yield pane
+
+        app = PaneApp()
+        async with app.run_test():
+            await asyncio.sleep(0)
+            pane._rows = rows
+            pane.limit = 3
+            pane.total_count = 5
+            pane.window_offset = 0
+            pane.cursor_item_id = 1
+            pane._update_viewport()
+            await pane._move_cursor(-1)
+            assert pane.window_offset == 0
+            assert pane.cursor_item_id == 1
+            assert refresh_calls == 0
+            app.exit()
+
+    _run(run_app())
+
+
+def test_playlist_cursor_clamps_at_bottom_boundary(tmp_path) -> None:
+    pane = PlaylistPane()
+
+    def make_row(item_id: int) -> PlaylistRow:
+        return PlaylistRow(
+            item_id=item_id,
+            track_id=item_id,
+            pos_key=item_id,
+            path=tmp_path / f"track_{item_id}.mp3",
+            title=f"Track {item_id}",
+            artist="Artist",
+            album="Album",
+            year=None,
+            duration_ms=120000,
+            meta_valid=True,
+            meta_error=None,
+        )
+
+    rows = [make_row(3), make_row(4), make_row(5)]
+
+    async def run_app() -> None:
+        refresh_calls = 0
+
+        async def fake_refresh() -> None:
+            nonlocal refresh_calls
+            refresh_calls += 1
+
+        pane._refresh_window = fake_refresh  # type: ignore[assignment]
+
+        class PaneApp(App):
+            def compose(self) -> ComposeResult:
+                yield pane
+
+        app = PaneApp()
+        async with app.run_test():
+            await asyncio.sleep(0)
+            pane._rows = rows
+            pane.limit = 3
+            pane.total_count = 5
+            pane.window_offset = 2
+            pane.cursor_item_id = 5
+            pane._update_viewport()
+            await pane._move_cursor(1)
+            assert pane.window_offset == 2
+            assert pane.cursor_item_id == 5
+            assert refresh_calls == 0
+            app.exit()
+
+    _run(run_app())
+
+
 def test_status_pane_updates() -> None:
     pane = StatusPane()
 
