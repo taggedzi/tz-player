@@ -155,6 +155,7 @@ Proposed implementation:
 
 6. `BL-006` Expand playlist editing integration tests  
 Workflows: WF-05  
+Status: `Done` (2026-02-13)
 Proposed implementation:
 - Add UI tests for reorder via keyboard, remove-selected confirm/cancel, and add-files path parsing behavior.
 
@@ -176,5 +177,4 @@ Proposed implementation:
 
 ## Recommended Execution Order
 
-1. `BL-006` playlist editing integration expansion
-2. `BL-007` + `BL-008` + `BL-009` polish/documentation
+1. `BL-007` + `BL-008` + `BL-009` polish/documentation
