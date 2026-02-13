@@ -92,6 +92,22 @@ See `docs/workflow-acceptance.md` for the per-workflow acceptance checklist and 
 
 See `docs/visualizations.md` for visualization subsystem goals, plugin contract, and authoring guidance.
 
+## Runtime Flags and Diagnostics
+
+Common runtime flags:
+
+- `--backend {fake,vlc}`: choose playback backend for this run.
+- `--verbose`: enable debug logging.
+- `--quiet`: warnings/errors only (`--quiet` overrides `--verbose`).
+- `--log-file <path>`: write logs to an explicit path.
+
+Behavior notes:
+
+- If `--backend vlc` is selected but VLC/libVLC is unavailable, the app falls back to `fake` and shows a clear in-app error.
+- Default log path when `--log-file` is not provided: `<user_data_dir>/logs/tz-player.log`.
+- Fatal startup errors return non-zero exit code and print a remediation hint.
+
+See `docs/usage.md` for full keybindings and troubleshooting guidance.
 
 ## Release
 

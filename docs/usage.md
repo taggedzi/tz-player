@@ -3,13 +3,13 @@
 Run the TUI:
 
 ```
-python -m tz_player.app
+tz-player
 ```
 
 Select a playback backend:
 
 ```
-python -m tz_player.app --backend vlc
+tz-player --backend vlc
 ```
 
 Notes:
@@ -29,6 +29,7 @@ Logging and diagnostics:
 - `--log-file /path/to/tz-player.log` writes logs to an explicit file path.
 - Without `--log-file`, logs are written to the app log directory as `tz-player.log`.
   - Typical default location pattern: `<user_data_dir>/logs/tz-player.log`.
+- Both console and rotating file logging are enabled by default.
 
 Current keys:
 - `up` / `down`: move cursor up/down in the playlist
@@ -68,3 +69,34 @@ Find/filter behavior:
 - Empty query restores the full playlist view.
 - Escape priority is deterministic: popup/modal dismisses first, then Find exits/clears.
 - Playback keys are available from main UI focus states (playlist pane, viewport, footer controls).
+
+## Troubleshooting
+
+Startup failure contract:
+- Fatal startup failures return non-zero exit code and print a remediation hint.
+- In-app startup failures show a modal with:
+  - what failed,
+  - likely cause,
+  - next step.
+
+Common failure cases:
+
+1. VLC backend unavailable:
+- Symptom: app cannot initialize VLC backend.
+- Behavior: app falls back to `fake` backend and shows an actionable error.
+- Next step: install VLC/libVLC and re-run with `--backend vlc`.
+
+2. State file unreadable/corrupt:
+- Symptom: startup warning/error about state load.
+- Behavior: app recovers with defaults where possible.
+- Next step: inspect state file under `<user_config_dir>/state.json`, then re-run with `--verbose`.
+
+3. Database access/init failure:
+- Symptom: startup fails during playlist store init.
+- Behavior: startup error modal appears and app exits/fails safely.
+- Next step: verify permissions/path for `<user_data_dir>/tz-player.sqlite`; re-run with `--verbose`.
+
+4. Missing media path:
+- Symptom: add/play action fails for missing files.
+- Behavior: app surfaces actionable error text and keeps UI responsive.
+- Next step: verify file path exists and is readable; refresh metadata after fixing paths.

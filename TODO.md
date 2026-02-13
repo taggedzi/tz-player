@@ -199,7 +199,7 @@ Each task includes:
   - `docs/workflow-acceptance.md` fully maps implemented workflows.
 - Tests:
   - N/A (docs-only), validated by review checklist.
-- Status: `todo`
+- Status: `done`
 - Commit:
 
 ## Release Readiness
