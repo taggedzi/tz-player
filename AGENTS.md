@@ -38,10 +38,14 @@ When guidance conflicts, follow this order:
 
 Minimum local validation for behavior changes:
 
-- `ruff check .`
-- `ruff format --check .`
-- `mypy src`
-- `pytest`
+- `.ubuntu-venv/bin/python -m ruff check .`
+- `.ubuntu-venv/bin/python -m ruff format --check .`
+- `.ubuntu-venv/bin/python -m mypy src`
+- `.ubuntu-venv/bin/python -m pytest`
+
+Environment rule:
+
+- In this repo, run Python tooling via `.ubuntu-venv/bin/python -m ...` so installed dependencies (for example `mutagen`) resolve consistently.
 
 If full suite is not run, state what was skipped and why.
 
