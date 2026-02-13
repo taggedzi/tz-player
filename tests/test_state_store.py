@@ -66,7 +66,9 @@ def test_state_save_replace_failure_keeps_previous_file(tmp_path, monkeypatch) -
     assert loaded == original
 
 
-def test_state_save_tmp_write_failure_keeps_previous_file(tmp_path, monkeypatch) -> None:
+def test_state_save_tmp_write_failure_keeps_previous_file(
+    tmp_path, monkeypatch
+) -> None:
     path = tmp_path / "state.json"
     original = AppState(playback_backend="fake", visualizer_id="basic")
     save_state(path, original)
