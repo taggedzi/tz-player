@@ -67,3 +67,5 @@ def test_matrix_variants_emit_ansi_color_when_enabled() -> None:
     plugin.on_activate(VisualizerContext(ansi_enabled=True, unicode_enabled=True))
     output = plugin.render(_frame(width=10, height=3, frame_index=4))
     assert "\x1b[" in output
+    assert "1;91m" in output
+    assert "38;5;" in output
