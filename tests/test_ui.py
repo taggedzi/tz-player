@@ -149,6 +149,8 @@ def test_actions_menu_dismisses_on_outside_mouse_down(tmp_path, monkeypatch) -> 
         async with app.run_test():
             await asyncio.sleep(0)
             pane = app.query_one(PlaylistPane)
+            pane.focus()
+            await asyncio.sleep(0)
             await pane._open_actions_menu()
             await asyncio.sleep(0)
             popup = app.query_one(ActionsMenuPopup)
@@ -161,6 +163,10 @@ def test_actions_menu_dismisses_on_outside_mouse_down(tmp_path, monkeypatch) -> 
                 await asyncio.sleep(0.01)
             assert len(app.query(ActionsMenuPopup)) == 0
             assert event.stopped is True
+            for _ in range(20):
+                if app.focused is pane:
+                    break
+                await asyncio.sleep(0.01)
             assert app.focused is pane
             app.exit()
 
