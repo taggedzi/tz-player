@@ -66,14 +66,14 @@ _STAGE_COMMANDS: dict[str, tuple[str, ...]] = {
     ),
 }
 
-_FEEDBACK: tuple[str, ...] = (
-    "[ok] synthetic probe acknowledged",
-    "[ok] telemetry packet merged",
-    "[ok] checksum stable",
-    "[ok] no persistent writes performed",
+_IDLE_TELEMETRY: tuple[str, ...] = (
+    "[run] synthetic probe acknowledged",
+    "[run] telemetry packet merged",
+    "[run] checksum stable",
+    "[run] no persistent writes performed",
     "[warn] entropy spike normalized",
-    "[ok] simulated boundary maintained",
-    "[ok] trace noise reduced",
+    "[run] simulated boundary maintained",
+    "[run] trace noise reduced",
 )
 
 _STAGE_MODES: dict[str, tuple[str, ...]] = {
@@ -150,16 +150,6 @@ class CyberpunkOpsVisualizer:
         return _fit_lines(lines, width, height)
 
 
-def _sparkline(tick: int, width: int) -> str:
-    chart_width = max(8, min(width - 4, 48))
-    blocks = " ▁▂▃▄▅▆▇█"
-    chars = []
-    for idx in range(chart_width):
-        level = ((tick // 2) + (idx * 7)) % (len(blocks) - 1)
-        chars.append(blocks[level + 1])
-    return "SIG " + "".join(chars)
-
-
 def _fit_lines(lines: list[str], width: int, height: int) -> str:
     clipped = [line[:width] for line in lines[:height]]
     while len(clipped) < height:
@@ -194,13 +184,13 @@ def _colorize_line(line: str) -> str:
         return f"\x1b[1;38;2;53;230;138m{line}\x1b[0m"
     if line.startswith(_PROMPT):
         return f"\x1b[1;38;2;0;215;230m{line}\x1b[0m"
-    if line.startswith("[ok]"):
+    if line.startswith("[done]"):
         return f"\x1b[38;2;53;230;138m{line}\x1b[0m"
     if line.startswith("[warn]"):
         return f"\x1b[38;2;242;201;76m{line}\x1b[0m"
     if line.startswith("[run]") or line.startswith("[mini]"):
         return f"\x1b[38;2;0;215;230m{line}\x1b[0m"
-    if line.startswith(">>") or line.startswith("SIG "):
+    if line.startswith(">>"):
         return f"\x1b[38;2;0;215;230m{line}\x1b[0m"
     return f"\x1b[38;2;199;208;217m{line}\x1b[0m"
 
@@ -255,7 +245,7 @@ def _build_transcript(
         mode = modes[idx] if idx < len(modes) else "mesh"
         command = commands[idx]
         lines.append(f"{_PROMPT} {command}")
-        lines.append(f"[ok] {_result_line(stage_name, mode, idx)}")
+        lines.append(f"[done] {_result_line(stage_name, mode, idx)}")
 
     active_command = commands[command_idx]
     active_mode = modes[command_idx] if command_idx < len(modes) else "mesh"
@@ -274,9 +264,9 @@ def _build_transcript(
     body_target = max(0, height - len(lines))
     for idx in range(body_target):
         if idx % 2 == 0:
-            lines.append(_FEEDBACK[(tick + idx) % len(_FEEDBACK)])
+            lines.append(_IDLE_TELEMETRY[(tick + idx) % len(_IDLE_TELEMETRY)])
         else:
-            lines.append(_sparkline(tick + idx, width))
+            lines.append(_idle_progress_line(tick + idx, width))
     return lines
 
 
@@ -308,8 +298,8 @@ def _render_active_command(
         return lines
 
     lines.append("[run] finalizing task and writing simulated report")
-    lines.append(f"[ok] {_result_line(stage_name, mode, command_idx)}")
-    lines.append("[ok] command complete; queue advancing")
+    lines.append(f"[done] {_result_line(stage_name, mode, command_idx)}")
+    lines.append("[run] command complete; queue advancing")
     return lines
 
 
@@ -428,6 +418,13 @@ def _mesh_lines(tick: int, run_ticks: int, width: int) -> list[str]:
         f"mesh[{mesh}]",
         f"scan_index={sweep:02d} saturation={(tick * 11) % 100:02d}%",
     ]
+
+
+def _idle_progress_line(tick: int, width: int) -> str:
+    span = max(10, min(width - 24, 40))
+    filled = ((tick * 3) % span) + 1
+    bar = ("#" * filled).ljust(span, ".")
+    return f"[mini] background queue [{bar}]"
 
 
 def _result_line(stage_name: str, mode: str, command_idx: int) -> str:

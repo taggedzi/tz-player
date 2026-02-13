@@ -89,4 +89,6 @@ def test_ops_commands_advance_one_at_a_time_with_result_history() -> None:
     assert "simscope survey --target track://current --passive" in first
     assert "simscope map-signal --window 8s --no-write" in second
     assert "simscope survey --target track://current --passive" in second
-    assert "[ok]" in second
+    assert "[done]" in second
+    assert "[ok]" not in second
+    assert "SIG " not in second
