@@ -28,6 +28,7 @@ from .ui.actions_menu import ActionsMenuDismissed, ActionsMenuPopup, ActionsMenu
 from .ui.modals.error import ErrorModal
 from .ui.playlist_pane import PlaylistPane
 from .ui.status_pane import StatusPane
+from .utils.async_utils import run_blocking
 
 logger = logging.getLogger(__name__)
 METADATA_REFRESH_DEBOUNCE = 0.2
@@ -183,17 +184,17 @@ class TzPlayerApp(App):
 
     async def _initialize_state(self) -> None:
         try:
-            self.state = await asyncio.to_thread(load_state, state_path())
+            self.state = await run_blocking(load_state, state_path())
             backend_name = _resolve_backend_name(
                 self._backend_name, self.state.playback_backend
             )
             self.state = replace(self.state, playback_backend=backend_name)
-            await asyncio.to_thread(save_state, state_path(), self.state)
+            await run_blocking(save_state, state_path(), self.state)
             await self.store.initialize()
             playlist_id = await self.store.ensure_playlist("Default")
             if self.state.playlist_id != playlist_id:
                 self.state = replace(self.state, playlist_id=playlist_id)
-                await asyncio.to_thread(save_state, state_path(), self.state)
+                await run_blocking(save_state, state_path(), self.state)
             self.playlist_id = playlist_id
             self.player_state = self._player_state_from_appstate(playlist_id)
             backend = _build_backend(backend_name)
@@ -216,7 +217,7 @@ class TzPlayerApp(App):
                 if backend_name != "fake":
                     backend_name = "fake"
                     self.state = replace(self.state, playback_backend=backend_name)
-                    await asyncio.to_thread(save_state, state_path(), self.state)
+                    await run_blocking(save_state, state_path(), self.state)
                     backend = _build_backend(backend_name)
                     self.player_service = PlayerService(
                         emit_event=self._handle_player_event,
@@ -582,7 +583,7 @@ class TzPlayerApp(App):
                 playback_backend=self.state.playback_backend,
             )
             self._last_persisted = self._state_tuple(self.player_state)
-            await asyncio.to_thread(save_state, state_path(), self.state)
+            await run_blocking(save_state, state_path(), self.state)
         except asyncio.CancelledError:
             return
 

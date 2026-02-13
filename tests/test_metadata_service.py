@@ -37,7 +37,7 @@ def test_metadata_service_fallback_and_duration(tmp_path) -> None:
     track_id = rows[0].track_id
 
     service = MetadataService(store)
-    _run(service.ensure_metadata([track_id]))
+    _run(asyncio.wait_for(service.ensure_metadata([track_id]), timeout=5))
 
     updated = _run(store.fetch_window(playlist_id, 0, 1))[0]
     assert updated.meta_valid is True
@@ -59,7 +59,7 @@ def test_invalidate_if_changed_marks_invalid(tmp_path) -> None:
     track_id = rows[0].track_id
 
     service = MetadataService(store)
-    _run(service.ensure_metadata([track_id]))
+    _run(asyncio.wait_for(service.ensure_metadata([track_id]), timeout=5))
 
     track_path.write_bytes(track_path.read_bytes())
     changed = _run(service.invalidate_if_changed(track_id))

@@ -36,6 +36,7 @@ from tz_player.ui.transport_controls import (
     TransportAction,
     TransportControls,
 )
+from tz_player.utils.async_utils import run_blocking
 
 if TYPE_CHECKING:
     from tz_player.app import TzPlayerApp
@@ -559,7 +560,7 @@ class PlaylistPane(Static):
         if not result:
             return
         folder = Path(result).expanduser()
-        paths = await asyncio.to_thread(_scan_media_files, folder)
+        paths = await run_blocking(_scan_media_files, folder)
         if not paths:
             await self._show_error("No media files found in folder.")
             return

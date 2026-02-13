@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import os
 import sqlite3
@@ -12,6 +11,7 @@ from pathlib import Path
 from typing import Literal
 
 from tz_player.db.schema import create_schema
+from tz_player.utils.async_utils import run_blocking
 
 POS_STEP = 10_000
 logger = logging.getLogger(__name__)
@@ -75,54 +75,54 @@ class PlaylistStore:
         self._db_path = Path(db_path)
 
     async def initialize(self) -> None:
-        await asyncio.to_thread(self._initialize_sync)
+        await run_blocking(self._initialize_sync)
 
     async def create_playlist(self, name: str) -> int:
-        return await asyncio.to_thread(self._create_playlist_sync, name)
+        return await run_blocking(self._create_playlist_sync, name)
 
     async def ensure_playlist(self, name: str) -> int:
-        return await asyncio.to_thread(self._ensure_playlist_sync, name)
+        return await run_blocking(self._ensure_playlist_sync, name)
 
     async def clear_playlist(self, playlist_id: int) -> None:
-        await asyncio.to_thread(self._clear_playlist_sync, playlist_id)
+        await run_blocking(self._clear_playlist_sync, playlist_id)
 
     async def add_tracks(self, playlist_id: int, paths: list[Path]) -> int:
-        return await asyncio.to_thread(self._add_tracks_sync, playlist_id, paths)
+        return await run_blocking(self._add_tracks_sync, playlist_id, paths)
 
     async def remove_items(self, playlist_id: int, item_ids: set[int]) -> int:
-        return await asyncio.to_thread(self._remove_items_sync, playlist_id, item_ids)
+        return await run_blocking(self._remove_items_sync, playlist_id, item_ids)
 
     async def count(self, playlist_id: int) -> int:
-        return await asyncio.to_thread(self._count_sync, playlist_id)
+        return await run_blocking(self._count_sync, playlist_id)
 
     async def fetch_window(
         self, playlist_id: int, offset: int, limit: int
     ) -> list[PlaylistRow]:
-        return await asyncio.to_thread(
+        return await run_blocking(
             self._fetch_window_sync, playlist_id, offset, limit
         )
 
     async def get_item_row(self, playlist_id: int, item_id: int) -> PlaylistRow | None:
-        return await asyncio.to_thread(self._get_item_row_sync, playlist_id, item_id)
+        return await run_blocking(self._get_item_row_sync, playlist_id, item_id)
 
     async def fetch_rows_by_track_ids(
         self, playlist_id: int, track_ids: list[int]
     ) -> list[PlaylistRow]:
-        return await asyncio.to_thread(
+        return await run_blocking(
             self._fetch_rows_by_track_ids_sync, playlist_id, track_ids
         )
 
     async def get_next_item_id(
         self, playlist_id: int, item_id: int, *, wrap: bool
     ) -> int | None:
-        return await asyncio.to_thread(
+        return await run_blocking(
             self._get_next_item_id_sync, playlist_id, item_id, wrap
         )
 
     async def get_prev_item_id(
         self, playlist_id: int, item_id: int, *, wrap: bool
     ) -> int | None:
-        return await asyncio.to_thread(
+        return await run_blocking(
             self._get_prev_item_id_sync, playlist_id, item_id, wrap
         )
 
@@ -133,47 +133,47 @@ class PlaylistStore:
         selection: list[int],
         cursor: int | None,
     ) -> None:
-        await asyncio.to_thread(
+        await run_blocking(
             self._move_selection_sync, playlist_id, direction, selection, cursor
         )
 
     async def invalidate_metadata(self, track_ids: set[int] | None = None) -> None:
-        await asyncio.to_thread(self._invalidate_metadata_sync, track_ids)
+        await run_blocking(self._invalidate_metadata_sync, track_ids)
 
     async def renumber_playlist(self, playlist_id: int) -> None:
-        await asyncio.to_thread(self._renumber_playlist_sync, playlist_id)
+        await run_blocking(self._renumber_playlist_sync, playlist_id)
 
     async def get_track_id_for_item(self, playlist_id: int, item_id: int) -> int | None:
-        return await asyncio.to_thread(
+        return await run_blocking(
             self._get_track_id_for_item_sync, playlist_id, item_id
         )
 
     async def get_item_index(self, playlist_id: int, item_id: int) -> int | None:
-        return await asyncio.to_thread(self._get_item_index_sync, playlist_id, item_id)
+        return await run_blocking(self._get_item_index_sync, playlist_id, item_id)
 
     async def list_item_ids(self, playlist_id: int) -> list[int]:
-        return await asyncio.to_thread(self._list_item_ids_sync, playlist_id)
+        return await run_blocking(self._list_item_ids_sync, playlist_id)
 
     async def get_random_item_id(
         self, playlist_id: int, *, exclude_item_id: int | None = None
     ) -> int | None:
-        return await asyncio.to_thread(
+        return await run_blocking(
             self._get_random_item_id_sync, playlist_id, exclude_item_id
         )
 
     async def get_tracks_basic(self, track_ids: list[int]) -> list[TrackRecord]:
-        return await asyncio.to_thread(self._get_tracks_basic_sync, track_ids)
+        return await run_blocking(self._get_tracks_basic_sync, track_ids)
 
     async def get_track_meta_snapshot(
         self, track_ids: list[int]
     ) -> dict[int, TrackMetaSnapshot]:
-        return await asyncio.to_thread(self._get_track_meta_snapshot_sync, track_ids)
+        return await run_blocking(self._get_track_meta_snapshot_sync, track_ids)
 
     async def upsert_track_meta(self, track_id: int, meta: TrackMeta) -> None:
-        await asyncio.to_thread(self._upsert_track_meta_sync, track_id, meta)
+        await run_blocking(self._upsert_track_meta_sync, track_id, meta)
 
     async def mark_meta_invalid(self, track_id: int, error: str | None = None) -> None:
-        await asyncio.to_thread(self._mark_meta_invalid_sync, track_id, error)
+        await run_blocking(self._mark_meta_invalid_sync, track_id, error)
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self._db_path, timeout=30)

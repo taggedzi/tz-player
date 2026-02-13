@@ -18,6 +18,7 @@ from tz_player.services.playlist_store import (
     TrackMetaSnapshot,
     TrackRecord,
 )
+from tz_player.utils.async_utils import run_blocking
 
 logger = logging.getLogger(__name__)
 
@@ -111,7 +112,7 @@ class MetadataService:
                 )
                 return track.track_id, False
             try:
-                payload = await asyncio.to_thread(_read_metadata, track.path)
+                payload = await run_blocking(_read_metadata, track.path)
             except Exception as exc:  # pragma: no cover - safety net
                 logger.exception("Failed to read metadata for %s: %s", track.path, exc)
                 payload = MetadataPayload(error=str(exc))
@@ -207,7 +208,7 @@ def _unique_ids(track_ids: list[int]) -> list[int]:
 
 async def _safe_stat(path: Path) -> FileStat | None:
     try:
-        stat = await asyncio.to_thread(path.stat)
+        stat = await run_blocking(path.stat)
     except OSError:
         return None
     return FileStat(mtime_ns=stat.st_mtime_ns, size_bytes=stat.st_size)
