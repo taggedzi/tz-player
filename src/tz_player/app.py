@@ -112,10 +112,17 @@ class TzPlayerApp(App):
         width: 1fr;
     }
 
-    #visualizer-pane, #current-track-pane {
+    #visualizer-pane {
         border: solid white;
         height: 1fr;
         content-align: center middle;
+    }
+
+    #current-track-pane {
+        border: solid white;
+        height: 6;
+        content-align: left top;
+        padding: 0 1;
     }
 
     #status-pane {
