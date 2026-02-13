@@ -45,19 +45,19 @@ logger = logging.getLogger(__name__)
 METADATA_REFRESH_DEBOUNCE = 0.2
 SPEED_MIN = 0.5
 SPEED_MAX = 4.0
-CYBERPUNK_2077_THEME = Theme(
-    name="cyberpunk_2077",
+CYBERPUNK_THEME = Theme(
+    name="Cyberpunk",
     primary="#fcee0a",
-    secondary="#ff2ea6",
-    warning="#ff9f1c",
+    secondary="#ffd60a",
+    warning="#ffea00",
     error="#ff4d6d",
-    success="#16f2a5",
-    accent="#00f0ff",
-    foreground="#f5f7ff",
-    background="#0a0f1e",
-    surface="#111827",
-    panel="#151b2f",
-    boost="#1e2742",
+    success="#9ef01a",
+    accent="#fcee0a",
+    foreground="#fff7c2",
+    background="#0b1020",
+    surface="#171d33",
+    panel="#1f2742",
+    boost="#2a3557",
     dark=True,
 )
 
@@ -194,8 +194,8 @@ class TzPlayerApp(App):
         self, *, auto_init: bool = True, backend_name: str | None = None
     ) -> None:
         super().__init__()
-        self.register_theme(CYBERPUNK_2077_THEME)
-        self.theme = CYBERPUNK_2077_THEME.name
+        self.register_theme(CYBERPUNK_THEME)
+        self.theme = CYBERPUNK_THEME.name
         self.store = PlaylistStore(db_path())
         self.state = AppState()
         self.playlist_id: int | None = None

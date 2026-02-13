@@ -32,7 +32,7 @@ Logging and diagnostics:
 - Both console and rotating file logging are enabled by default.
 
 Theme:
-- The header theme selector includes a custom `cyberpunk_2077` theme inspired by Cyberpunk-style neon colors.
+- The header theme selector includes a custom `Cyberpunk` theme with yellow-forward neon styling.
 
 Current keys:
 - `up` / `down`: move cursor up/down in the playlist
