@@ -185,7 +185,8 @@ def test_find_filters_playlist_and_escape_resets(tmp_path) -> None:
             assert pane.total_count == 3
 
             pane.focus_find()
-            await pilot.type("moon")
+            for key in "moon":
+                await pilot.press(key)
             await asyncio.sleep(0.3)
 
             assert pane.search_active is True
