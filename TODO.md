@@ -200,7 +200,7 @@ Each task includes:
 - Tests:
   - N/A (docs-only), validated by review checklist.
 - Status: `done`
-- Commit:
+- Commit: `fbfffa4`
 
 ## Release Readiness
 
