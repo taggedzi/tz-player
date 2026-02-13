@@ -14,6 +14,7 @@ from typing import Literal, cast
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
+from textual.theme import Theme
 from textual.timer import Timer
 from textual.widgets import Footer, Header, Static
 
@@ -44,6 +45,21 @@ logger = logging.getLogger(__name__)
 METADATA_REFRESH_DEBOUNCE = 0.2
 SPEED_MIN = 0.5
 SPEED_MAX = 4.0
+CYBERPUNK_2077_THEME = Theme(
+    name="cyberpunk_2077",
+    primary="#fcee0a",
+    secondary="#ff2ea6",
+    warning="#ff9f1c",
+    error="#ff4d6d",
+    success="#16f2a5",
+    accent="#00f0ff",
+    foreground="#f5f7ff",
+    background="#0a0f1e",
+    surface="#111827",
+    panel="#151b2f",
+    boost="#1e2742",
+    dark=True,
+)
 
 
 class TzPlayerApp(App):
@@ -178,6 +194,8 @@ class TzPlayerApp(App):
         self, *, auto_init: bool = True, backend_name: str | None = None
     ) -> None:
         super().__init__()
+        self.register_theme(CYBERPUNK_2077_THEME)
+        self.theme = CYBERPUNK_2077_THEME.name
         self.store = PlaylistStore(db_path())
         self.state = AppState()
         self.playlist_id: int | None = None

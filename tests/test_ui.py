@@ -60,6 +60,7 @@ def test_app_mounts(tmp_path, monkeypatch) -> None:
     async def run_app() -> None:
         async with app.run_test():
             await asyncio.sleep(0)
+            assert app.theme == "cyberpunk_2077"
             assert app.query_one(PlaylistPane)
             assert app.query_one(TransportControls)
             app.exit()
