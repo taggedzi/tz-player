@@ -79,6 +79,17 @@ Acceptance criteria:
 - DB state and UI state remain synchronized after each action.
 - Clear playlist resets cursor/selection/playing state.
 
+### WF-06: Visualization rendering and selection
+
+1. User sees visualization output in the right-side visualizer pane during playback.
+2. User can switch to another available visualizer plugin.
+3. User restart preserves selected visualizer when still available.
+
+Acceptance criteria:
+- Visualization updates run without blocking keyboard interaction or transport controls.
+- If a visualizer fails, app falls back to a safe visualizer and surfaces an actionable error.
+- If persisted visualizer is missing, app selects default visualizer and continues startup.
+
 ## 4. UX and Input Contract
 
 ### Keyboard contract
@@ -98,6 +109,14 @@ Acceptance criteria:
 - No keyboard trap states are allowed.
 - Visible focus indicator must exist for interactive elements.
 
+### Visualization UX contract
+
+- Visualizer pane must always render a valid frame (plugin output or explicit fallback message).
+- Visualizer frame rate must be bounded and deterministic to avoid UI starvation.
+- Visualizer behavior must degrade gracefully when paused/stopped/no track loaded.
+- Visualizer selection UI (when added) must be keyboard reachable and must not trap focus.
+- ANSI output is optional and gated by app state/config (`ansi_enabled`).
+
 ## 5. Architecture Constraints
 
 - Python package under `src/tz_player`.
@@ -106,28 +125,80 @@ Acceptance criteria:
 - Metadata read via `mutagen`.
 - Playback through `PlaybackBackend` abstraction.
 - Blocking IO must remain off the main loop (`asyncio.to_thread` or equivalent).
+- Visualizers are loaded via a plugin registry with stable plugin IDs.
+- Visualizer render path must not do blocking file/db/network IO on the event loop.
 
-## 6. Data and State Requirements
+## 6. Visualization plugin model (v1 target)
+
+### Plugin discovery and identity
+
+- Plugin discovery sources:
+  - Built-in plugins shipped in `tz_player.visualizers`.
+  - Optional local plugins exposed by configured import path(s).
+- Each plugin has a unique, stable `plugin_id` string for persistence (`AppState.visualizer_id`).
+- Duplicate IDs are rejected during registry build; app logs error and keeps first valid plugin.
+
+### Plugin lifecycle
+
+- Plugin instances are created by the registry/factory, not directly by UI code.
+- Lifecycle hooks:
+  - `on_activate(context)` called when plugin becomes active.
+  - `render(frame_input) -> str` returns Textual-safe frame text.
+  - `on_deactivate()` called before switching away or shutdown.
+- Plugin hooks must be exception-contained by host. Unhandled plugin exceptions must not crash app.
+
+### Frame input contract
+
+Host provides immutable render input containing:
+
+- Playback state: `status`, `position_s`, `duration_s`, `volume`, `speed`, `repeat_mode`, `shuffle`.
+- Track context: current track ID/path and selected metadata subset when available.
+- Timing context: monotonic timestamp, frame index, terminal pane width/height.
+- Capability flags: ANSI enabled, Unicode fallback preference.
+
+### Performance and scheduling
+
+- Default render cadence target: 10 FPS.
+- Supported range for configurable cadence: 2-30 FPS.
+- If plugin render exceeds frame budget consistently, host throttles and logs warning.
+- Any plugin-required blocking computation must run off-loop and feed cached render state.
+
+### Safety and fallback policy
+
+- On plugin activation/render failure, host switches to `basic` fallback visualizer.
+- Fallback visualizer must always produce deterministic text output and zero external dependencies.
+- User-visible error message should identify failed `plugin_id` and failure phase (activate/render).
+
+### Persistence and compatibility
+
+- Persist selected visualizer as `visualizer_id` in state JSON.
+- Missing/invalid persisted ID resolves to default plugin (`basic`) at startup.
+- State schema changes for visualizer config require migration coverage and tests.
+
+## 7. Data and State Requirements
 
 - Canonical media/playlist data lives in SQLite.
 - App UI/transport settings live in JSON state file.
 - State writes must be atomic or crash-safe.
 - Duplicate media entries in playlist are supported via playlist item identity.
+- Visualization selection persists via `visualizer_id` and must be forward-compatible.
 
-## 7. Reliability and Error Handling
+## 8. Reliability and Error Handling
 
 - User-visible operations must fail with actionable messages, not raw tracebacks.
 - UI errors should be logged and surfaced with modal/error banner.
 - Startup errors must degrade gracefully where possible.
 - No operation should leave app in partially-updated UI without recovery path.
+- Visualization/plugin failures must degrade to fallback visualizer without breaking playback UI.
 
-## 8. Observability
+## 9. Observability
 
 - Structured logging configured by CLI flags.
 - Log path stored under platform data/config directories.
 - Sensitive data (credentials, secrets) must not be logged.
+- Visualizer registry load, activation, fallback, and render overrun events should be logged.
 
-## 9. Testing and Quality Gates
+## 10. Testing and Quality Gates
 
 Required checks before release:
 
@@ -142,8 +213,9 @@ Quality expectations:
 - Regressions in keybindings/focus require dedicated tests.
 - No test may hang indefinitely; long-running tests require explicit timeout strategy.
 - Workflow-to-test mapping is maintained in `docs/workflow-acceptance.md`.
+- Visualization tests cover registry loading, ID persistence, fallback behavior, and render cadence bounds.
 
-## 10. Definition of Done (v1 production-ready target)
+## 11. Definition of Done (v1 production-ready target)
 
 A milestone is done when:
 
@@ -151,10 +223,12 @@ A milestone is done when:
 - Tests are added/updated and pass in CI.
 - Docs (`README.md`, `docs/usage.md`, and relevant ADRs) are updated.
 - No known blocker remains for keyboard navigation or core playback controls.
+- No known blocker remains for visualization fallback safety or plugin loading determinism.
 
-## 11. Delivery Plan (high-level)
+## 12. Delivery Plan (high-level)
 
 1. Stabilize current app: keyboard/focus regression fixes and test hang resolution.
 2. Harden playlist/search behavior and edge cases.
 3. Improve error handling and startup resilience.
-4. Close production checklist release blockers.
+4. Implement visualization registry, fallback visualizer, and plugin switching flow.
+5. Close production checklist release blockers.
