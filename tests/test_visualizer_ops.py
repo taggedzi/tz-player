@@ -47,6 +47,7 @@ def test_ops_render_contains_fictional_stage_and_metadata() -> None:
     assert "NON-OPERATIONAL" in output
     assert "TARGET: Neon Shadow :: Proxy Unit" in output
     assert "STAGE:" in output
+    assert "ops@nightcity:~$" in output
 
 
 def test_ops_render_is_deterministic_for_same_frame() -> None:
@@ -63,3 +64,10 @@ def test_ops_render_respects_resize_bounds() -> None:
     small_lines = small.splitlines()
     assert len(small_lines) == 4
     assert all(len(line) <= 20 for line in small_lines)
+
+
+def test_ops_render_fills_available_height() -> None:
+    plugin = CyberpunkOpsVisualizer()
+    plugin.on_activate(VisualizerContext(ansi_enabled=False, unicode_enabled=True))
+    tall = plugin.render(_frame(width=60, height=16, frame_index=8))
+    assert len(tall.splitlines()) == 16
