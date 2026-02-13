@@ -48,6 +48,7 @@ def test_ops_render_contains_fictional_stage_and_metadata() -> None:
     assert "TARGET: Neon Shadow :: Proxy Unit" in output
     assert "STAGE:" in output
     assert "ops@nightcity:~$" in output
+    assert "[run]" in output
 
 
 def test_ops_render_is_deterministic_for_same_frame() -> None:
@@ -71,3 +72,21 @@ def test_ops_render_fills_available_height() -> None:
     plugin.on_activate(VisualizerContext(ansi_enabled=False, unicode_enabled=True))
     tall = plugin.render(_frame(width=60, height=16, frame_index=8))
     assert len(tall.splitlines()) == 16
+
+
+def test_ops_render_includes_minigame_output_during_run_phase() -> None:
+    plugin = CyberpunkOpsVisualizer()
+    plugin.on_activate(VisualizerContext(ansi_enabled=False, unicode_enabled=True))
+    output = plugin.render(_frame(width=90, height=16, frame_index=9))
+    assert "[mini]" in output
+
+
+def test_ops_commands_advance_one_at_a_time_with_result_history() -> None:
+    plugin = CyberpunkOpsVisualizer()
+    plugin.on_activate(VisualizerContext(ansi_enabled=False, unicode_enabled=True))
+    first = plugin.render(_frame(width=90, height=18, frame_index=0))
+    second = plugin.render(_frame(width=90, height=18, frame_index=24))
+    assert "simscope survey --target track://current --passive" in first
+    assert "simscope map-signal --window 8s --no-write" in second
+    assert "simscope survey --target track://current --passive" in second
+    assert "[ok]" in second
