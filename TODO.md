@@ -213,5 +213,5 @@ Each task includes:
   - Release notes and checklist updated.
 - Tests:
   - Full suite + any enabled opt-in checks.
-- Status: `todo`
+- Status: `done`
 - Commit:

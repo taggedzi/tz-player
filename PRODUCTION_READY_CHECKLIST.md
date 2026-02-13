@@ -11,8 +11,9 @@ Validation status:
 - [x] `.ubuntu-venv/bin/python -m ruff check .`
 - [x] `.ubuntu-venv/bin/python -m ruff format --check .`
 - [x] `.ubuntu-venv/bin/python -m mypy src`
-- [x] `.ubuntu-venv/bin/python -m pytest -q` (64 passed, 1 skipped)
-- [x] VLC backend smoke test: `TZ_PLAYER_TEST_VLC=1 python -m pytest -q tests/test_vlc_backend.py` (1 passed)
+- [x] `.ubuntu-venv/bin/python -m pytest` (105 passed, 3 skipped)
+- [x] `TZ_PLAYER_RUN_PERF=1 .ubuntu-venv/bin/python -m pytest tests/test_performance_opt_in.py` (2 passed)
+- [ ] `TZ_PLAYER_TEST_VLC=1 .ubuntu-venv/bin/python -m pytest -q tests/test_vlc_backend.py` (fails in this environment: `libVLC` runtime unavailable)
 
 Backlog status:
 
@@ -25,6 +26,12 @@ Known remaining release tasks:
 - [x] Verify CI runs the same gate commands on PR (`.github/workflows/ci.yml`).
 - [x] Run VLC-specific smoke tests in an environment with `TZ_PLAYER_TEST_VLC=1` (see `docs/vlc-smoke-test.md`).
 - [ ] Run manual app startup check with VLC backend: `python -m tz_player.app --backend vlc`.
+- [ ] Re-run VLC backend smoke test in a VLC-enabled environment (`TZ_PLAYER_TEST_VLC=1`).
+
+Deferred with rationale:
+
+- VLC-specific automated/manual checks are deferred until a host with VLC/libVLC installed is available.
+- Deferral does not block non-VLC release quality gates; fallback-to-fake behavior is covered by automated tests.
 
 ## Libraries
 
