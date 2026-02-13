@@ -176,8 +176,8 @@ Each task includes:
   - DB operations fail safely without schema corruption.
 - Tests:
   - Add tests for state temp-file replacement and corrupted input recovery.
-- Status: `todo`
-- Commit:
+- Status: `done`
+- Commit: `2f64956`
 
 ## P2 UX and Documentation Completeness
 
