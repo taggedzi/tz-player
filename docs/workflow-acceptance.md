@@ -13,6 +13,16 @@ Run from repository root:
 .ubuntu-venv/bin/python -m pytest
 ```
 
+## Opt-in Performance Checks
+
+Performance checks are intentionally opt-in and are excluded from default CI gating.
+
+Run explicitly when profiling or before release sign-off:
+
+```bash
+TZ_PLAYER_RUN_PERF=1 .ubuntu-venv/bin/python -m pytest tests/test_performance_opt_in.py
+```
+
 ## Workflow Coverage Matrix
 
 | Workflow | Acceptance Intent | Automated Coverage |
