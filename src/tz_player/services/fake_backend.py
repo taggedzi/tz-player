@@ -115,7 +115,7 @@ class FakePlaybackBackend:
 
     async def set_speed(self, speed: float) -> None:
         async with self._lock:
-            self._state.speed = _clamp_float(speed, 0.5, 8.0)
+            self._state.speed = _clamp_float(speed, 0.5, 4.0)
 
     async def get_position_ms(self) -> int:
         async with self._lock:

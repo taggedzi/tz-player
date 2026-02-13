@@ -12,7 +12,7 @@ from tz_player.ui.slider_bar import SliderBar, SliderChanged
 from tz_player.utils.time_format import format_time_pair_ms
 
 SPEED_MIN = 0.5
-SPEED_MAX = 8.0
+SPEED_MAX = 4.0
 SPEED_STEP = 0.25
 
 

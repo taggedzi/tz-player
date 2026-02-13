@@ -57,6 +57,7 @@ Current keys:
 Status pane controls:
 - Click or drag the TIME bar to seek.
 - Click or drag the VOL and SPD bars to change volume and speed.
+- Playback speed range is capped to `0.5x` through `4.0x` for backend compatibility.
 - Time display shows MM:SS normally and switches to H:MM:SS for long tracks.
 
 Playlist footer:

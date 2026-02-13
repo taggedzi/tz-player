@@ -12,10 +12,10 @@ from tz_player.ui.status_pane import (
 
 def test_speed_quantization_and_clamp() -> None:
     assert quantize_speed(0.1) == 0.5
-    assert quantize_speed(8.2) == 8.0
+    assert quantize_speed(8.2) == 4.0
     assert quantize_speed(1.13) == 1.25
     assert speed_from_fraction(0.0) == 0.5
-    assert speed_from_fraction(1.0) == 8.0
+    assert speed_from_fraction(1.0) == 4.0
 
 
 def test_volume_clamp() -> None:

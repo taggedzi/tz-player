@@ -42,6 +42,8 @@ from .visualizers import (
 
 logger = logging.getLogger(__name__)
 METADATA_REFRESH_DEBOUNCE = 0.2
+SPEED_MIN = 0.5
+SPEED_MAX = 4.0
 
 
 class TzPlayerApp(App):
@@ -689,13 +691,14 @@ class TzPlayerApp(App):
     def _player_state_from_appstate(self, playlist_id: int) -> PlayerState:
         repeat_mode = _repeat_from_state(self.state.repeat_mode)
         volume = self.state.volume
+        speed = _clamp_speed(self.state.speed)
         if volume <= 1.0:
             volume = volume * 100
         return PlayerState(
             playlist_id=playlist_id,
             item_id=self.state.current_item_id,
             volume=int(volume),
-            speed=self.state.speed,
+            speed=speed,
             repeat_mode=repeat_mode,
             shuffle=self.state.shuffle,
         )
@@ -758,6 +761,10 @@ def _track_needs_metadata(track: TrackInfo) -> bool:
         or track.album is None
         or track.duration_ms is None
     )
+
+
+def _clamp_speed(speed: float) -> float:
+    return max(SPEED_MIN, min(speed, SPEED_MAX))
 
 
 def _resolve_backend_name(cli_backend: str | None, state_backend: str | None) -> str:

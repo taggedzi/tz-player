@@ -120,7 +120,7 @@ def test_volume_speed_repeat_shuffle() -> None:
         await service.set_volume(-5)
         assert service.state.volume == 0
         await service.change_speed(40)
-        assert service.state.speed == 8.0
+        assert service.state.speed == 4.0
         await service.change_speed(-40)
         assert service.state.speed == 0.5
         await service.reset_speed()
