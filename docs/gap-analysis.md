@@ -148,6 +148,7 @@ Proposed implementation:
 
 5. `BL-005` Strengthen navigation/focus regression test suite  
 Workflows: WF-02, WF-03, WF-04  
+Status: `Done` (2026-02-13)
 Proposed implementation:
 - Add matrix tests across focus targets (`playlist-pane`, `playlist-viewport`, `playlist-find`, transport buttons).
 - Verify up/down, play controls, and escape semantics per focus state.
@@ -175,6 +176,5 @@ Proposed implementation:
 
 ## Recommended Execution Order
 
-1. `BL-005` focus/navigation regression matrix
-2. `BL-006` playlist editing integration expansion
-3. `BL-007` + `BL-008` + `BL-009` polish/documentation
+1. `BL-006` playlist editing integration expansion
+2. `BL-007` + `BL-008` + `BL-009` polish/documentation
