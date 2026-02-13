@@ -4,6 +4,7 @@ This folder contains lightweight project documentation.
 
 - `usage.md` for end-user notes
 - `architecture.md` for design notes
+- `gap-analysis.md` for workflow-to-spec gap mapping and prioritized backlog
 - `adr/` for architectural decision records
 
 Project-level governance docs live at repo root:

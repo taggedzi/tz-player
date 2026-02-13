@@ -71,3 +71,19 @@ A task is complete when:
 - Relevant docs/ADRs are updated.
 - Known risks and follow-ups are documented.
 
+## 9. MCP Setup Verification
+
+This project can use the `repo-interrogator` MCP server for repository interrogation.
+
+Verification checklist:
+
+- Confirm server is configured:
+  - `codex mcp list`
+  - Expect an enabled `repo-interrogator` entry.
+- Confirm server command/args target this repo:
+  - `codex mcp get repo-interrogator`
+  - Expect `--repo-root /mnt/e/Home/Documents/Programming/tz-player`.
+- If MCP config changed, restart the Codex session to reload server availability.
+- Run a direct server smoke check if needed:
+  - `printf '%s\n' '{"id":"req-1","method":"repo.status","params":{}}' | /mnt/e/Home/Documents/Programming/repomap/.venv/bin/repo-mcp --repo-root /mnt/e/Home/Documents/Programming/tz-player`
+  - Expect JSON response with `"ok": true`.
