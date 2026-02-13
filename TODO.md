@@ -154,8 +154,8 @@ Each task includes:
   - Metadata and visualization work remain loop-safe under load.
 - Tests:
   - Add regression tests around metadata debounce and UI responsiveness assumptions.
-- Status: `todo`
-- Commit:
+- Status: `done`
+- Commit: `f3618a3`
 
 ### T-012 Opt-in performance checks
 - Spec Ref: Section `9.1`, Section `10`
