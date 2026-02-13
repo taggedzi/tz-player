@@ -82,8 +82,18 @@ class TzPlayerApp(App):
         color: $text;
     }
 
+    #playlist-find:focus {
+        background: $boost;
+        color: $text;
+    }
+
     #playlist-viewport {
         height: 1fr;
+        background: $panel;
+    }
+
+    #playlist-viewport:focus {
+        background: $boost;
     }
 
     #right-pane {
