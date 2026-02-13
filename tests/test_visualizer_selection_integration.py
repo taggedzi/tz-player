@@ -80,6 +80,21 @@ class VizDefault:
         return "default"
 
 
+@dataclass
+class VizAnsi:
+    plugin_id: str = "viz.ansi"
+    display_name: str = "Viz ANSI"
+
+    def on_activate(self, context: VisualizerContext) -> None:
+        return None
+
+    def on_deactivate(self) -> None:
+        return None
+
+    def render(self, frame: VisualizerFrameInput) -> str:
+        return "\x1b[1;92mANSI\x1b[0m"
+
+
 def test_visualizer_selection_persists_across_restart(tmp_path, monkeypatch) -> None:
     _setup_dirs(tmp_path, monkeypatch)
     registry = VisualizerRegistry(
@@ -160,3 +175,32 @@ def test_unknown_persisted_visualizer_falls_back_and_repersists(
 
     persisted = load_state(paths.state_path())
     assert persisted.visualizer_id == "viz.default"
+
+
+def test_ansi_visualizer_output_does_not_raise_markup_error(
+    tmp_path, monkeypatch
+) -> None:
+    _setup_dirs(tmp_path, monkeypatch)
+    registry = VisualizerRegistry(
+        {"viz.default": VizDefault, "viz.ansi": VizAnsi},
+        default_id="viz.default",
+    )
+    monkeypatch.setattr(
+        app_module.VisualizerRegistry,
+        "built_in",
+        classmethod(lambda cls: registry),
+    )
+    app = TzPlayerApp(auto_init=False, backend_name="fake")
+
+    async def run_app() -> None:
+        async with app.run_test() as pilot:
+            await asyncio.sleep(0)
+            await app._initialize_state()
+            assert app.visualizer_host is not None
+            assert app.visualizer_host.active_id == "viz.default"
+            await pilot.press("z")
+            await asyncio.sleep(0)
+            assert app.visualizer_host.active_id == "viz.ansi"
+            app.exit()
+
+    _run(run_app())

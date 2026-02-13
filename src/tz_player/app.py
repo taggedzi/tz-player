@@ -673,7 +673,8 @@ class TzPlayerApp(App):
             pane.update("Visualizer unavailable")
             return
         notice = self.visualizer_host.consume_notice()
-        pane.update(f"{notice}\n{output}" if notice else output)
+        render_text = f"{notice}\n{output}" if notice else output
+        pane.update(Text.from_ansi(render_text))
 
     async def _handle_metadata_updated(self, track_ids: list[int]) -> None:
         pane = self.query_one(PlaylistPane)
