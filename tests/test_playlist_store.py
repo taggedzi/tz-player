@@ -190,3 +190,27 @@ def test_migration_adds_item_id(tmp_path) -> None:
         assert "id" in columns
         version = conn.execute("PRAGMA user_version").fetchone()[0]
         assert version == 2
+
+
+def test_search_item_ids_and_fetch_by_item_ids(tmp_path) -> None:
+    db_path = tmp_path / "library.sqlite"
+    store = PlaylistStore(db_path)
+    _run(store.initialize())
+    playlist_id = _run(store.create_playlist("Search"))
+
+    track_paths = [
+        tmp_path / "moon_song.mp3",
+        tmp_path / "sun_song.mp3",
+        tmp_path / "moonlight.flac",
+    ]
+    for path in track_paths:
+        _touch(path)
+
+    _run(store.add_tracks(playlist_id, track_paths))
+    rows = _run(store.fetch_window(playlist_id, 0, 10))
+
+    match_ids = _run(store.search_item_ids(playlist_id, "moon"))
+    assert match_ids == [rows[0].item_id, rows[2].item_id]
+
+    fetched = _run(store.fetch_rows_by_item_ids(playlist_id, match_ids[::-1]))
+    assert [row.item_id for row in fetched] == match_ids[::-1]

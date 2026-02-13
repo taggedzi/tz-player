@@ -158,6 +158,50 @@ def test_playlist_pane_refresh_with_tracks(tmp_path) -> None:
     _run(run_app())
 
 
+def test_find_filters_playlist_and_escape_resets(tmp_path) -> None:
+    store = PlaylistStore(tmp_path / "library.sqlite")
+
+    async def run_app() -> None:
+        await store.initialize()
+        playlist_id = await store.ensure_playlist("Default")
+        files = [
+            tmp_path / "moon_song.mp3",
+            tmp_path / "sun_song.mp3",
+            tmp_path / "moonlight.flac",
+        ]
+        for path in files:
+            path.write_bytes(b"")
+        await store.add_tracks(playlist_id, files)
+        pane = PlaylistPane()
+
+        class PaneApp(App):
+            def compose(self) -> ComposeResult:
+                yield pane
+
+        app = PaneApp()
+        async with app.run_test() as pilot:
+            await asyncio.sleep(0)
+            await pane.configure(store, playlist_id, None)
+            assert pane.total_count == 3
+
+            pane.focus_find()
+            await pilot.type("moon")
+            await asyncio.sleep(0.3)
+
+            assert pane.search_active is True
+            assert pane.total_count == 2
+            assert len(pane._rows) == 2
+            assert all("moon" in row.path.name.lower() for row in pane._rows)
+
+            await pilot.press("escape")
+            await asyncio.sleep(0.1)
+            assert pane.search_active is False
+            assert pane.total_count == 3
+            app.exit()
+
+    _run(run_app())
+
+
 def test_escape_exits_find_and_restores_global_keys(tmp_path, monkeypatch) -> None:
     _setup_dirs(tmp_path, monkeypatch)
 

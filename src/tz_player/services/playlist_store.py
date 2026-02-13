@@ -98,9 +98,7 @@ class PlaylistStore:
     async def fetch_window(
         self, playlist_id: int, offset: int, limit: int
     ) -> list[PlaylistRow]:
-        return await run_blocking(
-            self._fetch_window_sync, playlist_id, offset, limit
-        )
+        return await run_blocking(self._fetch_window_sync, playlist_id, offset, limit)
 
     async def get_item_row(self, playlist_id: int, item_id: int) -> PlaylistRow | None:
         return await run_blocking(self._get_item_row_sync, playlist_id, item_id)
@@ -111,6 +109,18 @@ class PlaylistStore:
         return await run_blocking(
             self._fetch_rows_by_track_ids_sync, playlist_id, track_ids
         )
+
+    async def fetch_rows_by_item_ids(
+        self, playlist_id: int, item_ids: list[int]
+    ) -> list[PlaylistRow]:
+        return await run_blocking(
+            self._fetch_rows_by_item_ids_sync, playlist_id, item_ids
+        )
+
+    async def search_item_ids(
+        self, playlist_id: int, query: str, *, limit: int = 1000
+    ) -> list[int]:
+        return await run_blocking(self._search_item_ids_sync, playlist_id, query, limit)
 
     async def get_next_item_id(
         self, playlist_id: int, item_id: int, *, wrap: bool
@@ -415,6 +425,96 @@ class PlaylistStore:
             )
             for row in rows
         ]
+
+    def _fetch_rows_by_item_ids_sync(
+        self, playlist_id: int, item_ids: list[int]
+    ) -> list[PlaylistRow]:
+        if not item_ids:
+            return []
+        placeholders = ", ".join("?" for _ in item_ids)
+        order_cases = " ".join(
+            f"WHEN playlist_items.id = ? THEN {idx}" for idx in range(len(item_ids))
+        )
+        params: list[int] = [playlist_id, *item_ids, *item_ids]
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT
+                    playlist_items.id AS item_id,
+                    playlist_items.track_id,
+                    playlist_items.pos_key,
+                    tracks.path,
+                    track_meta.title,
+                    track_meta.artist,
+                    track_meta.album,
+                    track_meta.year,
+                    track_meta.duration_ms,
+                    track_meta.meta_valid,
+                    track_meta.meta_error
+                FROM playlist_items
+                JOIN tracks ON tracks.id = playlist_items.track_id
+                LEFT JOIN track_meta ON track_meta.track_id = tracks.id
+                WHERE playlist_items.playlist_id = ?
+                  AND playlist_items.id IN ({placeholders})
+                ORDER BY CASE {order_cases} END
+                """,
+                params,
+            ).fetchall()
+        return [
+            PlaylistRow(
+                item_id=int(row["item_id"]),
+                track_id=int(row["track_id"]),
+                pos_key=int(row["pos_key"]),
+                path=Path(row["path"]),
+                title=row["title"],
+                artist=row["artist"],
+                album=row["album"],
+                year=row["year"],
+                duration_ms=row["duration_ms"],
+                meta_valid=_coerce_meta_valid(row["meta_valid"]),
+                meta_error=row["meta_error"],
+            )
+            for row in rows
+        ]
+
+    def _search_item_ids_sync(
+        self, playlist_id: int, query: str, limit: int
+    ) -> list[int]:
+        tokens = [token.strip().lower() for token in query.split() if token.strip()]
+        if not tokens:
+            return []
+        field_exprs = [
+            "LOWER(COALESCE(track_meta.title, ''))",
+            "LOWER(COALESCE(track_meta.artist, ''))",
+            "LOWER(COALESCE(track_meta.album, ''))",
+            "LOWER(COALESCE(CAST(track_meta.year AS TEXT), ''))",
+            "LOWER(COALESCE(tracks.path, ''))",
+        ]
+        token_clauses = []
+        for _ in tokens:
+            token_clauses.append(
+                "(" + " OR ".join(f"{expr} LIKE ?" for expr in field_exprs) + ")"
+            )
+        where_clause = " AND ".join(token_clauses)
+        params: list[object] = [playlist_id]
+        for token in tokens:
+            params.extend([f"%{token}%"] * len(field_exprs))
+        params.append(limit)
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT playlist_items.id AS item_id
+                FROM playlist_items
+                JOIN tracks ON tracks.id = playlist_items.track_id
+                LEFT JOIN track_meta ON track_meta.track_id = tracks.id
+                WHERE playlist_items.playlist_id = ?
+                  AND {where_clause}
+                ORDER BY playlist_items.pos_key
+                LIMIT ?
+                """,
+                params,
+            ).fetchall()
+        return [int(row["item_id"]) for row in rows]
 
     def _get_next_item_id_sync(
         self, playlist_id: int, item_id: int, wrap: bool

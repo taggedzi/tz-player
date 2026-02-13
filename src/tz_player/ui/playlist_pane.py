@@ -98,6 +98,13 @@ class PlaylistPane(Static):
         self._transport_controls = TransportControls(id="playlist-bottom")
         self._last_player_state: PlayerState | None = None
         self._refresh_gen = 0
+        self.search_query = ""
+        self.search_active = False
+        self._search_gen = 0
+        self._search_task: asyncio.Task[None] | None = None
+        self._search_result_item_ids: list[int] = []
+        self._search_prev_cursor_item_id: int | None = None
+        self._search_prev_window_offset: int | None = None
 
     def compose(self) -> ComposeResult:
         yield Vertical(
@@ -163,6 +170,11 @@ class PlaylistPane(Static):
     def focus_find(self) -> None:
         self._find_input.focus()
 
+    async def on_input_changed(self, event: Input.Changed) -> None:
+        if event.input is not self._find_input:
+            return
+        self._schedule_search(event.value)
+
     async def on_input_submitted(self, event: Input.Submitted) -> None:
         if event.input is not self._find_input:
             return
@@ -183,6 +195,7 @@ class PlaylistPane(Static):
 
     def clear_find_and_focus(self) -> None:
         self._find_input.value = ""
+        self._schedule_search("")
         self.focus()
 
     def is_find_focused(self) -> bool:
@@ -243,18 +256,26 @@ class PlaylistPane(Static):
             )
             return
         cursor_index = None
-        if self.cursor_item_id is not None:
-            cursor_index = await self.store.get_item_index(
-                self.playlist_id, self.cursor_item_id
-            )
         playing_index = None
-        if (
-            self._last_player_state.status in {"playing", "paused"}
-            and self._last_player_state.item_id is not None
-        ):
-            playing_index = await self.store.get_item_index(
-                self.playlist_id, self._last_player_state.item_id
-            )
+        if self.search_active:
+            cursor_index = self._search_index(self.cursor_item_id)
+            if (
+                self._last_player_state.status in {"playing", "paused"}
+                and self._last_player_state.item_id is not None
+            ):
+                playing_index = self._search_index(self._last_player_state.item_id)
+        else:
+            if self.cursor_item_id is not None:
+                cursor_index = await self.store.get_item_index(
+                    self.playlist_id, self.cursor_item_id
+                )
+            if (
+                self._last_player_state.status in {"playing", "paused"}
+                and self._last_player_state.item_id is not None
+            ):
+                playing_index = await self.store.get_item_index(
+                    self.playlist_id, self._last_player_state.item_id
+                )
         self._transport_controls.update_from_state(
             self._last_player_state,
             total_count=self.total_count,
@@ -264,6 +285,9 @@ class PlaylistPane(Static):
 
     async def refresh_view(self) -> None:
         if self.store is None or self.playlist_id is None:
+            return
+        if self.search_active:
+            await self._refresh_search_results()
             return
         await self._recompute_limit()
         try:
@@ -347,6 +371,9 @@ class PlaylistPane(Static):
     async def _refresh_window(self) -> None:
         if self.store is None or self.playlist_id is None:
             return
+        if self.search_active:
+            await self._refresh_search_window()
+            return
         try:
             gen = self._refresh_gen
             self._rows = await self.store.fetch_window(
@@ -366,6 +393,151 @@ class PlaylistPane(Static):
         except Exception as exc:  # pragma: no cover - UI safety net
             logger.exception("Failed to refresh playlist: %s", exc)
             await self._show_error("Failed to refresh playlist. See log file.")
+
+    def _schedule_search(self, query: str) -> None:
+        self.search_query = query
+        self._search_gen += 1
+        gen = self._search_gen
+        if self._search_task is not None:
+            self._search_task.cancel()
+        if not query.strip():
+            self._search_task = asyncio.create_task(
+                self._apply_search_query(gen, query)
+            )
+        else:
+            self._search_task = asyncio.create_task(self._search_debounced(gen, query))
+
+    async def _search_debounced(self, gen: int, query: str) -> None:
+        try:
+            await asyncio.sleep(0.2)
+            await self._apply_search_query(gen, query)
+        except asyncio.CancelledError:
+            return
+        finally:
+            if self._search_task is asyncio.current_task():
+                self._search_task = None
+
+    async def _apply_search_query(self, gen: int, query: str) -> None:
+        try:
+            if self.store is None or self.playlist_id is None:
+                return
+            if gen != self._search_gen:
+                return
+            trimmed = query.strip()
+            if not trimmed:
+                await self._exit_search_mode()
+                return
+            if not self.search_active:
+                self._search_prev_cursor_item_id = self.cursor_item_id
+                self._search_prev_window_offset = self.window_offset
+            self.search_active = True
+            self.search_query = query
+            await self._recompute_limit()
+            try:
+                item_ids = await self.store.search_item_ids(self.playlist_id, trimmed)
+                if gen != self._search_gen:
+                    return
+            except Exception as exc:  # pragma: no cover - UI safety net
+                logger.exception("Failed to search playlist: %s", exc)
+                await self._show_error("Failed to search playlist. See log file.")
+                return
+            self._search_result_item_ids = item_ids
+            self.total_count = len(item_ids)
+            if self.cursor_item_id not in item_ids:
+                self.cursor_item_id = item_ids[0] if item_ids else None
+                self.window_offset = 0
+            else:
+                self.window_offset = self._clamp_offset(self.window_offset)
+            await self._refresh_search_window()
+            await self._refresh_transport_controls()
+        finally:
+            if self._search_task is asyncio.current_task():
+                self._search_task = None
+
+    async def _refresh_search_results(self) -> None:
+        if self.store is None or self.playlist_id is None:
+            return
+        trimmed = self.search_query.strip()
+        if not trimmed:
+            await self._exit_search_mode()
+            return
+        await self._recompute_limit()
+        gen = self._search_gen
+        try:
+            item_ids = await self.store.search_item_ids(self.playlist_id, trimmed)
+            if gen != self._search_gen:
+                return
+        except Exception as exc:  # pragma: no cover - UI safety net
+            logger.exception("Failed to search playlist: %s", exc)
+            await self._show_error("Failed to search playlist. See log file.")
+            return
+        self._search_result_item_ids = item_ids
+        self.total_count = len(item_ids)
+        if self.cursor_item_id not in item_ids:
+            self.cursor_item_id = item_ids[0] if item_ids else None
+            self.window_offset = 0
+        else:
+            self.window_offset = self._clamp_offset(self.window_offset)
+        await self._refresh_search_window()
+        await self._refresh_transport_controls()
+
+    async def _refresh_search_window(self) -> None:
+        if self.store is None or self.playlist_id is None:
+            return
+        try:
+            gen = self._search_gen
+            window_ids = self._search_result_item_ids[
+                self.window_offset : self.window_offset + self.limit
+            ]
+            if not window_ids:
+                self._rows = []
+            else:
+                self._rows = await self.store.fetch_rows_by_item_ids(
+                    self.playlist_id, window_ids
+                )
+            if gen != self._search_gen:
+                logger.debug(
+                    "Search window aborted due to gen change gen=%s current=%s",
+                    gen,
+                    self._search_gen,
+                )
+                return
+            if self.cursor_item_id is None and self._rows:
+                self.cursor_item_id = self._rows[0].item_id
+            self._update_viewport()
+            self._request_visible_metadata()
+        except Exception as exc:  # pragma: no cover - UI safety net
+            logger.exception("Failed to refresh search window: %s", exc)
+            await self._show_error("Failed to search playlist. See log file.")
+
+    async def _exit_search_mode(self) -> None:
+        was_active = self.search_active
+        self.search_active = False
+        self.search_query = ""
+        self._search_result_item_ids = []
+        self._search_gen += 1
+        self.total_count = 0
+        self.window_offset = 0
+        self._rows = []
+        if not was_active:
+            await self.refresh_view()
+            return
+        await self.refresh_view()
+        if self._search_prev_cursor_item_id is not None:
+            self.cursor_item_id = self._search_prev_cursor_item_id
+        if self._search_prev_window_offset is not None:
+            self.window_offset = self._clamp_offset(self._search_prev_window_offset)
+            await self._refresh_window()
+        await self._refresh_transport_controls()
+
+    def _search_index(self, item_id: int | None) -> int | None:
+        if item_id is None:
+            return None
+        try:
+            idx = self._search_result_item_ids.index(item_id)
+        except ValueError:
+            return None
+        return idx + 1
 
     async def _recompute_limit(self) -> None:
         await asyncio.sleep(0)

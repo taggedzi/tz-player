@@ -59,19 +59,18 @@ Gaps:
 
 ### WF-04: Find/search focus behavior
 
-Status: `Blocked`
+Status: `Met`
 
 Evidence:
-- `f` focuses find input: `src/tz_player/app.py:261`, `src/tz_player/ui/playlist_pane.py:152`
-- Find input widget exists: `src/tz_player/ui/playlist_pane.py:86`
-- No input change/submit handlers in current implementation (no search/filter path in pane).
-- Escape only closes modal/popup in app handler: `src/tz_player/app.py:287`
+- `f` focuses Find input: `src/tz_player/app.py:261`, `src/tz_player/ui/playlist_pane.py:152`
+- Find input change handling schedules debounced filtering: `src/tz_player/ui/playlist_pane.py:173`, `src/tz_player/ui/playlist_pane.py:397`
+- Escape/enter Find exit behavior is explicit in pane handlers: `src/tz_player/ui/playlist_pane.py:179`, `src/tz_player/ui/playlist_pane.py:194`
+- Store-backed search and ordered row fetch are implemented: `src/tz_player/services/playlist_store.py:113`, `src/tz_player/services/playlist_store.py:426`
+- Search behavior covered by tests: `tests/test_ui.py:161`, `tests/test_playlist_store.py:194`
+- Docs updated for Find/filter behavior: `docs/usage.md:31`, `docs/usage.md:55`
 
 Gaps:
-- Typing in Find does not filter playlist (feature absent on this branch).
-- No deterministic keyboard exit behavior for Find mode.
-- Find focus can trap global controls in practice.
-- `docs/usage.md` does not document Find exit behavior: `docs/usage.md:25`
+- None for v1 WF-04 acceptance criteria.
 
 ### WF-05: Playlist editing
 
@@ -91,8 +90,8 @@ Gaps:
 ## Cross-Cutting Quality Gate Gaps
 
 1. Test reliability blocker  
-Observed: `tests/test_metadata_service.py::test_metadata_service_fallback_and_duration` hangs in this environment and times out.  
-File: `tests/test_metadata_service.py:27`
+Status: mitigated in `BL-003` by isolating blocking test paths and adding timeout discipline in the metadata path tests.  
+Residual risk: full suite reliability still depends on local dependency setup (`mutagen`, `vlc`).
 
 2. Keyboard/focus contract is not fully specified in code  
 No explicit focus-state machine; behavior is distributed across app/pane/input event handlers.
@@ -108,6 +107,7 @@ Files: `src/tz_player/ui/text_button.py:17`, `src/tz_player/app.py:34`
 1. `BL-001` Fix Find focus trap and define deterministic escape behavior  
 Workflows: WF-03, WF-04  
 Why now: Keyboard trap blocks primary controls.  
+Status: `Done` (2026-02-13)
 Proposed implementation:
 - Implement explicit Find mode handlers (`Input.Changed`, `Input.Submitted`, `Escape`) in playlist pane.
 - Add app-level escape order: modal/popup first, then Find exit/clear.
@@ -119,8 +119,9 @@ Acceptance tests:
 2. `BL-002` Implement or remove search behavior ambiguity for v1  
 Workflows: WF-04  
 Why now: Spec says “Typing filters playlist (when enabled)” but branch currently has no filtering behavior.  
-Decision required:
-- Either implement filtering now (preferred), or explicitly scope it out in `SPEC.md`.
+Status: `Done` (2026-02-13, implemented filtering)
+Decision taken:
+- Implemented filtering for v1.
 Acceptance tests:
 - If enabled: query updates visible rows and reset on empty query.
 - If deferred: spec/docs clearly state Find is focus-only placeholder.
@@ -128,6 +129,7 @@ Acceptance tests:
 3. `BL-003` Resolve metadata test hang and enforce timeout discipline  
 Workflows: Quality gates  
 Why now: `pytest` gate is not trustworthy with hanging test.  
+Status: `Done` (2026-02-13)
 Proposed implementation:
 - Isolate root cause in `MetadataService`/test fixture interaction.
 - Add bounded timeout strategy for metadata test path.
@@ -172,11 +174,7 @@ Proposed implementation:
 
 ## Recommended Execution Order
 
-1. `BL-001` Find focus trap
-2. `BL-003` metadata hang reliability
-3. `BL-002` search behavior decision/implementation
-4. `BL-004` startup resilience tests
-5. `BL-005` focus/navigation regression matrix
-6. `BL-006` playlist editing integration expansion
-7. `BL-007` + `BL-008` + `BL-009` polish/documentation
-
+1. `BL-004` startup resilience tests
+2. `BL-005` focus/navigation regression matrix
+3. `BL-006` playlist editing integration expansion
+4. `BL-007` + `BL-008` + `BL-009` polish/documentation

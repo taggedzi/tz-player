@@ -28,6 +28,7 @@ Current keys:
 - `v`: toggle selection for the current row
 - `delete`: remove selected tracks (confirm)
 - `f`: focus the Find input
+- `enter` (in Find): return focus to playlist
 - `space`: play/pause
 - `n` / `p`: next/previous track
 - `x`: stop
@@ -40,7 +41,7 @@ Current keys:
 - `\`: speed reset to 1.0
 - `r`: cycle repeat mode
 - `s`: toggle shuffle
-- `escape`: dismiss modals
+- `escape`: dismiss modal/popup; in Find it clears query and exits Find mode
 
 Status pane controls:
 - Click or drag the TIME bar to seek.
@@ -51,3 +52,7 @@ Playlist footer:
 - Track counter shows `Track: ####/####` (current/total).
 - Repeat indicator shows `R:OFF|ONE|ALL` and shuffle shows `S:OFF|ON`.
 - Transport buttons allow Prev/Play/Pause/Stop/Next with mouse clicks.
+
+Find/filter behavior:
+- Typing in Find filters playlist rows by metadata/path text.
+- Empty query restores the full playlist view.
