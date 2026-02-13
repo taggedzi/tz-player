@@ -130,8 +130,8 @@ Each task includes:
   - Users can identify active log destination quickly.
 - Tests:
   - CLI tests for log level selection and output path handling.
-- Status: `todo`
-- Commit:
+- Status: `done`
+- Commit: `f372843`
 
 ### T-010 Error message quality pass
 - Spec Ref: Section `8` Error message quality contract
