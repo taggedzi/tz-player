@@ -27,6 +27,7 @@ Current keys:
 - `shift+up` / `shift+down`: reorder selection up/down
 - `v`: toggle selection for the current row
 - `delete`: remove selected tracks (confirm)
+- `a`: open/toggle the Actions menu (Add files/folder, clear, metadata actions)
 - `f`: focus the Find input
 - `enter` (in Find): return focus to playlist
 - `space`: play/pause

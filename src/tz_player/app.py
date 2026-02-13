@@ -131,6 +131,7 @@ class TzPlayerApp(App):
     BINDINGS = [
         ("escape", "dismiss_modal", "Dismiss"),
         ("space", "play_pause", "Play/Pause"),
+        ("a", "open_actions_menu", "Actions"),
         ("f", "focus_find", "Find"),
         ("n", "next_track", "Next"),
         ("p", "previous_track", "Previous"),
@@ -279,6 +280,10 @@ class TzPlayerApp(App):
 
     def action_focus_find(self) -> None:
         self.query_one(PlaylistPane).focus_find()
+
+    async def action_open_actions_menu(self) -> None:
+        pane = self.query_one(PlaylistPane)
+        await pane._open_actions_menu()
 
     async def action_play_pause(self) -> None:
         if self.player_service is None or self.playlist_id is None:

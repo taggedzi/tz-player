@@ -131,6 +131,42 @@ def test_actions_menu_dismisses_on_escape() -> None:
     _run(run_app())
 
 
+def test_actions_menu_keyboard_open_and_select(tmp_path, monkeypatch) -> None:
+    _setup_dirs(tmp_path, monkeypatch)
+    app = TzPlayerApp(auto_init=False)
+
+    async def run_app() -> None:
+        await app.store.initialize()
+        playlist_id = await app.store.ensure_playlist("Default")
+
+        async with app.run_test() as pilot:
+            await asyncio.sleep(0)
+            pane = app.query_one(PlaylistPane)
+            selected_actions: list[str] = []
+
+            async def record_action(action: str) -> None:
+                selected_actions.append(action)
+
+            pane._handle_actions_menu = record_action  # type: ignore[assignment]
+            await pane.configure(app.store, playlist_id, None)
+            pane.focus()
+
+            await pilot.press("a")
+            await asyncio.sleep(0)
+            assert app.query_one(ActionsMenuPopup)
+
+            await pilot.press("down")
+            await pilot.press("enter")
+            await asyncio.sleep(0)
+
+            assert selected_actions == ["add_folder"]
+            assert len(app.query(ActionsMenuPopup)) == 0
+            assert app.focused is pane
+            app.exit()
+
+    _run(run_app())
+
+
 def test_playlist_pane_refresh_with_tracks(tmp_path) -> None:
     store = PlaylistStore(tmp_path / "library.sqlite")
 

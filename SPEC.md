@@ -87,6 +87,7 @@ Acceptance criteria:
 - `shift+up/shift+down` reorder selected/cursor item(s).
 - `v` toggles selection.
 - `delete` removes selection after confirmation.
+- `a` opens/toggles the playlist Actions menu.
 - `f` focuses Find input.
 - Playback bindings (`space`, `n`, `p`, `x`, seek, volume, speed, repeat, shuffle) must work from main UI focus states.
 - `escape` closes active modal/popups first; then exits Find focus or clears transient mode.
