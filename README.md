@@ -88,6 +88,10 @@ See `docs/usage.md` for the full key map.
 
 See `docs/workflow-acceptance.md` for the per-workflow acceptance checklist and mapped tests.
 
+## Visualization Plugins
+
+See `docs/visualizations.md` for visualization subsystem goals, plugin contract, and authoring guidance.
+
 
 ## Release
 

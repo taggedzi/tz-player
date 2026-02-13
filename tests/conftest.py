@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import sys
 from pathlib import Path
 
@@ -29,3 +30,15 @@ def run_blocking_inline(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(metadata_service_module, "run_blocking", _inline)
     monkeypatch.setattr(app_module, "run_blocking", _inline)
     monkeypatch.setattr(playlist_pane_module, "run_blocking", _inline)
+
+
+@pytest.fixture(autouse=True)
+def ensure_current_event_loop():
+    """Provide a current event loop for sync tests (required on Python 3.9)."""
+    loop = asyncio.new_event_loop()
+    try:
+        asyncio.set_event_loop(loop)
+        yield
+    finally:
+        loop.close()
+        asyncio.set_event_loop(None)

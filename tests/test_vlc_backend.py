@@ -7,7 +7,10 @@ import os
 
 import pytest
 
-pytest.importorskip("vlc")
+try:
+    import vlc  # noqa: F401
+except (ImportError, OSError, FileNotFoundError) as exc:
+    pytest.skip(f"python-vlc/libVLC unavailable: {exc}", allow_module_level=True)
 
 from tz_player.services.vlc_backend import VLCPlaybackBackend
 

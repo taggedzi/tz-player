@@ -40,7 +40,8 @@ class MetadataService:
         on_metadata_updated: Callable[[list[int]], Awaitable[None]] | None = None,
     ) -> None:
         self._store = store
-        self._semaphore = asyncio.Semaphore(concurrency)
+        self._concurrency = concurrency
+        self._semaphore: asyncio.Semaphore | None = None
         self._on_metadata_updated = on_metadata_updated
 
     async def ensure_metadata(self, track_ids: list[int]) -> None:
@@ -93,7 +94,8 @@ class MetadataService:
         return True
 
     async def _load_one(self, track: TrackRecord) -> tuple[int, bool]:
-        async with self._semaphore:
+        semaphore = self._ensure_semaphore()
+        async with semaphore:
             stat = await _safe_stat(track.path)
             if stat is None:
                 await self._store.upsert_track_meta(
@@ -129,6 +131,13 @@ class MetadataService:
             )
             await self._store.upsert_track_meta(track.track_id, meta)
             return track.track_id, meta.meta_valid
+
+    def _ensure_semaphore(self) -> asyncio.Semaphore:
+        semaphore = self._semaphore
+        if semaphore is None:
+            semaphore = asyncio.Semaphore(self._concurrency)
+            self._semaphore = semaphore
+        return semaphore
 
 
 @dataclass(frozen=True)

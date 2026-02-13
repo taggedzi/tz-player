@@ -67,3 +67,13 @@ def test_invalidate_if_changed_marks_invalid(tmp_path) -> None:
 
     updated = _run(store.fetch_window(playlist_id, 0, 1))[0]
     assert updated.meta_valid is False
+
+
+def test_metadata_service_constructs_without_current_loop(tmp_path) -> None:
+    db_path = tmp_path / "library.sqlite"
+    store = PlaylistStore(db_path)
+    _run(store.initialize())
+
+    asyncio.set_event_loop(None)
+    service = MetadataService(store)
+    assert service is not None
