@@ -94,6 +94,12 @@ module = [
 ]
 disallow_untyped_defs = false
 
+[[tool.mypy.overrides]]
+module = [
+  "vlc",
+]
+ignore_missing_imports = true
+
 
 [tool.pytest.ini_options]
 addopts = [

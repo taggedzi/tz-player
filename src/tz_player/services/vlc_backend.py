@@ -108,7 +108,7 @@ class VLCPlaybackBackend:
 
     def _thread_main(self, ready_future: asyncio.Future[None]) -> None:
         try:
-            import vlc  # type: ignore[import-untyped]
+            import vlc
 
             instance = vlc.Instance()
             player = instance.media_player_new()

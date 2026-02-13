@@ -2,6 +2,28 @@
 
 Use this checklist before a release. Pick the section that matches your project type.
 
+## tz-player Status (2026-02-13)
+
+Active profile: **TUI Apps**
+
+Validation status:
+
+- [x] `.ubuntu-venv/bin/python -m ruff check .`
+- [x] `.ubuntu-venv/bin/python -m ruff format --check .`
+- [x] `.ubuntu-venv/bin/python -m mypy src`
+- [x] `.ubuntu-venv/bin/python -m pytest -q` (64 passed, 1 skipped)
+
+Backlog status:
+
+- [x] BL-001 through BL-009 complete on `spec-baseline` (see `docs/gap-analysis.md`).
+- [x] Workflow acceptance checklist added (`docs/workflow-acceptance.md`) and linked from `SPEC.md`.
+
+Known remaining release tasks:
+
+- [ ] Update version/changelog for the release candidate.
+- [ ] Verify CI runs the same gate commands on PR.
+- [ ] Run VLC-specific smoke tests in an environment with `TZ_PLAYER_TEST_VLC=1`.
+
 ## Libraries
 
 ### Must Have (Release Blockers)

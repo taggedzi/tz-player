@@ -25,4 +25,3 @@ async def run_blocking(func: Callable[..., T], /, *args: Any, **kwargs: Any) -> 
         bound = partial(func, *args, **kwargs)
         return await loop.run_in_executor(_IO_EXECUTOR, bound)
     return await loop.run_in_executor(_IO_EXECUTOR, func, *args)
-
