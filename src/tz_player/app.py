@@ -20,6 +20,7 @@ from . import __version__
 from .events import PlayerStateChanged, TrackChanged
 from .logging_utils import setup_logging
 from .paths import db_path, log_dir, state_path
+from .runtime_config import resolve_log_level
 from .services.fake_backend import FakePlaybackBackend
 from .services.metadata_service import MetadataService
 from .services.player_service import PlayerService, PlayerState, TrackInfo
@@ -786,12 +787,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
-
-    level = "INFO"
-    if args.verbose:
-        level = "DEBUG"
-    if args.quiet:
-        level = "WARNING"
+    level = resolve_log_level(verbose=args.verbose, quiet=args.quiet)
 
     setup_logging(
         log_dir=log_dir(),

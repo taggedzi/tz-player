@@ -10,6 +10,7 @@ from pathlib import Path
 from . import __version__
 from .logging_utils import setup_logging
 from .paths import log_dir
+from .runtime_config import resolve_log_level
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -35,11 +36,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
-    level = "INFO"
-    if args.verbose:
-        level = "DEBUG"
-    if args.quiet:
-        level = "WARNING"
+    level = resolve_log_level(verbose=args.verbose, quiet=args.quiet)
 
     setup_logging(
         log_dir=log_dir(),
