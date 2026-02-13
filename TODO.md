@@ -43,8 +43,8 @@ Each task includes:
   - Playing/current/selected markers stay correct during movement and reloads.
 - Tests:
   - Add boundary tests for top/bottom transitions and empty playlist behavior.
-- Status: `todo`
-- Commit:
+- Status: `done`
+- Commit: `7572c70`
 
 ### T-003 Playback controls and routing
 - Spec Ref: `WF-03`, Section `4` Keyboard contract
