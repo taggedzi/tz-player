@@ -105,8 +105,8 @@ Each task includes:
 - Tests:
   - Integration tests for selection persistence across restart.
   - State migration/read-compat tests for invalid or missing `visualizer_id`.
-- Status: `todo`
-- Commit:
+- Status: `done`
+- Commit: `7db63c5`
 
 ## P1 Runtime Config, Logging, Diagnostics
 
