@@ -78,8 +78,8 @@ Each task includes:
 - Tests:
   - Add integration coverage for mixed selection reorder/remove sequences.
   - Add tests for cancel paths and repeated clear actions.
-- Status: `todo`
-- Commit:
+- Status: `done`
+- Commit: `625c4f1`
 
 ## P1 Visualization System
 
