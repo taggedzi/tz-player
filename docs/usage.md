@@ -56,3 +56,5 @@ Playlist footer:
 Find/filter behavior:
 - Typing in Find filters playlist rows by metadata/path text.
 - Empty query restores the full playlist view.
+- Escape priority is deterministic: popup/modal dismisses first, then Find exits/clears.
+- Playback keys are available from main UI focus states (playlist pane, viewport, footer controls).

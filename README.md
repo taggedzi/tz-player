@@ -45,10 +45,10 @@ pip install -e ".[dev]"
 ```
 
 ```bash
-ruff check .
-ruff format .
-pytest
-mypy src
+python -m ruff check .
+python -m ruff format --check .
+python -m mypy src
+python -m pytest
 ```
 
 
@@ -71,6 +71,22 @@ python -m twine check dist/*
 - `src/tz_player/` package source
 - `tests/` tests
 - `docs/` lightweight docs and notes
+
+## Keyboard and Focus Behavior
+
+- `f` focuses Find.
+- While Find is focused, text entry keys are handled by the input.
+- `enter` in Find returns focus to the playlist pane.
+- `escape` handling order:
+  - closes active modal/popup first
+  - then clears/exits Find mode
+- Playback keys (`space`, `n`, `p`, `x`, seek/volume/speed/repeat/shuffle) are available from main UI focus states.
+
+See `docs/usage.md` for the full key map.
+
+## Workflow Acceptance
+
+See `docs/workflow-acceptance.md` for the per-workflow acceptance checklist and mapped tests.
 
 
 ## Release
