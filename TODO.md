@@ -141,8 +141,8 @@ Each task includes:
   - Startup fatal errors return non-zero exit from CLI entrypoints.
 - Tests:
   - Add targeted tests for VLC unavailable, missing files, and init/read failures.
-- Status: `todo`
-- Commit:
+- Status: `done`
+- Commit: `b0072a9`
 
 ## P2 Performance and Reliability
 
