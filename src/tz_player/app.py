@@ -53,11 +53,11 @@ CYBERPUNK_THEME = Theme(
     error="#ff4d6d",
     success="#9ef01a",
     accent="#fcee0a",
-    foreground="#fff7c2",
-    background="#0b1020",
-    surface="#171d33",
-    panel="#1f2742",
-    boost="#2a3557",
+    foreground="#fcee0a",
+    background="#000000",
+    surface="#000000",
+    panel="#050505",
+    boost="#101010",
     dark=True,
 )
 
@@ -129,13 +129,13 @@ class TzPlayerApp(App):
     }
 
     #visualizer-pane {
-        border: solid white;
+        border: solid #39ff14;
         height: 1fr;
         content-align: center middle;
     }
 
     #current-track-pane {
-        border: solid white;
+        border: solid #39ff14;
         height: 6;
         content-align: left top;
         padding: 0 1;
@@ -143,7 +143,7 @@ class TzPlayerApp(App):
 
     #status-pane {
         height: 5;
-        border: solid white;
+        border: solid #39ff14;
         layout: vertical;
         padding: 0 1;
     }
@@ -158,7 +158,7 @@ class TzPlayerApp(App):
 
     #modal-body {
         padding: 1 2;
-        border: solid white;
+        border: solid #39ff14;
         width: 60%;
     }
 
