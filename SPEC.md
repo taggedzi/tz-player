@@ -90,6 +90,17 @@ Acceptance criteria:
 - If a visualizer fails, app falls back to a safe visualizer and surfaces an actionable error.
 - If persisted visualizer is missing, app selects default visualizer and continues startup.
 
+### WF-07: Configure runtime behavior and diagnostics
+
+1. User starts app with CLI flags for backend and logging behavior.
+2. App resolves effective runtime config from CLI, persisted state, and defaults.
+3. User can locate logs and diagnose common failures without reading source code.
+
+Acceptance criteria:
+- Config precedence is deterministic and documented.
+- Logging can be increased/decreased without code changes.
+- Error output includes actionable remediation for common setup failures.
+
 ## 4. UX and Input Contract
 
 ### Keyboard contract
@@ -109,6 +120,13 @@ Acceptance criteria:
 - No keyboard trap states are allowed.
 - Visible focus indicator must exist for interactive elements.
 
+### Mouse contract
+
+- Mouse support is optional but reliable where implemented.
+- Click/drag affordances for transport and slider controls must be discoverable.
+- Mouse interactions must not break keyboard-first workflows or steal focus irrecoverably.
+- Modal/popup dismiss behavior via pointer interactions must be deterministic.
+
 ### Visualization UX contract
 
 - Visualizer pane must always render a valid frame (plugin output or explicit fallback message).
@@ -127,6 +145,15 @@ Acceptance criteria:
 - Blocking IO must remain off the main loop (`asyncio.to_thread` or equivalent).
 - Visualizers are loaded via a plugin registry with stable plugin IDs.
 - Visualizer render path must not do blocking file/db/network IO on the event loop.
+
+### Runtime config precedence
+
+- Precedence order must be explicit and stable:
+  1. CLI flags for current run.
+  2. Persisted state/settings.
+  3. Built-in defaults.
+- Effective backend selection follows this precedence and degrades safely to `fake` when VLC initialization fails.
+- Conflicting logging flags must resolve deterministically (`--quiet` overrides `--verbose`).
 
 ## 6. Visualization plugin model (v1 target)
 
@@ -182,6 +209,8 @@ Host provides immutable render input containing:
 - State writes must be atomic or crash-safe.
 - Duplicate media entries in playlist are supported via playlist item identity.
 - Visualization selection persists via `visualizer_id` and must be forward-compatible.
+- Persisted state keys should be backward-compatible where feasible; renamed keys require migration/read-compat coverage.
+- Shutdown and crash recovery must preserve DB/state integrity (no partially-written JSON and no corrupt SQLite schema operations).
 
 ## 8. Reliability and Error Handling
 
@@ -191,12 +220,44 @@ Host provides immutable render input containing:
 - No operation should leave app in partially-updated UI without recovery path.
 - Visualization/plugin failures must degrade to fallback visualizer without breaking playback UI.
 
+### Error message quality contract
+
+- User-facing error text should include:
+  - what failed,
+  - likely cause (when known),
+  - immediate next step.
+- Common failure classes must have tailored copy:
+  - missing media file/path,
+  - unavailable VLC/libVLC runtime,
+  - unreadable/corrupt state file,
+  - DB access/init failure.
+- Fatal startup failure must return non-zero exit code from CLI entrypoints.
+
 ## 9. Observability
 
 - Structured logging configured by CLI flags.
 - Log path stored under platform data/config directories.
 - Sensitive data (credentials, secrets) must not be logged.
 - Visualizer registry load, activation, fallback, and render overrun events should be logged.
+
+### Logging and diagnostics UX
+
+- Supported logging flags:
+  - `--verbose` for debug-level logs,
+  - `--quiet` for warning/error-only logs,
+  - `--log-file` for explicit file path output.
+- Default log level is `INFO` when no flag is set.
+- Logs should be written to both console and file output configured by application logging setup.
+- User docs must describe where logs are written and how to raise verbosity for troubleshooting.
+
+## 9.1 Performance targets and opt-in profiling
+
+- Performance targets (v1 baseline):
+  - App startup to interactive playlist focus: <= 2.0s on a typical dev machine for small playlists (<= 500 items).
+  - Keyboard action to visible UI update: <= 100ms for core controls under nominal load.
+  - Metadata refresh scheduling must not block render/input loop.
+- Performance regression checks are opt-in for local and CI workflows.
+- Optional performance checks must be clearly labeled and skippable without blocking standard functional CI.
 
 ## 10. Testing and Quality Gates
 
@@ -214,6 +275,7 @@ Quality expectations:
 - No test may hang indefinitely; long-running tests require explicit timeout strategy.
 - Workflow-to-test mapping is maintained in `docs/workflow-acceptance.md`.
 - Visualization tests cover registry loading, ID persistence, fallback behavior, and render cadence bounds.
+- Add opt-in performance/regression tests for startup and interaction latency before v1 release sign-off.
 
 ## 11. Definition of Done (v1 production-ready target)
 
