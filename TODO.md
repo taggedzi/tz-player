@@ -24,7 +24,7 @@ Execution tracker derived from `SPEC.md`.
 - Tests:
   - Unit tests for frame generation bounds and deterministic seed behavior.
   - Integration test for plugin activation, rendering, and cycling persistence.
-- Status: `todo`
+- Status: `done`
 - Commit:
 
 ### VIZ-002 Cyberpunk Terminal Ops Visualizer Plugin

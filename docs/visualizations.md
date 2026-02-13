@@ -152,10 +152,10 @@ This section documents planned extra-scope visualizers before implementation.
 ### 1) Matrix Rain (Non-Reactive)
 
 - Goal: clean falling-code animation, independent of live audio levels.
-- Planned IDs:
+- Implemented IDs:
   - `matrix.green`
-  - `matrix.blue` (optional)
-  - `matrix.red` (optional)
+  - `matrix.blue`
+  - `matrix.red`
 - Contract:
   - deterministic seeded motion for testability
   - bounded frame work per render

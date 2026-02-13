@@ -7,6 +7,7 @@ from collections.abc import Callable
 
 from .base import VisualizerPlugin
 from .basic import BasicVisualizer
+from .matrix import MatrixBlueVisualizer, MatrixGreenVisualizer, MatrixRedVisualizer
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +39,14 @@ class VisualizerRegistry:
 
     @classmethod
     def built_in(cls) -> VisualizerRegistry:
-        factories = _build_factory_map([BasicVisualizer])
+        factories = _build_factory_map(
+            [
+                BasicVisualizer,
+                MatrixGreenVisualizer,
+                MatrixBlueVisualizer,
+                MatrixRedVisualizer,
+            ]
+        )
         default_id = "basic"
         if default_id not in factories:
             msg = "Built-in visualizers missing required 'basic' plugin."
