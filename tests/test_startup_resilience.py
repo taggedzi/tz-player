@@ -116,3 +116,85 @@ def test_startup_shows_generic_init_error_when_backend_start_fails(
             app.exit()
 
     _run(run_app())
+
+
+def test_startup_focuses_playlist_on_nominal_init(tmp_path, monkeypatch) -> None:
+    _setup_dirs(tmp_path, monkeypatch)
+    app = TzPlayerApp(auto_init=False, backend_name="fake")
+
+    async def run_app() -> None:
+        async with app.run_test():
+            await asyncio.sleep(0)
+            await app._initialize_state()
+            pane = app.query_one(PlaylistPane)
+            assert app.player_service is not None
+            assert app.focused is pane
+            app.exit()
+
+    _run(run_app())
+
+
+def test_startup_shows_generic_error_when_state_load_fails(
+    tmp_path, monkeypatch
+) -> None:
+    _setup_dirs(tmp_path, monkeypatch)
+    pushed_screens: list[object] = []
+
+    async def capture_push_screen(self, screen):
+        pushed_screens.append(screen)
+        return None
+
+    async def failing_run_blocking(func, /, *args, **kwargs):
+        if func is app_module.load_state:
+            raise OSError("read failed")
+        return func(*args, **kwargs)
+
+    monkeypatch.setattr(TzPlayerApp, "push_screen", capture_push_screen)
+    monkeypatch.setattr(app_module, "run_blocking", failing_run_blocking)
+    app = TzPlayerApp(auto_init=False, backend_name="fake")
+
+    async def run_app() -> None:
+        async with app.run_test():
+            await asyncio.sleep(0)
+            await app._initialize_state()
+            status = app.query_one(StatusPane)
+            assert status._player_service is None
+            assert any(
+                isinstance(screen, ErrorModal)
+                and screen._message == "Failed to initialize. See log file."
+                for screen in pushed_screens
+            )
+            app.exit()
+
+    _run(run_app())
+
+
+def test_startup_shows_generic_error_when_db_init_fails(tmp_path, monkeypatch) -> None:
+    _setup_dirs(tmp_path, monkeypatch)
+    pushed_screens: list[object] = []
+
+    async def capture_push_screen(self, screen):
+        pushed_screens.append(screen)
+        return None
+
+    async def failing_initialize():
+        raise RuntimeError("db init failed")
+
+    monkeypatch.setattr(TzPlayerApp, "push_screen", capture_push_screen)
+    app = TzPlayerApp(auto_init=False, backend_name="fake")
+    monkeypatch.setattr(app.store, "initialize", failing_initialize)
+
+    async def run_app() -> None:
+        async with app.run_test():
+            await asyncio.sleep(0)
+            await app._initialize_state()
+            status = app.query_one(StatusPane)
+            assert status._player_service is None
+            assert any(
+                isinstance(screen, ErrorModal)
+                and screen._message == "Failed to initialize. See log file."
+                for screen in pushed_screens
+            )
+            app.exit()
+
+    _run(run_app())
