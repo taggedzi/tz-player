@@ -180,3 +180,126 @@ def test_add_files_action_parses_paths_and_updates_playlist(
             app.exit()
 
     _run(run_app())
+
+
+def test_mixed_selection_reorder_then_remove_selected(tmp_path, monkeypatch) -> None:
+    _setup_dirs(tmp_path, monkeypatch)
+    app = TzPlayerApp(auto_init=False)
+
+    async def run_app() -> None:
+        async with app.run_test() as pilot:
+            await asyncio.sleep(0)
+            pane, playlist_id = await _configure_playlist(
+                app,
+                tmp_path,
+                names=["track1.mp3", "track2.mp3", "track3.mp3", "track4.mp3"],
+            )
+
+            tasks = []
+
+            def run_worker(coro, exclusive=False):  # type: ignore[no-untyped-def]
+                task = asyncio.create_task(coro)
+                tasks.append(task)
+                return task
+
+            pane.run_worker = run_worker  # type: ignore[assignment]
+
+            # Select first and third items.
+            await pilot.press("v")
+            await pilot.press("down")
+            await pilot.press("down")
+            await pilot.press("v")
+            await asyncio.sleep(0)
+            assert len(pane.selected_item_ids) == 2
+
+            before_names = [row.path.name for row in pane._rows]
+            await pilot.press("shift+down")
+            await asyncio.sleep(0)
+            after_names = [row.path.name for row in pane._rows]
+            assert after_names != before_names
+
+            rows_now = await app.store.fetch_window(playlist_id, 0, 20)
+            selected_names = {
+                row.path.name
+                for row in rows_now
+                if row.item_id in pane.selected_item_ids
+            }
+            assert len(selected_names) == 2
+
+            async def confirm_true(_message: str) -> bool:
+                return True
+
+            pane._confirm = confirm_true  # type: ignore[assignment]
+            await pilot.press("delete")
+            if tasks:
+                await asyncio.gather(*tasks)
+                tasks.clear()
+
+            assert pane.selected_item_ids == set()
+            rows_remaining = await app.store.fetch_window(playlist_id, 0, 20)
+            remaining_names = {row.path.name for row in rows_remaining}
+            assert remaining_names.isdisjoint(selected_names)
+            assert len(rows_remaining) == 2
+            app.exit()
+
+    _run(run_app())
+
+
+def test_clear_playlist_cancel_then_repeated_confirm(tmp_path, monkeypatch) -> None:
+    _setup_dirs(tmp_path, monkeypatch)
+    app = TzPlayerApp(auto_init=False)
+
+    async def run_app() -> None:
+        async with app.run_test():
+            await asyncio.sleep(0)
+            pane, playlist_id = await _configure_playlist(
+                app,
+                tmp_path,
+                names=["track1.mp3", "track2.mp3", "track3.mp3"],
+            )
+
+            tasks = []
+
+            def run_worker(coro, exclusive=False):  # type: ignore[no-untyped-def]
+                task = asyncio.create_task(coro)
+                tasks.append(task)
+                return task
+
+            pane.run_worker = run_worker  # type: ignore[assignment]
+            initial_cursor = pane.cursor_item_id
+
+            confirmations = [False, True, True]
+
+            async def confirm_sequence(_message: str) -> bool:
+                return confirmations.pop(0)
+
+            pane._confirm = confirm_sequence  # type: ignore[assignment]
+
+            await app.on_actions_menu_selected(ActionsMenuSelected("clear_playlist"))
+            if tasks:
+                await asyncio.gather(*tasks)
+                tasks.clear()
+            assert await app.store.count(playlist_id) == 3
+            assert pane.cursor_item_id == initial_cursor
+            assert pane.total_count == 3
+
+            await app.on_actions_menu_selected(ActionsMenuSelected("clear_playlist"))
+            if tasks:
+                await asyncio.gather(*tasks)
+                tasks.clear()
+            assert await app.store.count(playlist_id) == 0
+            assert pane.total_count == 0
+            assert pane.cursor_item_id is None
+            assert pane.selected_item_ids == set()
+
+            await app.on_actions_menu_selected(ActionsMenuSelected("clear_playlist"))
+            if tasks:
+                await asyncio.gather(*tasks)
+                tasks.clear()
+            assert await app.store.count(playlist_id) == 0
+            assert pane.total_count == 0
+            assert pane.cursor_item_id is None
+            assert pane.selected_item_ids == set()
+            app.exit()
+
+    _run(run_app())
