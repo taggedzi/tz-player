@@ -46,18 +46,18 @@ METADATA_REFRESH_DEBOUNCE = 0.2
 SPEED_MIN = 0.5
 SPEED_MAX = 4.0
 CYBERPUNK_THEME = Theme(
-    name="Cyberpunk",
-    primary="#fcee0a",
-    secondary="#ffd60a",
-    warning="#ffea00",
-    error="#ff4d6d",
-    success="#9ef01a",
-    accent="#fcee0a",
-    foreground="#fcee0a",
-    background="#000000",
-    surface="#000000",
-    panel="#050505",
-    boost="#101010",
+    name="cyberpunk-clean",
+    primary="#00D7E6",
+    secondary="#00B8C4",
+    warning="#FF5A36",
+    error="#FF3B3B",
+    success="#35E68A",
+    accent="#F2C94C",
+    foreground="#C7D0D9",
+    background="#0B0F14",
+    surface="#111923",
+    panel="#0F1621",
+    boost="#16202D",
     dark=True,
 )
 
@@ -129,13 +129,13 @@ class TzPlayerApp(App):
     }
 
     #visualizer-pane {
-        border: solid #39ff14;
+        border: solid $secondary;
         height: 1fr;
         content-align: center middle;
     }
 
     #current-track-pane {
-        border: solid #39ff14;
+        border: solid $secondary;
         height: 6;
         content-align: left top;
         padding: 0 1;
@@ -143,7 +143,7 @@ class TzPlayerApp(App):
 
     #status-pane {
         height: 5;
-        border: solid #39ff14;
+        border: solid $secondary;
         layout: vertical;
         padding: 0 1;
     }
@@ -158,7 +158,7 @@ class TzPlayerApp(App):
 
     #modal-body {
         padding: 1 2;
-        border: solid #39ff14;
+        border: solid $secondary;
         width: 60%;
     }
 
