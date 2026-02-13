@@ -164,7 +164,7 @@ This section documents planned extra-scope visualizers before implementation.
 ### 2) Cyberpunk Terminal Ops (Fictional)
 
 - Goal: movie-style fictional “target analysis” sequence keyed to current track metadata.
-- Planned ID:
+- Implemented ID:
   - `ops.cyberpunk`
 - Planned stages:
   - surveillance

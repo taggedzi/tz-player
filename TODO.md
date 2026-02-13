@@ -38,7 +38,7 @@ Execution tracker derived from `SPEC.md`.
 - Tests:
   - Unit tests for stage progression and metadata interpolation.
   - Integration test to confirm plugin remains non-blocking and survives missing metadata.
-- Status: `todo`
+- Status: `done`
 - Commit:
 
 ### VIZ-003 Audio-Reactive VU Meter Visualizer Plugin

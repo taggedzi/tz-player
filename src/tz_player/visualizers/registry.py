@@ -8,6 +8,7 @@ from collections.abc import Callable
 from .base import VisualizerPlugin
 from .basic import BasicVisualizer
 from .matrix import MatrixBlueVisualizer, MatrixGreenVisualizer, MatrixRedVisualizer
+from .ops_cyberpunk import CyberpunkOpsVisualizer
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,7 @@ class VisualizerRegistry:
                 MatrixGreenVisualizer,
                 MatrixBlueVisualizer,
                 MatrixRedVisualizer,
+                CyberpunkOpsVisualizer,
             ]
         )
         default_id = "basic"
