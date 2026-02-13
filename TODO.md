@@ -32,8 +32,8 @@ Each task includes:
 - Tests:
   - Extend startup resilience tests for edge cases (state read failure, DB init errors).
   - Assert no unhandled exceptions during startup flow.
-- Status: `todo`
-- Commit:
+- Status: `done`
+- Commit: `eec7fd9`
 
 ### T-002 Playlist navigation determinism
 - Spec Ref: `WF-02`, Section `4` Focus contract
