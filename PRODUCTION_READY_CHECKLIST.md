@@ -12,6 +12,7 @@ Validation status:
 - [x] `.ubuntu-venv/bin/python -m ruff format --check .`
 - [x] `.ubuntu-venv/bin/python -m mypy src`
 - [x] `.ubuntu-venv/bin/python -m pytest -q` (64 passed, 1 skipped)
+- [x] VLC backend smoke test: `TZ_PLAYER_TEST_VLC=1 python -m pytest -q tests/test_vlc_backend.py` (1 passed)
 
 Backlog status:
 
@@ -22,7 +23,8 @@ Known remaining release tasks:
 
 - [x] Update version/changelog for the release candidate.
 - [x] Verify CI runs the same gate commands on PR (`.github/workflows/ci.yml`).
-- [ ] Run VLC-specific smoke tests in an environment with `TZ_PLAYER_TEST_VLC=1` (see `docs/vlc-smoke-test.md`).
+- [x] Run VLC-specific smoke tests in an environment with `TZ_PLAYER_TEST_VLC=1` (see `docs/vlc-smoke-test.md`).
+- [ ] Run manual app startup check with VLC backend: `python -m tz_player.app --backend vlc`.
 
 ## Libraries
 
