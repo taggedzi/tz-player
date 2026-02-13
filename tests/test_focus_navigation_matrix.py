@@ -80,7 +80,7 @@ def test_key_routing_matrix_across_focus_targets(tmp_path, monkeypatch) -> None:
             targets = [
                 ("playlist-pane", pane, True),
                 ("playlist-viewport", viewport, True),
-                ("transport-play", play_button, False),
+                ("transport-play", play_button, True),
             ]
             for _, widget, should_navigate in targets:
                 pane.clear_find_and_focus()
@@ -122,7 +122,8 @@ def test_escape_priority_popup_then_find(tmp_path, monkeypatch) -> None:
             pane = await _configure_app(app, tmp_path)
 
             await pilot.press("f")
-            await pilot.type("track")
+            for key in "track":
+                await pilot.press(key)
             await asyncio.sleep(0.3)
             assert pane.search_active is True
             assert pane.is_find_focused() is True
