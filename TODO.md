@@ -119,8 +119,8 @@ Each task includes:
   - Backend override logic matches startup fallback behavior.
 - Tests:
   - Parser and integration tests for precedence matrix.
-- Status: `todo`
-- Commit:
+- Status: `done`
+- Commit: `b59dbd8`
 
 ### T-009 Logging UX and log discoverability
 - Spec Ref: Section `9` Logging and diagnostics UX
