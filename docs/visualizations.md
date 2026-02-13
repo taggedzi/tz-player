@@ -144,3 +144,56 @@ class BasicBarsPlugin:
 - Unit tests for persisted `visualizer_id` resolution.
 - Unit tests for plugin exceptions during activation/render.
 - UI integration test proving visualization failures do not block keyboard transport controls.
+
+## Planned Plugin Pack (Next Phase)
+
+This section documents planned extra-scope visualizers before implementation.
+
+### 1) Matrix Rain (Non-Reactive)
+
+- Goal: clean falling-code animation, independent of live audio levels.
+- Planned IDs:
+  - `matrix.green`
+  - `matrix.blue` (optional)
+  - `matrix.red` (optional)
+- Contract:
+  - deterministic seeded motion for testability
+  - bounded frame work per render
+  - no blocking calls in `render`
+
+### 2) Cyberpunk Terminal Ops (Fictional)
+
+- Goal: movie-style fictional “target analysis” sequence keyed to current track metadata.
+- Planned ID:
+  - `ops.cyberpunk`
+- Planned stages:
+  - surveillance
+  - vulnerability scan
+  - ICE break
+  - account targeting
+  - privilege escalation
+  - data acquisition
+  - decryption
+  - transfer/download
+  - log cleanup
+- Safety/content constraints:
+  - clearly fictional/non-operational
+  - avoid actionable exploitation guidance
+  - treat as stylized narrative output only
+
+### 3) Audio-Reactive VU Meter
+
+- Goal: level-based meter tied to real playback energy when signal data exists.
+- Planned ID:
+  - `vu.reactive`
+- Contract:
+  - consume normalized levels from backend/provider contract
+  - smoothing and clipping to avoid jitter/spikes
+  - graceful fallback when signal stream unavailable
+
+## Implementation Prerequisites
+
+- Add a level-signal provider contract for backend integrations.
+- Keep fake backend deterministic for tests.
+- Gate backend-specific signal features (for example VLC-only paths) behind capability checks.
+- Maintain plugin fallback rules and non-blocking guarantees.

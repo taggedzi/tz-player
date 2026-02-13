@@ -1,7 +1,7 @@
 # tz-player Implementation TODO
 
-Execution tracker derived from `SPEC.md`.  
-`SPEC.md` remains the source of truth; this file tracks delivery work.
+Execution tracker derived from `SPEC.md`.
+`SPEC.md` remains the source of truth.
 
 ## Status Legend
 
@@ -10,208 +10,103 @@ Execution tracker derived from `SPEC.md`.
 - `done`: implemented, validated, and committed
 - `blocked`: requires decision or external dependency
 
-## Task Template
+## Active Backlog
 
-Each task includes:
-- `Spec Ref`: workflow or section reference in `SPEC.md`
-- `Scope`: concrete implementation target
-- `Acceptance`: measurable done criteria
-- `Tests`: required automated coverage updates
-- `Status`: current state
-- `Commit`: fill with commit SHA when done
+## V3 Visualization Expansion (Extra Scope)
 
-## P0 Core Workflows
-
-### T-001 Launch and state restore hardening
-- Spec Ref: `WF-01`, Sections `7`, `8`
-- Scope: Ensure startup path is deterministic, resilient, and non-blocking for DB/state/backend init.
-- Acceptance:
-  - Startup reaches interactive playlist focus under nominal conditions.
-  - VLC failure falls back to fake backend with actionable user-visible error.
-  - Corrupt/missing state file recovers with defaults and log signal.
-- Tests:
-  - Extend startup resilience tests for edge cases (state read failure, DB init errors).
-  - Assert no unhandled exceptions during startup flow.
-- Status: `done`
-- Commit: `eec7fd9`
-
-### T-002 Playlist navigation determinism
-- Spec Ref: `WF-02`, Section `4` Focus contract
-- Scope: Validate cursor/viewport markers and focus-aware navigation behavior.
-- Acceptance:
-  - Cursor motion and scroll pinning are stable across boundary conditions.
-  - Playing/current/selected markers stay correct during movement and reloads.
-- Tests:
-  - Add boundary tests for top/bottom transitions and empty playlist behavior.
-- Status: `done`
-- Commit: `7572c70`
-
-### T-003 Playback controls and routing
-- Spec Ref: `WF-03`, Section `4` Keyboard contract
-- Scope: Ensure all playback bindings and status updates route consistently across focus targets.
-- Acceptance:
-  - All declared keys work in allowed focus states.
-  - Mouse transport controls remain functional while preserving keyboard flow.
-- Tests:
-  - Expand key-routing matrix for all playback actions.
-  - Add regressions for seek/volume/speed updates reflected in status pane.
-- Status: `done`
-- Commit: `cf04e9d`
-
-### T-004 Find/search focus behavior
-- Spec Ref: `WF-04`, Section `4` Keyboard + Focus contract
-- Scope: Guarantee deterministic entry/exit behavior for Find mode with no keyboard traps.
-- Acceptance:
-  - `f`, `enter`, and `escape` behavior follows contract across modal/popup states.
-  - Empty query always restores full playlist view.
-- Tests:
-  - Add focus transition tests around menu popup + Find interaction order.
-- Status: `done`
-- Commit: `9d5303a`
-
-### T-005 Playlist editing safety and sync
-- Spec Ref: `WF-05`, Sections `7`, `8`
-- Scope: Keep DB/UI/transport state synchronized for add/reorder/remove/clear flows.
-- Acceptance:
-  - Destructive actions remain confirmation-gated.
-  - Clear/reset behavior restores coherent cursor/selection/playing state.
-- Tests:
-  - Add integration coverage for mixed selection reorder/remove sequences.
-  - Add tests for cancel paths and repeated clear actions.
-- Status: `done`
-- Commit: `625c4f1`
-
-## P1 Visualization System
-
-### T-006 Visualizer registry and host
+### VIZ-001 Matrix Rain Visualizer Plugin
 - Spec Ref: `WF-06`, Sections `5`, `6`
-- Scope: Implement visualizer registry, activation lifecycle, pane rendering host, and safe scheduling.
+- Scope: Add a clean matrix-style code rain visualizer that is non-audio-reactive.
 - Acceptance:
-  - Built-in plugins discoverable by stable ID.
-  - Active plugin renders bounded cadence without blocking UI loop.
-  - Plugin exception triggers fallback visualizer and actionable error.
+  - Plugin renders deterministic falling-code animation with smooth motion at host cadence.
+  - Supports at least one green variant; optional blue/red variants exposed as selectable plugin IDs.
+  - No keyboard/input starvation while active.
 - Tests:
-  - Unit tests for registry discovery, duplicate IDs, unknown ID fallback.
-  - Host tests for activation/render failure fallback behavior.
-- Status: `done`
-- Commit: `212d61d`
+  - Unit tests for frame generation bounds and deterministic seed behavior.
+  - Integration test for plugin activation, rendering, and cycling persistence.
+- Status: `todo`
+- Commit:
 
-### T-007 Visualizer selection and persistence
-- Spec Ref: `WF-06`, Sections `6`, `7`
-- Scope: Expose plugin switching flow and persist `visualizer_id` compatibility behavior.
+### VIZ-002 Cyberpunk Terminal Ops Visualizer Plugin
+- Spec Ref: `WF-06`, Sections `4`, `6`, `8`
+- Scope: Add a fictional terminal-operations visualizer themed as staged song “target analysis”.
 - Acceptance:
-  - User can switch visualizer.
-  - Restart restores persisted plugin when available; defaults to `basic` otherwise.
+  - Renders staged fictional sequence: surveillance, vulnerability scan, ICE break, account targeting, privilege escalation, data acquisition, decryption, transfer, log cleanup.
+  - Stage text is explicitly fictional and non-instructional (movie-style flavor only).
+  - Uses current track metadata in output where available (title/artist/album/year).
+  - Safe fallback behavior maintained on any render failure.
 - Tests:
-  - Integration tests for selection persistence across restart.
-  - State migration/read-compat tests for invalid or missing `visualizer_id`.
-- Status: `done`
-- Commit: `7db63c5`
+  - Unit tests for stage progression and metadata interpolation.
+  - Integration test to confirm plugin remains non-blocking and survives missing metadata.
+- Status: `todo`
+- Commit:
 
-## P1 Runtime Config, Logging, Diagnostics
-
-### T-008 Runtime config precedence and conflicts
-- Spec Ref: `WF-07`, Section `5` Runtime config precedence
-- Scope: Enforce deterministic resolution for CLI flags vs persisted state vs defaults.
+### VIZ-003 Audio-Reactive VU Meter Visualizer Plugin
+- Spec Ref: `WF-06`, Sections `5`, `6`, `9.1`
+- Scope: Add a true audio-reactive VU meter visualizer that responds to live playback signal/levels.
 - Acceptance:
-  - Effective config follows precedence contract.
-  - `--quiet` overrides `--verbose` deterministically.
-  - Backend override logic matches startup fallback behavior.
+  - Meter reflects changing audio energy during playback.
+  - Behavior degrades gracefully when signal data is unavailable (falls back to simulated/position-driven idle mode).
+  - Update cadence remains within host bounds without UI starvation.
 - Tests:
-  - Parser and integration tests for precedence matrix.
-- Status: `done`
-- Commit: `b59dbd8`
+  - Unit tests for level normalization, smoothing, clipping, and fallback paths.
+  - Integration test with deterministic level provider stub and plugin persistence.
+- Status: `todo`
+- Commit:
 
-### T-009 Logging UX and log discoverability
-- Spec Ref: Section `9` Logging and diagnostics UX
-- Scope: Ensure runtime logging flags, default levels, and log path behavior match spec and docs.
+### VIZ-004 Playback-Level Signal Provider Contract
+- Spec Ref: Sections `5`, `6`
+- Scope: Define and implement backend-facing signal provider API for audio-reactive visualizers.
 - Acceptance:
-  - `--verbose`, `--quiet`, and `--log-file` behave as documented.
-  - Users can identify active log destination quickly.
+  - Stable interface for obtaining recent level samples (mono level or L/R pair).
+  - Fake backend provides deterministic synthetic levels for tests.
+  - VLC backend implementation is optional-gated and safely disabled when unsupported.
 - Tests:
-  - CLI tests for log level selection and output path handling.
-- Status: `done`
-- Commit: `f372843`
+  - Contract tests for provider shape and timing expectations.
+  - Backend-specific tests for fake provider and VLC unavailable behavior.
+- Status: `todo`
+- Commit:
 
-### T-010 Error message quality pass
-- Spec Ref: Section `8` Error message quality contract
-- Scope: Standardize actionable user-facing errors for common failure classes.
+### VIZ-005 Visualizer Catalog and UX Docs
+- Spec Ref: Sections `6`, `9`, `11`
+- Scope: Document plugin IDs, behavior, limitations, and troubleshooting for new visualizers.
 - Acceptance:
-  - Message shape includes failure, likely cause, and next step where possible.
-  - Startup fatal errors return non-zero exit from CLI entrypoints.
+  - `docs/visualizations.md` includes behavior/constraints for matrix, terminal-ops, and VU plugins.
+  - `docs/usage.md` includes practical notes for choosing and cycling visualizers.
 - Tests:
-  - Add targeted tests for VLC unavailable, missing files, and init/read failures.
-- Status: `done`
-- Commit: `b0072a9`
+  - N/A (docs), validated by review checklist.
+- Status: `todo`
+- Commit:
 
-## P2 Performance and Reliability
-
-### T-011 Non-blocking audit for IO paths
-- Spec Ref: Sections `5`, `9.1`
-- Scope: Verify blocking operations are isolated off event loop and fix any violations.
+### VIZ-006 Visualizer Acceptance Coverage Update
+- Spec Ref: `WF-06`, Section `11`
+- Scope: Extend acceptance mapping and release gate notes for added visualizer plugins.
 - Acceptance:
-  - No known direct blocking DB/file/network call on UI event loop hot paths.
-  - Metadata and visualization work remain loop-safe under load.
+  - `docs/workflow-acceptance.md` maps new visualizer tests.
+  - Release checklist reflects any environment-gated visualizer checks.
 - Tests:
-  - Add regression tests around metadata debounce and UI responsiveness assumptions.
-- Status: `done`
-- Commit: `f3618a3`
+  - N/A (docs), validated by review checklist.
+- Status: `todo`
+- Commit:
 
-### T-012 Opt-in performance checks
-- Spec Ref: Section `9.1`, Section `10`
-- Scope: Add opt-in performance suite for startup and interaction latency budgets.
-- Acceptance:
-  - Perf checks runnable via explicit opt-in command/flag.
-  - Results report whether baseline targets are met.
-- Tests:
-  - Add perf harness/tests marked opt-in, excluded from default CI gate.
-- Status: `done`
-- Commit: `38b134a`
+## Archived Completed Work
 
-### T-013 Crash-safe persistence verification
-- Spec Ref: Sections `7`, `8`
-- Scope: Validate atomic state writes and DB consistency expectations on interruption/failure paths.
-- Acceptance:
-  - No partial JSON state writes observed in simulated interruption cases.
-  - DB operations fail safely without schema corruption.
-- Tests:
-  - Add tests for state temp-file replacement and corrupted input recovery.
-- Status: `done`
-- Commit: `2f64956`
+All baseline and stabilization tasks are complete and archived here for traceability.
 
-## P2 UX and Documentation Completeness
-
-### T-014 Mouse interaction acceptance coverage
-- Spec Ref: Section `4` Mouse contract
-- Scope: Validate pointer behavior for sliders, transport, and popup dismissal interactions.
-- Acceptance:
-  - Mouse actions are deterministic and do not create keyboard trap states.
-- Tests:
-  - Add focused UI tests for mouse click/drag and focus recovery.
-- Status: `done`
-- Commit: `5e7b9d3`
-
-### T-015 Docs parity and troubleshooting
-- Spec Ref: Sections `9`, `11`
-- Scope: Keep user/developer docs aligned with implemented behavior and diagnostics workflow.
-- Acceptance:
-  - `README.md` and `docs/usage.md` reflect final keybindings, flags, fallback behavior, and log guidance.
-  - `docs/workflow-acceptance.md` fully maps implemented workflows.
-- Tests:
-  - N/A (docs-only), validated by review checklist.
-- Status: `done`
-- Commit: `fbfffa4`
-
-## Release Readiness
-
-### T-016 v1 pre-release sweep
-- Spec Ref: Section `11` Definition of Done
-- Scope: Final stabilization pass and release checklist closure.
-- Acceptance:
-  - Required validation commands pass.
-  - Known blockers resolved or formally deferred with rationale.
-  - Release notes and checklist updated.
-- Tests:
-  - Full suite + any enabled opt-in checks.
-- Status: `done`
-- Commit: `ca3bc89`
+### P0/P1/P2 Completed
+- T-001 Launch and state restore hardening — `done` — `eec7fd9`
+- T-002 Playlist navigation determinism — `done` — `7572c70`
+- T-003 Playback controls and routing — `done` — `cf04e9d`
+- T-004 Find/search focus behavior — `done` — `9d5303a`
+- T-005 Playlist editing safety and sync — `done` — `625c4f1`
+- T-006 Visualizer registry and host — `done` — `212d61d`
+- T-007 Visualizer selection and persistence — `done` — `7db63c5`
+- T-008 Runtime config precedence and conflicts — `done` — `b59dbd8`
+- T-009 Logging UX and log discoverability — `done` — `f372843`
+- T-010 Error message quality pass — `done` — `b0072a9`
+- T-011 Non-blocking audit for IO paths — `done` — `f3618a3`
+- T-012 Opt-in performance checks — `done` — `38b134a`
+- T-013 Crash-safe persistence verification — `done` — `2f64956`
+- T-014 Mouse interaction acceptance coverage — `done` — `5e7b9d3`
+- T-015 Docs parity and troubleshooting — `done` — `fbfffa4`
+- T-016 v1 pre-release sweep — `done` — `ca3bc89`
