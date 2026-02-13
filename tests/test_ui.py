@@ -158,6 +158,56 @@ def test_playlist_pane_refresh_with_tracks(tmp_path) -> None:
     _run(run_app())
 
 
+def test_escape_exits_find_and_restores_global_keys(tmp_path, monkeypatch) -> None:
+    _setup_dirs(tmp_path, monkeypatch)
+
+    class KeyCaptureApp(TzPlayerApp):
+        def __init__(self) -> None:
+            super().__init__(auto_init=False)
+            self.calls: list[str] = []
+
+        async def action_next_track(self) -> None:
+            self.calls.append("next")
+
+        async def action_previous_track(self) -> None:
+            self.calls.append("previous")
+
+        async def action_play_pause(self) -> None:
+            self.calls.append("play_pause")
+
+    app = KeyCaptureApp()
+
+    async def run_app() -> None:
+        async with app.run_test() as pilot:
+            await asyncio.sleep(0)
+            pane = app.query_one(PlaylistPane)
+            await pilot.press("f")
+            await asyncio.sleep(0)
+            assert app.focused is pane._find_input
+
+            # While find has focus, text input consumes these keys.
+            await pilot.press("n")
+            await pilot.press("p")
+            await pilot.press("space")
+            await asyncio.sleep(0)
+            assert app.calls == []
+
+            # Escape should exit find mode and return focus to playlist pane.
+            await pilot.press("escape")
+            await asyncio.sleep(0)
+            assert app.focused is pane
+            assert pane._find_input.value == ""
+
+            await pilot.press("n")
+            await pilot.press("p")
+            await pilot.press("space")
+            await asyncio.sleep(0)
+            assert app.calls == ["next", "previous", "play_pause"]
+            app.exit()
+
+    _run(run_app())
+
+
 def test_clear_playlist_action_resets_state(tmp_path, monkeypatch) -> None:
     _setup_dirs(tmp_path, monkeypatch)
     app = TzPlayerApp(auto_init=False)

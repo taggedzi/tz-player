@@ -48,6 +48,16 @@ MEDIA_EXTENSIONS = {".mp3", ".flac", ".wav", ".m4a", ".ogg"}
 DEBUG_VIEWPORT = False
 
 
+class FindInput(Input):
+    class EscapePressed(Message):
+        def __init__(self, input_widget: FindInput) -> None:
+            super().__init__()
+            self.input = input_widget
+
+    async def key_escape(self) -> None:
+        self.post_message(self.EscapePressed(self))
+
+
 class PlaylistPane(Static):
     """Playlist panel with actions and a virtualized table."""
 
@@ -83,7 +93,7 @@ class PlaylistPane(Static):
         self._viewport = PlaylistViewport(id="playlist-viewport")
         self._actions = ActionsMenuButton(id="playlist-actions")
         self._actions_popup: ActionsMenuPopup | None = None
-        self._find_input = Input(placeholder="Find...", id="playlist-find")
+        self._find_input = FindInput(placeholder="Find...", id="playlist-find")
         self._transport_controls = TransportControls(id="playlist-bottom")
         self._last_player_state: PlayerState | None = None
         self._refresh_gen = 0
@@ -152,11 +162,33 @@ class PlaylistPane(Static):
     def focus_find(self) -> None:
         self._find_input.focus()
 
+    async def on_input_submitted(self, event: Input.Submitted) -> None:
+        if event.input is not self._find_input:
+            return
+        self.focus()
+
+    async def on_find_input_escape_pressed(
+        self, event: FindInput.EscapePressed
+    ) -> None:
+        if event.input is not self._find_input:
+            return
+        self.clear_find_and_focus()
+
     def get_cursor_item_id(self) -> int | None:
         if self.cursor_item_id is None and self._rows:
             self.cursor_item_id = self._rows[0].item_id
             self._update_viewport()
         return self.cursor_item_id
+
+    def clear_find_and_focus(self) -> None:
+        self._find_input.value = ""
+        self.focus()
+
+    def is_find_focused(self) -> bool:
+        return self._find_input.has_focus
+
+    def has_find_text(self) -> bool:
+        return bool(self._find_input.value.strip())
 
     def get_visible_track_ids(self) -> set[int]:
         return {row.track_id for row in self._rows}

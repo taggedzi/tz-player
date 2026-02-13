@@ -257,6 +257,14 @@ class TzPlayerApp(App):
     def action_dismiss_modal(self) -> None:
         if isinstance(self.screen, ModalScreen):
             self.pop_screen()
+            return
+        popup = self.query(ActionsMenuPopup)
+        if popup:
+            popup.first().dismiss()
+            return
+        pane = self.query_one(PlaylistPane)
+        if pane.is_find_focused() or pane.has_find_text():
+            pane.clear_find_and_focus()
 
     def action_focus_find(self) -> None:
         self.query_one(PlaylistPane).focus_find()
