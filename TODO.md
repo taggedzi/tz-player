@@ -188,7 +188,7 @@ Each task includes:
   - Mouse actions are deterministic and do not create keyboard trap states.
 - Tests:
   - Add focused UI tests for mouse click/drag and focus recovery.
-- Status: `todo`
+- Status: `done`
 - Commit:
 
 ### T-015 Docs parity and troubleshooting

@@ -28,6 +28,16 @@ class FakeAppDirs:
         self.user_config_dir = str(config_dir)
 
 
+class _FakeScreenMouseEvent:
+    def __init__(self, *, screen_x: int, screen_y: int) -> None:
+        self.screen_x = screen_x
+        self.screen_y = screen_y
+        self.stopped = False
+
+    def stop(self) -> None:
+        self.stopped = True
+
+
 def _run(coro):
     return asyncio.run(coro)
 
@@ -126,6 +136,32 @@ def test_actions_menu_dismisses_on_escape() -> None:
             await pilot.press("escape")
             await asyncio.sleep(0)
             assert len(app.query(ActionsMenuPopup)) == 0
+            app.exit()
+
+    _run(run_app())
+
+
+def test_actions_menu_dismisses_on_outside_mouse_down(tmp_path, monkeypatch) -> None:
+    _setup_dirs(tmp_path, monkeypatch)
+    app = TzPlayerApp(auto_init=False)
+
+    async def run_app() -> None:
+        async with app.run_test():
+            await asyncio.sleep(0)
+            pane = app.query_one(PlaylistPane)
+            await pane._open_actions_menu()
+            await asyncio.sleep(0)
+            popup = app.query_one(ActionsMenuPopup)
+            popup.contains_point = lambda _x, _y: False  # type: ignore[assignment]
+            event = _FakeScreenMouseEvent(screen_x=0, screen_y=0)
+            app.on_mouse_down(event)
+            for _ in range(20):
+                if len(app.query(ActionsMenuPopup)) == 0:
+                    break
+                await asyncio.sleep(0.01)
+            assert len(app.query(ActionsMenuPopup)) == 0
+            assert event.stopped is True
+            assert app.focused is pane
             app.exit()
 
     _run(run_app())
