@@ -22,6 +22,14 @@ GUI entrypoint supports the same flag:
 python -m tz_player.gui --backend vlc
 ```
 
+Logging and diagnostics:
+- Default log level is `INFO`.
+- `--verbose` sets log level to `DEBUG`.
+- `--quiet` sets log level to `WARNING` (takes precedence over `--verbose`).
+- `--log-file /path/to/tz-player.log` writes logs to an explicit file path.
+- Without `--log-file`, logs are written to the app log directory as `tz-player.log`.
+  - Typical default location pattern: `<user_data_dir>/logs/tz-player.log`.
+
 Current keys:
 - `up` / `down`: move cursor up/down in the playlist
 - `shift+up` / `shift+down`: reorder selection up/down
