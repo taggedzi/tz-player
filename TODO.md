@@ -93,8 +93,8 @@ Each task includes:
 - Tests:
   - Unit tests for registry discovery, duplicate IDs, unknown ID fallback.
   - Host tests for activation/render failure fallback behavior.
-- Status: `todo`
-- Commit:
+- Status: `done`
+- Commit: `212d61d`
 
 ### T-007 Visualizer selection and persistence
 - Spec Ref: `WF-06`, Sections `6`, `7`
