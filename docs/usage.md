@@ -63,6 +63,9 @@ Status pane controls:
 - Playback speed range is capped to `0.5x` through `4.0x` for backend compatibility.
 - Time display shows MM:SS normally and switches to H:MM:SS for long tracks.
 
+Current track information pane:
+- Shows labeled metadata fields for `Title`, `Artist` (and `Genre` when available), `Album` + `Year`, and `Time` + `Bitrate` (when discoverable).
+
 Playlist footer:
 - Track counter shows `Track: ####/####` (current/total).
 - Repeat indicator shows `R:OFF|ONE|ALL` and shuffle shows `S:OFF|ON`.

@@ -11,6 +11,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Literal, cast
 
+from mutagen import File as MutagenFile
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
@@ -563,6 +564,7 @@ class TzPlayerApp(App):
         row = await self.store.get_item_row(playlist_id, item_id)
         if row is None:
             return None
+        genre, bitrate_kbps = await run_blocking(_read_track_extras, row.path)
         if not row.meta_valid:
             return TrackInfo(
                 title=None,
@@ -571,6 +573,8 @@ class TzPlayerApp(App):
                 year=None,
                 path=str(row.path),
                 duration_ms=None,
+                genre=genre,
+                bitrate_kbps=bitrate_kbps,
             )
         return TrackInfo(
             title=row.title,
@@ -579,6 +583,8 @@ class TzPlayerApp(App):
             year=row.year,
             path=str(row.path),
             duration_ms=row.duration_ms,
+            genre=genre,
+            bitrate_kbps=bitrate_kbps,
         )
 
     async def _next_track_provider(
@@ -787,12 +793,50 @@ def _clamp_speed(speed: float) -> float:
 
 def _format_track_info_panel(track: TrackInfo | None) -> str:
     if track is None:
-        return "Title: --\nArtist: --\nAlbum: --\nTime: --:--"
+        return (
+            "Title: --\nArtist: --\nAlbum: -- | Year: ----\nTime: --:-- | Bitrate: --"
+        )
     title = track.title or Path(track.path).name
     artist = track.artist or "Unknown"
+    if track.genre:
+        artist = f"{artist} | Genre: {track.genre}"
     album = track.album or "Unknown"
+    year_text = str(track.year) if track.year is not None else "----"
     duration = _format_time(track.duration_ms or 0)
-    return f"Title: {title}\nArtist: {artist}\nAlbum: {album}\nTime: {duration}"
+    bitrate_text = (
+        f"{track.bitrate_kbps} kbps" if track.bitrate_kbps is not None else "--"
+    )
+    return (
+        f"Title: {title}\n"
+        f"Artist: {artist}\n"
+        f"Album: {album} | Year: {year_text}\n"
+        f"Time: {duration} | Bitrate: {bitrate_text}"
+    )
+
+
+def _read_track_extras(path: Path) -> tuple[str | None, int | None]:
+    try:
+        audio = MutagenFile(path, easy=True)
+    except Exception:
+        return None, None
+    if audio is None:
+        return None, None
+    genre = _first_tag(audio.tags or {}, "genre")
+    bitrate = getattr(audio.info, "bitrate", None)
+    bitrate_kbps = None
+    if isinstance(bitrate, (int, float)) and bitrate > 0:
+        bitrate_kbps = int(round(float(bitrate) / 1000.0))
+    return genre, bitrate_kbps
+
+
+def _first_tag(tags: dict, key: str) -> str | None:
+    value = tags.get(key)
+    if isinstance(value, list) and value:
+        first = value[0]
+        return str(first) if first is not None else None
+    if isinstance(value, str):
+        return value
+    return None
 
 
 def _resolve_backend_name(cli_backend: str | None, state_backend: str | None) -> str:

@@ -15,14 +15,18 @@ def test_format_track_info_panel_with_track() -> None:
             year=2026,
             path="/tmp/song.mp3",
             duration_ms=123000,
+            genre="Synthwave",
+            bitrate_kbps=320,
         )
     )
     assert "Title: Song" in text
-    assert "Artist: Artist" in text
-    assert "Album: Album" in text
-    assert "Time: 02:03" in text
+    assert "Artist: Artist | Genre: Synthwave" in text
+    assert "Album: Album | Year: 2026" in text
+    assert "Time: 02:03 | Bitrate: 320 kbps" in text
 
 
 def test_format_track_info_panel_without_track() -> None:
     text = _format_track_info_panel(None)
-    assert text == "Title: --\nArtist: --\nAlbum: --\nTime: --:--"
+    assert text == (
+        "Title: --\nArtist: --\nAlbum: -- | Year: ----\nTime: --:-- | Bitrate: --"
+    )

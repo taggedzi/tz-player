@@ -37,6 +37,8 @@ class TrackInfo:
     year: int | None
     path: str
     duration_ms: int | None
+    genre: str | None = None
+    bitrate_kbps: int | None = None
 
 
 @dataclass(frozen=True)
