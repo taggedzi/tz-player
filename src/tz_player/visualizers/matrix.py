@@ -13,8 +13,8 @@ _GLYPHS = "0123456789ABCDEF$#@%&*+=-"
 class _MatrixRainBase:
     plugin_id: str
     display_name: str
-    _head_color: str
-    _tail_palette: tuple[int, ...]
+    _head_rgb: tuple[int, int, int]
+    _trail_rgb: tuple[int, int, int]
     _ansi_enabled: bool = True
 
     def on_activate(self, context: VisualizerContext) -> None:
@@ -48,10 +48,10 @@ class _MatrixRainBase:
                     chars.append(glyph)
                     continue
                 if distance == 0:
-                    chars.append(f"\x1b[1;{self._head_color}m{glyph}\x1b[0m")
+                    chars.append(f"\x1b[1;{_rgb_code(self._head_rgb)}m{glyph}\x1b[0m")
                 else:
-                    color = _trail_color(self._tail_palette, distance, trail)
-                    chars.append(f"\x1b[38;5;{color}m{glyph}\x1b[0m")
+                    trail_rgb = _trail_rgb(self._trail_rgb, distance, trail)
+                    chars.append(f"\x1b[{_rgb_code(trail_rgb)}m{glyph}\x1b[0m")
             lines.append("".join(chars))
         return "\n".join(lines)
 
@@ -60,31 +60,42 @@ class _MatrixRainBase:
 class MatrixGreenVisualizer(_MatrixRainBase):
     plugin_id: str = "matrix.green"
     display_name: str = "Matrix Rain (Green)"
-    _head_color: str = "92"
-    _tail_palette: tuple[int, ...] = (120, 82, 46, 40, 34, 28, 22)
+    _head_rgb: tuple[int, int, int] = (180, 255, 190)
+    _trail_rgb: tuple[int, int, int] = (0, 255, 110)
 
 
 @dataclass
 class MatrixBlueVisualizer(_MatrixRainBase):
     plugin_id: str = "matrix.blue"
     display_name: str = "Matrix Rain (Blue)"
-    _head_color: str = "96"
-    _tail_palette: tuple[int, ...] = (153, 117, 81, 45, 39, 33, 17)
+    _head_rgb: tuple[int, int, int] = (170, 225, 255)
+    _trail_rgb: tuple[int, int, int] = (0, 180, 255)
 
 
 @dataclass
 class MatrixRedVisualizer(_MatrixRainBase):
     plugin_id: str = "matrix.red"
     display_name: str = "Matrix Rain (Red)"
-    _head_color: str = "91"
-    _tail_palette: tuple[int, ...] = (217, 203, 167, 131, 125, 89, 52)
+    _head_rgb: tuple[int, int, int] = (255, 185, 185)
+    _trail_rgb: tuple[int, int, int] = (255, 75, 75)
 
 
-def _trail_color(palette: tuple[int, ...], distance: float, trail: int) -> int:
-    if not palette:
-        return 22
+def _trail_rgb(
+    base_rgb: tuple[int, int, int], distance: float, trail: int
+) -> tuple[int, int, int]:
     if trail <= 1:
-        return palette[0]
+        return base_rgb
     ratio = min(max(distance / (trail - 1), 0.0), 1.0)
-    index = int(round(ratio * (len(palette) - 1)))
-    return palette[index]
+    # Fade from ~80% of base brightness down to ~8% for near-invisible tail.
+    brightness = 0.8 - ratio * 0.72
+    r, g, b = base_rgb
+    return (
+        max(0, min(255, int(round(r * brightness)))),
+        max(0, min(255, int(round(g * brightness)))),
+        max(0, min(255, int(round(b * brightness)))),
+    )
+
+
+def _rgb_code(rgb: tuple[int, int, int]) -> str:
+    r, g, b = rgb
+    return f"38;2;{r};{g};{b}"
