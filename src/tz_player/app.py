@@ -159,6 +159,7 @@ class TzPlayerApp(App):
         ("\\", "speed_reset", "Speed reset"),
         ("r", "repeat_mode", "Repeat"),
         ("s", "shuffle", "Shuffle"),
+        ("z", "cycle_visualizer", "Visualizer"),
         ("q", "quit", "Quit"),
     ]
 
@@ -445,6 +446,34 @@ class TzPlayerApp(App):
         if self.player_state.item_id is None:
             anchor_id = self.query_one(PlaylistPane).get_cursor_item_id()
         await self.player_service.toggle_shuffle(anchor_item_id=anchor_id)
+
+    async def action_cycle_visualizer(self) -> None:
+        if self.visualizer_registry is None or self.visualizer_host is None:
+            return
+        plugin_ids = self.visualizer_registry.plugin_ids()
+        if not plugin_ids:
+            return
+        try:
+            current_idx = plugin_ids.index(self.visualizer_host.active_id)
+        except ValueError:
+            current_idx = 0
+        next_idx = (current_idx + 1) % len(plugin_ids)
+        next_id = plugin_ids[next_idx]
+        context = VisualizerContext(
+            ansi_enabled=self.state.ansi_enabled,
+            unicode_enabled=True,
+        )
+        try:
+            active = self.visualizer_host.activate(next_id, context)
+        except Exception as exc:
+            logger.exception("Failed to switch visualizer to '%s': %s", next_id, exc)
+            await self.push_screen(
+                ErrorModal("Failed to switch visualizer. See log file.")
+            )
+            return
+        self.state = replace(self.state, visualizer_id=active)
+        await run_blocking(save_state, state_path(), self.state)
+        self._render_visualizer_frame()
 
     async def handle_playlist_cleared(self) -> None:
         if self.player_service is not None:

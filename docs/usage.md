@@ -42,6 +42,7 @@ Current keys:
 - `\`: speed reset to 1.0
 - `r`: cycle repeat mode
 - `s`: toggle shuffle
+- `z`: cycle visualizer plugin
 - `escape`: dismiss modal/popup; in Find it clears query and exits Find mode
 
 Status pane controls:
