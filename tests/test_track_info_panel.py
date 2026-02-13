@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from rich.text import Text
+
 from tz_player.app import _format_track_info_panel
 from tz_player.services.player_service import TrackInfo
 
@@ -19,14 +21,17 @@ def test_format_track_info_panel_with_track() -> None:
             bitrate_kbps=320,
         )
     )
-    assert "Title: Song" in text
-    assert "Artist: Artist | Genre: Synthwave" in text
-    assert "Album: Album | Year: 2026" in text
-    assert "Time: 02:03 | Bitrate: 320 kbps" in text
+    assert isinstance(text, Text)
+    assert "Title: Song" in text.plain
+    assert "Artist: Artist | Genre: Synthwave" in text.plain
+    assert "Album: Album | Year: 2026" in text.plain
+    assert "Time: 02:03 | Bitrate: 320 kbps" in text.plain
+    assert any("bold" in (span.style or "") for span in text.spans)
 
 
 def test_format_track_info_panel_without_track() -> None:
     text = _format_track_info_panel(None)
-    assert text == (
+    assert isinstance(text, Text)
+    assert text.plain == (
         "Title: --\nArtist: --\nAlbum: -- | Year: ----\nTime: --:-- | Bitrate: --"
     )

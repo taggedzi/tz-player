@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Literal, cast
 
 from mutagen import File as MutagenFile
+from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
@@ -791,27 +792,50 @@ def _clamp_speed(speed: float) -> float:
     return max(SPEED_MIN, min(speed, SPEED_MAX))
 
 
-def _format_track_info_panel(track: TrackInfo | None) -> str:
+def _format_track_info_panel(track: TrackInfo | None) -> Text:
     if track is None:
-        return (
-            "Title: --\nArtist: --\nAlbum: -- | Year: ----\nTime: --:-- | Bitrate: --"
+        title = "--"
+        artist = "--"
+        genre = None
+        album = "--"
+        year_text = "----"
+        duration = "--:--"
+        bitrate_text = "--"
+    else:
+        title = track.title or Path(track.path).name
+        artist = track.artist or "Unknown"
+        genre = track.genre
+        album = track.album or "Unknown"
+        year_text = str(track.year) if track.year is not None else "----"
+        duration = _format_time(track.duration_ms or 0)
+        bitrate_text = (
+            f"{track.bitrate_kbps} kbps" if track.bitrate_kbps is not None else "--"
         )
-    title = track.title or Path(track.path).name
-    artist = track.artist or "Unknown"
-    if track.genre:
-        artist = f"{artist} | Genre: {track.genre}"
-    album = track.album or "Unknown"
-    year_text = str(track.year) if track.year is not None else "----"
-    duration = _format_time(track.duration_ms or 0)
-    bitrate_text = (
-        f"{track.bitrate_kbps} kbps" if track.bitrate_kbps is not None else "--"
-    )
-    return (
-        f"Title: {title}\n"
-        f"Artist: {artist}\n"
-        f"Album: {album} | Year: {year_text}\n"
-        f"Time: {duration} | Bitrate: {bitrate_text}"
-    )
+
+    label_style = "bold #F2C94C"
+    text = Text()
+    text.append("Title: ", style=label_style)
+    text.append(title)
+    text.append("\n")
+    text.append("Artist: ", style=label_style)
+    text.append(artist)
+    if genre:
+        text.append(" | ")
+        text.append("Genre: ", style=label_style)
+        text.append(genre)
+    text.append("\n")
+    text.append("Album: ", style=label_style)
+    text.append(album)
+    text.append(" | ")
+    text.append("Year: ", style=label_style)
+    text.append(year_text)
+    text.append("\n")
+    text.append("Time: ", style=label_style)
+    text.append(duration)
+    text.append(" | ")
+    text.append("Bitrate: ", style=label_style)
+    text.append(bitrate_text)
+    return text
 
 
 def _read_track_extras(path: Path) -> tuple[str | None, int | None]:
