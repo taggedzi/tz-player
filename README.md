@@ -1,6 +1,6 @@
 # tz-player
 
-[![CI](https://github.com/OWNER/tz-player/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/tz-player/actions/workflows/ci.yml)
+[![CI](https://github.com/taggedzi/tz-player/actions/workflows/ci.yml/badge.svg)](https://github.com/taggedzi/tz-player/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/tz-player.svg)](https://pypi.org/project/tz-player/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
