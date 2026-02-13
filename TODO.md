@@ -165,8 +165,8 @@ Each task includes:
   - Results report whether baseline targets are met.
 - Tests:
   - Add perf harness/tests marked opt-in, excluded from default CI gate.
-- Status: `todo`
-- Commit:
+- Status: `done`
+- Commit: `38b134a`
 
 ### T-013 Crash-safe persistence verification
 - Spec Ref: Sections `7`, `8`
