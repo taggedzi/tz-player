@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from rich.text import Text
 from textual.app import ComposeResult
 from textual.containers import Horizontal
 from textual.widget import Widget
@@ -80,9 +81,16 @@ class StatusPane(Widget):
     def update_state(self, state: PlayerState) -> None:
         self._state = state
         shuffle = "on" if state.shuffle else "off"
-        self._status_line.update(
-            f"Status: {state.status} | repeat {state.repeat_mode} | shuffle {shuffle}"
-        )
+        status_text = Text()
+        status_text.append("Status: ", style="bold #F2C94C")
+        status_text.append(state.status)
+        status_text.append(" | ")
+        status_text.append("Repeat: ", style="bold #F2C94C")
+        status_text.append(state.repeat_mode)
+        status_text.append(" | ")
+        status_text.append("Shuffle: ", style="bold #F2C94C")
+        status_text.append(shuffle)
+        self._status_line.update(status_text)
         pos_text, dur_text = format_time_pair_ms(state.position_ms, state.duration_ms)
         self._time_bar.set_value_text(f"{pos_text}/{dur_text}")
         if not self._time_bar.is_dragging:

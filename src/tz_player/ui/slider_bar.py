@@ -76,14 +76,16 @@ class SliderBar(Widget):
         self._bar_start = bar_start
         self._bar_length = bar_length
         bar = self._render_bar(bar_length)
-        text = label_text
-        if bar:
-            text = f"{text} {bar}"
-        if value_text:
-            text = f"{text} {value_text}"
         if width <= 0:
             return Text("")
-        return Text(text[:width], no_wrap=True)
+        text = Text(no_wrap=True)
+        text.append(label_text, style="bold #F2C94C")
+        if bar:
+            text.append(f" {bar}")
+        if value_text:
+            text.append(f" {value_text}")
+        text.truncate(width, overflow="crop")
+        return text
 
     def on_mouse_down(self, event: MouseDown) -> None:
         if event.button != 1:

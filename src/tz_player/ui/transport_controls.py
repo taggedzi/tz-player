@@ -125,7 +125,7 @@ class TransportControls(Widget):
             counter = f"Track: {'0' * width}/{'0' * width}"
         else:
             counter = f"Track: {current:0{width}d}/{total_count:0{width}d}"
-        self._track_counter.update(counter)
+        self._track_counter.update(_styled_track_counter_markup(counter))
         self._repeat_button.update(f"R:{state.repeat_mode} ")
         shuffle_text = "ON" if state.shuffle else "OFF"
         self._shuffle_button.update(f"S:{shuffle_text} ")
@@ -143,3 +143,8 @@ class TransportControls(Widget):
                     cast(Literal["prev", "toggle_play", "stop", "next"], action)
                 )
             )
+
+
+def _styled_track_counter_markup(counter: str) -> str:
+    label, _, value = counter.partition(" ")
+    return f"[bold #F2C94C]{label}[/] {value}"
