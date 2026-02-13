@@ -55,8 +55,8 @@ Each task includes:
 - Tests:
   - Expand key-routing matrix for all playback actions.
   - Add regressions for seek/volume/speed updates reflected in status pane.
-- Status: `todo`
-- Commit:
+- Status: `done`
+- Commit: `cf04e9d`
 
 ### T-004 Find/search focus behavior
 - Spec Ref: `WF-04`, Section `4` Keyboard + Focus contract
