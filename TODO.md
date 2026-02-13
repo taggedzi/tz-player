@@ -66,8 +66,8 @@ Each task includes:
   - Empty query always restores full playlist view.
 - Tests:
   - Add focus transition tests around menu popup + Find interaction order.
-- Status: `todo`
-- Commit:
+- Status: `done`
+- Commit: `9d5303a`
 
 ### T-005 Playlist editing safety and sync
 - Spec Ref: `WF-05`, Sections `7`, `8`
