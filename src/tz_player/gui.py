@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import sys
 from pathlib import Path
 
 from . import __version__
@@ -36,16 +37,23 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
-    level = resolve_log_level(verbose=args.verbose, quiet=args.quiet)
-
-    setup_logging(
-        log_dir=log_dir(),
-        level=level,
-        log_file=Path(args.log_file) if args.log_file else None,
-    )
-    logging.getLogger(__name__).info("Starting tz-player GUI")
-    TzPlayerApp(backend_name=args.backend).run()
-    return 0
+    try:
+        level = resolve_log_level(verbose=args.verbose, quiet=args.quiet)
+        setup_logging(
+            log_dir=log_dir(),
+            level=level,
+            log_file=Path(args.log_file) if args.log_file else None,
+        )
+        logging.getLogger(__name__).info("Starting tz-player GUI")
+        TzPlayerApp(backend_name=args.backend).run()
+        return 0
+    except Exception as exc:  # pragma: no cover - top-level safety net
+        logging.getLogger(__name__).exception("Fatal GUI startup error: %s", exc)
+        print(
+            "GUI startup failed. Verify backend/log configuration and re-run with --verbose.",
+            file=sys.stderr,
+        )
+        return 1
 
 
 if __name__ == "__main__":

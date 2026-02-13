@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import sys
 import time
 from dataclasses import replace
 from pathlib import Path
@@ -254,7 +255,11 @@ class TzPlayerApp(App):
                     )
                     await self.player_service.start()
                     await self.push_screen(
-                        ErrorModal("VLC backend unavailable; using fake backend.")
+                        ErrorModal(
+                            "VLC backend unavailable; using fake backend.\n"
+                            "Cause: VLC/libVLC runtime is not available.\n"
+                            "Next step: install VLC/libVLC, then restart to use --backend vlc."
+                        )
                     )
                 else:
                     raise
@@ -274,7 +279,13 @@ class TzPlayerApp(App):
             await self._start_visualizer()
         except Exception as exc:
             logger.exception("Failed to initialize app: %s", exc)
-            await self.push_screen(ErrorModal("Failed to initialize. See log file."))
+            await self.push_screen(
+                ErrorModal(
+                    "Failed to initialize app.\n"
+                    "Likely cause: state/database/backend startup failure.\n"
+                    "Next step: verify file permissions/paths and review the log file."
+                )
+            )
 
     async def on_unmount(self) -> None:
         self._stop_visualizer()
@@ -784,19 +795,27 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main() -> None:
+def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
-    level = resolve_log_level(verbose=args.verbose, quiet=args.quiet)
-
-    setup_logging(
-        log_dir=log_dir(),
-        level=level,
-        log_file=Path(args.log_file) if args.log_file else None,
-    )
-    logging.getLogger(__name__).info("Starting tz-player TUI")
-    TzPlayerApp(backend_name=args.backend).run()
+    try:
+        level = resolve_log_level(verbose=args.verbose, quiet=args.quiet)
+        setup_logging(
+            log_dir=log_dir(),
+            level=level,
+            log_file=Path(args.log_file) if args.log_file else None,
+        )
+        logging.getLogger(__name__).info("Starting tz-player TUI")
+        TzPlayerApp(backend_name=args.backend).run()
+        return 0
+    except Exception as exc:  # pragma: no cover - top-level safety net
+        logging.getLogger(__name__).exception("Fatal startup error: %s", exc)
+        print(
+            "Startup failed. Verify backend/state/log paths and re-run with --verbose.",
+            file=sys.stderr,
+        )
+        return 1
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

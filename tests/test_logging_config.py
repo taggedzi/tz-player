@@ -155,9 +155,105 @@ def test_app_main_passes_effective_level_and_log_file(monkeypatch, tmp_path) -> 
     monkeypatch.setattr(app_module, "log_dir", lambda: tmp_path / "logs")
     monkeypatch.setattr(app_module, "TzPlayerApp", FakeApp)
 
-    app_module.main()
+    rc = app_module.main()
 
+    assert rc == 0
     assert captured["level"] == "DEBUG"
     assert captured["log_file"] == tmp_path / "app.log"
     assert captured["backend"] == "fake"
     assert captured["ran"] is True
+
+
+def test_app_main_returns_nonzero_on_startup_failure(
+    monkeypatch, tmp_path, capsys
+) -> None:
+    args = SimpleNamespace(
+        verbose=False,
+        quiet=False,
+        log_file=None,
+        backend="fake",
+    )
+
+    class FakeParser:
+        def parse_args(self):
+            return args
+
+    class FailingApp:
+        def __init__(self, *, backend_name: str | None = None) -> None:
+            del backend_name
+
+        def run(self) -> None:
+            raise RuntimeError("boom")
+
+    monkeypatch.setattr(app_module, "build_parser", lambda: FakeParser())
+    monkeypatch.setattr(app_module, "setup_logging", lambda **kwargs: None)
+    monkeypatch.setattr(app_module, "log_dir", lambda: tmp_path / "logs")
+    monkeypatch.setattr(app_module, "TzPlayerApp", FailingApp)
+
+    rc = app_module.main()
+    captured = capsys.readouterr()
+
+    assert rc == 1
+    assert "Startup failed." in captured.err
+
+
+def test_gui_main_returns_nonzero_on_startup_failure(
+    monkeypatch, tmp_path, capsys
+) -> None:
+    args = SimpleNamespace(
+        verbose=False,
+        quiet=False,
+        log_file=None,
+        backend="vlc",
+    )
+
+    class FakeParser:
+        def parse_args(self):
+            return args
+
+    class FailingApp:
+        def __init__(self, *, backend_name: str | None = None) -> None:
+            del backend_name
+
+        def run(self) -> None:
+            raise RuntimeError("boom")
+
+    monkeypatch.setattr(gui_module, "build_parser", lambda: FakeParser())
+    monkeypatch.setattr(gui_module, "setup_logging", lambda **kwargs: None)
+    monkeypatch.setattr(gui_module, "log_dir", lambda: tmp_path / "logs")
+    monkeypatch.setattr(gui_module, "TzPlayerApp", FailingApp)
+
+    rc = gui_module.main()
+    captured = capsys.readouterr()
+
+    assert rc == 1
+    assert "GUI startup failed." in captured.err
+
+
+def test_cli_main_returns_nonzero_when_logging_setup_fails(
+    monkeypatch, tmp_path, capsys
+) -> None:
+    args = SimpleNamespace(
+        verbose=False,
+        quiet=False,
+        log_file=None,
+        backend="fake",
+    )
+
+    class FakeParser:
+        def parse_args(self):
+            return args
+
+    def fail_setup_logging(**kwargs):
+        del kwargs
+        raise OSError("cannot open log")
+
+    monkeypatch.setattr(cli_module, "build_parser", lambda: FakeParser())
+    monkeypatch.setattr(cli_module, "setup_logging", fail_setup_logging)
+    monkeypatch.setattr(cli_module, "log_dir", lambda: tmp_path / "logs")
+
+    rc = cli_module.main()
+    captured = capsys.readouterr()
+
+    assert rc == 1
+    assert "Unexpected error. Re-run with --verbose for details." in captured.err

@@ -36,16 +36,14 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
-    level = resolve_log_level(verbose=args.verbose, quiet=args.quiet)
-
-    setup_logging(
-        log_dir=log_dir(),
-        level=level,
-        log_file=Path(args.log_file) if args.log_file else None,
-    )
     logger = logging.getLogger(__name__)
-
     try:
+        level = resolve_log_level(verbose=args.verbose, quiet=args.quiet)
+        setup_logging(
+            log_dir=log_dir(),
+            level=level,
+            log_file=Path(args.log_file) if args.log_file else None,
+        )
         logger.info("Starting tz-player CLI")
         print("tz-player CLI is ready.")
         return 0

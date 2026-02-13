@@ -77,3 +77,25 @@ def test_metadata_service_constructs_without_current_loop(tmp_path) -> None:
     asyncio.set_event_loop(None)
     service = MetadataService(store)
     assert service is not None
+
+
+def test_metadata_service_marks_missing_file_invalid(tmp_path) -> None:
+    db_path = tmp_path / "library.sqlite"
+    store = PlaylistStore(db_path)
+    _run(store.initialize())
+    playlist_id = _run(store.create_playlist("Default"))
+
+    track_path = tmp_path / "missing.wav"
+    _write_wave(track_path)
+    _run(store.add_tracks(playlist_id, [track_path]))
+    track_path.unlink()
+
+    rows = _run(store.fetch_window(playlist_id, 0, 1))
+    track_id = rows[0].track_id
+
+    service = MetadataService(store)
+    _run(asyncio.wait_for(service.ensure_metadata([track_id]), timeout=5))
+
+    updated = _run(store.fetch_window(playlist_id, 0, 1))[0]
+    assert updated.meta_valid is False
+    assert updated.meta_error == "File missing"

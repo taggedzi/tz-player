@@ -797,7 +797,11 @@ class PlaylistPane(Static):
             self._metadata_pending.difference_update(selected_track_ids)
         except Exception as exc:
             logger.exception("Playlist action failed: %s", exc)
-            await self._show_error("Action failed. See log file.")
+            await self._show_error(
+                "Failed to refresh metadata for selected tracks.\n"
+                "Likely cause: invalid path or file/database permission issue.\n"
+                "Next step: verify paths/permissions and check the log file."
+            )
 
     async def _refresh_metadata_all(self) -> None:
         if self.store is None or self.playlist_id is None:
@@ -809,7 +813,11 @@ class PlaylistPane(Static):
             self._metadata_pending.clear()
         except Exception as exc:
             logger.exception("Playlist action failed: %s", exc)
-            await self._show_error("Action failed. See log file.")
+            await self._show_error(
+                "Failed to refresh metadata for playlist.\n"
+                "Likely cause: file/database permission issue.\n"
+                "Next step: verify paths/permissions and check the log file."
+            )
 
     async def _run_store_action(self, label: str, func, *args) -> None:
         if self.store is None or self.playlist_id is None:
@@ -821,7 +829,11 @@ class PlaylistPane(Static):
             await self.refresh_view()
         except Exception as exc:
             logger.exception("Playlist action failed: %s", exc)
-            await self._show_error("Action failed. See log file.")
+            await self._show_error(
+                f"Failed to {label}.\n"
+                "Likely cause: invalid path or file/database permission issue.\n"
+                "Next step: verify paths/permissions and check the log file."
+            )
 
     async def _confirm(self, message: str) -> bool:
         result = await self.app.push_screen_wait(ConfirmModal(message))

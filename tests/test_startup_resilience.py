@@ -76,7 +76,8 @@ def test_startup_falls_back_to_fake_backend_when_vlc_fails(
             assert build_calls == ["vlc", "fake"]
             assert any(
                 isinstance(screen, ErrorModal)
-                and screen._message == "VLC backend unavailable; using fake backend."
+                and "VLC backend unavailable; using fake backend." in screen._message
+                and "install VLC/libVLC" in screen._message
                 for screen in pushed_screens
             )
             app.exit()
@@ -110,7 +111,8 @@ def test_startup_shows_generic_init_error_when_backend_start_fails(
             assert status._player_service is None
             assert any(
                 isinstance(screen, ErrorModal)
-                and screen._message == "Failed to initialize. See log file."
+                and "Failed to initialize app." in screen._message
+                and "verify file permissions/paths" in screen._message
                 for screen in pushed_screens
             )
             app.exit()
@@ -161,7 +163,8 @@ def test_startup_shows_generic_error_when_state_load_fails(
             assert status._player_service is None
             assert any(
                 isinstance(screen, ErrorModal)
-                and screen._message == "Failed to initialize. See log file."
+                and "Failed to initialize app." in screen._message
+                and "verify file permissions/paths" in screen._message
                 for screen in pushed_screens
             )
             app.exit()
@@ -192,7 +195,8 @@ def test_startup_shows_generic_error_when_db_init_fails(tmp_path, monkeypatch) -
             assert status._player_service is None
             assert any(
                 isinstance(screen, ErrorModal)
-                and screen._message == "Failed to initialize. See log file."
+                and "Failed to initialize app." in screen._message
+                and "verify file permissions/paths" in screen._message
                 for screen in pushed_screens
             )
             app.exit()
