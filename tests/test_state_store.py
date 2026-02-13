@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
+import pytest
+
 from tz_player.state_store import AppState, load_state, save_state
 
 
@@ -39,3 +43,46 @@ def test_state_corrupt_json_defaults(tmp_path, caplog) -> None:
     state = load_state(path)
     assert state == AppState()
     assert any("invalid JSON" in record.message for record in caplog.records)
+
+
+def test_state_save_replace_failure_keeps_previous_file(tmp_path, monkeypatch) -> None:
+    path = tmp_path / "state.json"
+    original = AppState(playback_backend="fake", visualizer_id="basic")
+    save_state(path, original)
+    updated = AppState(playback_backend="vlc", visualizer_id="viz.one")
+
+    def fail_replace(self: Path, target: Path) -> None:
+        del target
+        if self.suffix == ".tmp":
+            raise OSError("replace failed")
+        return None
+
+    monkeypatch.setattr(Path, "replace", fail_replace)
+
+    with pytest.raises(OSError):
+        save_state(path, updated)
+
+    loaded = load_state(path)
+    assert loaded == original
+
+
+def test_state_save_tmp_write_failure_keeps_previous_file(tmp_path, monkeypatch) -> None:
+    path = tmp_path / "state.json"
+    original = AppState(playback_backend="fake", visualizer_id="basic")
+    save_state(path, original)
+    updated = AppState(playback_backend="vlc", visualizer_id="viz.one")
+
+    original_write_text = Path.write_text
+
+    def fail_tmp_write(self: Path, data: str, encoding: str = "utf-8") -> int:
+        if self.suffix == ".tmp":
+            raise OSError("tmp write failed")
+        return original_write_text(self, data, encoding=encoding)
+
+    monkeypatch.setattr(Path, "write_text", fail_tmp_write)
+
+    with pytest.raises(OSError):
+        save_state(path, updated)
+
+    loaded = load_state(path)
+    assert loaded == original

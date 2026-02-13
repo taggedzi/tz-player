@@ -6,6 +6,9 @@ import asyncio
 import sqlite3
 from pathlib import Path
 
+import pytest
+
+import tz_player.services.playlist_store as playlist_store_module
 from tz_player.services.playlist_store import PlaylistStore
 
 
@@ -214,3 +217,32 @@ def test_search_item_ids_and_fetch_by_item_ids(tmp_path) -> None:
 
     fetched = _run(store.fetch_rows_by_item_ids(playlist_id, match_ids[::-1]))
     assert [row.item_id for row in fetched] == match_ids[::-1]
+
+
+def test_add_tracks_failure_rolls_back_transaction(tmp_path, monkeypatch) -> None:
+    db_path = tmp_path / "library.sqlite"
+    store = PlaylistStore(db_path)
+    _run(store.initialize())
+    playlist_id = _run(store.create_playlist("Rollback"))
+
+    paths = [tmp_path / "a.mp3", tmp_path / "b.mp3"]
+    for path in paths:
+        _touch(path)
+
+    original_stat_path = playlist_store_module._stat_path
+    calls = {"count": 0}
+
+    def fail_second_stat(path: Path) -> tuple[int | None, int | None]:
+        calls["count"] += 1
+        if calls["count"] == 2:
+            raise OSError("simulated stat failure")
+        return original_stat_path(path)
+
+    monkeypatch.setattr(playlist_store_module, "_stat_path", fail_second_stat)
+
+    with pytest.raises(OSError):
+        _run(store.add_tracks(playlist_id, paths))
+
+    assert _run(store.count(playlist_id)) == 0
+    rows = _run(store.fetch_window(playlist_id, 0, 10))
+    assert rows == []
