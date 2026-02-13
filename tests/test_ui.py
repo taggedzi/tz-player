@@ -239,6 +239,92 @@ def test_find_filters_playlist_and_escape_resets(tmp_path) -> None:
     _run(run_app())
 
 
+def test_find_enter_returns_focus_and_keeps_filter(tmp_path) -> None:
+    store = PlaylistStore(tmp_path / "library.sqlite")
+
+    async def run_app() -> None:
+        await store.initialize()
+        playlist_id = await store.ensure_playlist("Default")
+        files = [
+            tmp_path / "moon_song.mp3",
+            tmp_path / "sun_song.mp3",
+        ]
+        for path in files:
+            path.write_bytes(b"")
+        await store.add_tracks(playlist_id, files)
+        pane = PlaylistPane()
+
+        class PaneApp(App):
+            def compose(self) -> ComposeResult:
+                yield pane
+
+        app = PaneApp()
+        async with app.run_test() as pilot:
+            await asyncio.sleep(0)
+            await pane.configure(store, playlist_id, None)
+            pane.focus_find()
+            for key in "moon":
+                await pilot.press(key)
+            await asyncio.sleep(0.3)
+
+            assert pane.search_active is True
+            assert pane.total_count == 1
+            assert pane.is_find_focused() is True
+
+            await pilot.press("enter")
+            await asyncio.sleep(0)
+            assert app.focused is pane
+            assert pane.search_active is True
+            assert pane.total_count == 1
+            assert pane.has_find_text() is True
+            app.exit()
+
+    _run(run_app())
+
+
+def test_escape_clears_find_when_query_exists_but_focus_moved(
+    tmp_path, monkeypatch
+) -> None:
+    _setup_dirs(tmp_path, monkeypatch)
+    app = TzPlayerApp(auto_init=False)
+
+    async def run_app() -> None:
+        await app.store.initialize()
+        playlist_id = await app.store.ensure_playlist("Default")
+        files = [
+            tmp_path / "moon_song.mp3",
+            tmp_path / "sun_song.mp3",
+        ]
+        for path in files:
+            path.write_bytes(b"")
+        await app.store.add_tracks(playlist_id, files)
+        async with app.run_test() as pilot:
+            await asyncio.sleep(0)
+            pane = app.query_one(PlaylistPane)
+            await pane.configure(app.store, playlist_id, None)
+            pane.focus_find()
+            for key in "moon":
+                await pilot.press(key)
+            await asyncio.sleep(0.3)
+
+            assert pane.search_active is True
+            assert pane.total_count == 1
+            pane.focus()
+            await asyncio.sleep(0)
+            assert app.focused is pane
+            assert pane.has_find_text() is True
+
+            await pilot.press("escape")
+            await asyncio.sleep(0.1)
+            assert pane.search_active is False
+            assert pane.has_find_text() is False
+            assert pane.total_count == 2
+            assert app.focused is pane
+            app.exit()
+
+    _run(run_app())
+
+
 def test_escape_exits_find_and_restores_global_keys(tmp_path, monkeypatch) -> None:
     _setup_dirs(tmp_path, monkeypatch)
 
