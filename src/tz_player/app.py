@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import time
 from dataclasses import replace
 from pathlib import Path
 from typing import Literal, cast
@@ -12,6 +13,7 @@ from typing import Literal, cast
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
+from textual.timer import Timer
 from textual.widgets import Footer, Header, Static
 
 from . import __version__
@@ -29,6 +31,12 @@ from .ui.modals.error import ErrorModal
 from .ui.playlist_pane import PlaylistPane
 from .ui.status_pane import StatusPane
 from .utils.async_utils import run_blocking
+from .visualizers import (
+    VisualizerContext,
+    VisualizerFrameInput,
+    VisualizerHost,
+    VisualizerRegistry,
+)
 
 logger = logging.getLogger(__name__)
 METADATA_REFRESH_DEBOUNCE = 0.2
@@ -173,6 +181,9 @@ class TzPlayerApp(App):
         self._last_persisted: (
             tuple[int | None, int | None, int, float, str, bool] | None
         ) = None
+        self.visualizer_registry: VisualizerRegistry | None = None
+        self.visualizer_host: VisualizerHost | None = None
+        self._visualizer_timer: Timer | None = None
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -258,11 +269,13 @@ class TzPlayerApp(App):
             self._update_status_pane()
             await pane.update_transport_controls(self.player_state)
             self._update_current_track_pane()
+            await self._start_visualizer()
         except Exception as exc:
             logger.exception("Failed to initialize app: %s", exc)
             await self.push_screen(ErrorModal("Failed to initialize. See log file."))
 
     async def on_unmount(self) -> None:
+        self._stop_visualizer()
         if self.player_service is not None:
             await self.player_service.shutdown()
 
@@ -526,6 +539,73 @@ class TzPlayerApp(App):
         album = self.current_track.album or "Unknown album"
         duration = _format_time(self.current_track.duration_ms or 0)
         pane.update(f"{title}\n{artist}\n{album}\n{duration}")
+
+    async def _start_visualizer(self) -> None:
+        self.visualizer_registry = VisualizerRegistry.built_in()
+        self.visualizer_host = VisualizerHost(self.visualizer_registry, target_fps=10)
+        context = VisualizerContext(
+            ansi_enabled=self.state.ansi_enabled,
+            unicode_enabled=True,
+        )
+        requested = self.state.visualizer_id or self.visualizer_registry.default_id
+        active = self.visualizer_host.activate(requested, context)
+        if self.state.visualizer_id != active:
+            self.state = replace(self.state, visualizer_id=active)
+            await run_blocking(save_state, state_path(), self.state)
+        self._render_visualizer_frame()
+        interval = 1.0 / self.visualizer_host.target_fps
+        self._visualizer_timer = self.set_interval(
+            interval, self._render_visualizer_frame
+        )
+
+    def _stop_visualizer(self) -> None:
+        if self._visualizer_timer is not None:
+            self._visualizer_timer.stop()
+            self._visualizer_timer = None
+        if self.visualizer_host is not None:
+            self.visualizer_host.shutdown()
+            self.visualizer_host = None
+
+    def _render_visualizer_frame(self) -> None:
+        if self.visualizer_host is None:
+            return
+        pane = self.query_one("#visualizer-pane", Static)
+        context = VisualizerContext(
+            ansi_enabled=self.state.ansi_enabled,
+            unicode_enabled=True,
+        )
+        frame = VisualizerFrameInput(
+            frame_index=self.visualizer_host.frame_index,
+            monotonic_s=time.monotonic(),
+            width=max(1, pane.size.width),
+            height=max(1, pane.size.height),
+            status=self.player_state.status,
+            position_s=max(0.0, self.player_state.position_ms / 1000.0),
+            duration_s=self.player_state.duration_ms / 1000.0
+            if self.player_state.duration_ms > 0
+            else None,
+            volume=float(self.player_state.volume),
+            speed=self.player_state.speed,
+            repeat_mode=self.player_state.repeat_mode,
+            shuffle=self.player_state.shuffle,
+            track_id=None,
+            track_path=self.current_track.path
+            if self.current_track is not None
+            else None,
+            title=self.current_track.title if self.current_track is not None else None,
+            artist=self.current_track.artist
+            if self.current_track is not None
+            else None,
+            album=self.current_track.album if self.current_track is not None else None,
+        )
+        try:
+            output = self.visualizer_host.render_frame(frame, context)
+        except Exception as exc:  # pragma: no cover - UI safety net
+            logger.exception("Visualizer host render failed: %s", exc)
+            pane.update("Visualizer unavailable")
+            return
+        notice = self.visualizer_host.consume_notice()
+        pane.update(f"{notice}\n{output}" if notice else output)
 
     async def _handle_metadata_updated(self, track_ids: list[int]) -> None:
         pane = self.query_one(PlaylistPane)
