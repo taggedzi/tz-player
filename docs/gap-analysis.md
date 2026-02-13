@@ -163,18 +163,22 @@ Proposed implementation:
 
 7. `BL-007` Normalize focus styling for interactive widgets  
 Workflows: UX contract  
+Status: `Done` (2026-02-13)
 Proposed implementation:
 - Add explicit `:focus` styles for viewport/find and key controls to satisfy visible focus requirement.
 
 8. `BL-008` Align docs with implemented keyboard/focus behavior  
 Files: `docs/usage.md`, `README.md`  
+Status: `Done` (2026-02-13)
 Proposed implementation:
 - Document final escape/find behavior and key routing model once stabilized.
 
 9. `BL-009` Add per-workflow acceptance checklist to CI docs  
+Status: `Done` (2026-02-13)
 Proposed implementation:
 - Track WF-01..WF-05 acceptance checks in a test plan document and link from `SPEC.md`.
 
 ## Recommended Execution Order
 
-1. `BL-007` + `BL-008` + `BL-009` polish/documentation
+1. Backlog items `BL-001` through `BL-009` are complete on this branch.
+2. Next phase is full-suite validation in a clean environment and production checklist closure.

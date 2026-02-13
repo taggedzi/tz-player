@@ -140,6 +140,7 @@ Quality expectations:
 - Tests cover keyboard flows, focus flows, playback control routing, playlist mutations, and state persistence.
 - Regressions in keybindings/focus require dedicated tests.
 - No test may hang indefinitely; long-running tests require explicit timeout strategy.
+- Workflow-to-test mapping is maintained in `docs/workflow-acceptance.md`.
 
 ## 10. Definition of Done (v1 production-ready target)
 
@@ -156,4 +157,3 @@ A milestone is done when:
 2. Harden playlist/search behavior and edge cases.
 3. Improve error handling and startup resilience.
 4. Close production checklist release blockers.
-
