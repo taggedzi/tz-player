@@ -98,6 +98,9 @@ class PlayerService:
 
     async def start(self) -> None:
         await self._backend.start()
+        # Keep backend engine state aligned with persisted/app state before any play action.
+        await self._backend.set_volume(self._state.volume)
+        await self._backend.set_speed(self._state.speed)
         if self._poll_task is None:
             self._poll_task = asyncio.create_task(self._poll_position())
 

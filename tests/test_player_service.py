@@ -62,6 +62,70 @@ def test_play_progresses_and_pause_freezes() -> None:
     _run(run())
 
 
+def test_start_applies_initial_volume_and_speed_to_backend() -> None:
+    class RecordingBackend:
+        def __init__(self) -> None:
+            self.handler = None
+            self.volume: int | None = None
+            self.speed: float | None = None
+
+        def set_event_handler(self, handler) -> None:  # type: ignore[no-untyped-def]
+            self.handler = handler
+
+        async def start(self) -> None:
+            return None
+
+        async def shutdown(self) -> None:
+            return None
+
+        async def play(  # type: ignore[no-untyped-def]
+            self, item_id, track_path, start_ms=0, *, duration_ms=None
+        ) -> None:
+            return None
+
+        async def toggle_pause(self) -> None:
+            return None
+
+        async def stop(self) -> None:
+            return None
+
+        async def seek_ms(self, position_ms: int) -> None:
+            return None
+
+        async def set_volume(self, volume: int) -> None:
+            self.volume = volume
+
+        async def set_speed(self, speed: float) -> None:
+            self.speed = speed
+
+        async def get_position_ms(self) -> int:
+            return 0
+
+        async def get_duration_ms(self) -> int:
+            return 0
+
+        async def get_state(self) -> str:
+            return "idle"
+
+    async def emit_event(_event: object) -> None:
+        return None
+
+    async def run() -> None:
+        backend = RecordingBackend()
+        service = PlayerService(
+            emit_event=emit_event,
+            track_info_provider=_track_info_provider,
+            backend=backend,  # type: ignore[arg-type]
+            initial_state=PlayerState(volume=77, speed=1.5),
+        )
+        await service.start()
+        assert backend.volume == 77
+        assert backend.speed == 1.5
+        await service.shutdown()
+
+    _run(run())
+
+
 def test_stop_resets_position() -> None:
     async def emit_event(_event: object) -> None:
         return None
