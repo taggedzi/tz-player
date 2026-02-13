@@ -26,15 +26,18 @@ class _MatrixRainBase:
     def render(self, frame: VisualizerFrameInput) -> str:
         width = max(1, frame.width)
         height = max(1, frame.height)
-        # Slow global fall cadence by ~20% for a calmer matrix effect.
-        fall_tick = max(0, (frame.frame_index * 4) // 5)
+        # Use continuous monotonic time to avoid quantized per-frame jumps/stutter.
+        # Tuned to feel smooth while remaining slower than the earlier cadence.
+        base_rows_per_second = 7.5
         lines: list[str] = []
         for y in range(height):
             chars: list[str] = []
             for x in range(width):
-                speed = 1 + ((x * 11) % 4)
+                speed_scale = 0.75 + ((x * 11) % 4) * 0.2
                 period = height + 14 + (x % 7)
-                head = (fall_tick * speed + x * 17) % period - 7
+                head = (
+                    frame.monotonic_s * base_rows_per_second * speed_scale + x * 17
+                ) % period - 7
                 trail = 5 + (x % 6)
                 distance = head - y
                 if distance < 0 or distance >= trail:
@@ -77,7 +80,7 @@ class MatrixRedVisualizer(_MatrixRainBase):
     _tail_palette: tuple[int, ...] = (217, 203, 167, 131, 125, 89, 52)
 
 
-def _trail_color(palette: tuple[int, ...], distance: int, trail: int) -> int:
+def _trail_color(palette: tuple[int, ...], distance: float, trail: int) -> int:
     if not palette:
         return 22
     if trail <= 1:
