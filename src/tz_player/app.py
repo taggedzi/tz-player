@@ -599,14 +599,7 @@ class TzPlayerApp(App):
 
     def _update_current_track_pane(self) -> None:
         pane = self.query_one("#current-track-pane", Static)
-        if self.current_track is None:
-            pane.update("No track selected")
-            return
-        title = self.current_track.title or Path(self.current_track.path).name
-        artist = self.current_track.artist or "Unknown artist"
-        album = self.current_track.album or "Unknown album"
-        duration = _format_time(self.current_track.duration_ms or 0)
-        pane.update(f"{title}\n{artist}\n{album}\n{duration}")
+        pane.update(_format_track_info_panel(self.current_track))
 
     async def _start_visualizer(self) -> None:
         self.visualizer_registry = VisualizerRegistry.built_in()
@@ -790,6 +783,16 @@ def _track_needs_metadata(track: TrackInfo) -> bool:
 
 def _clamp_speed(speed: float) -> float:
     return max(SPEED_MIN, min(speed, SPEED_MAX))
+
+
+def _format_track_info_panel(track: TrackInfo | None) -> str:
+    if track is None:
+        return "Title: --\nArtist: --\nAlbum: --\nTime: --:--"
+    title = track.title or Path(track.path).name
+    artist = track.artist or "Unknown"
+    album = track.album or "Unknown"
+    duration = _format_time(track.duration_ms or 0)
+    return f"Title: {title}\nArtist: {artist}\nAlbum: {album}\nTime: {duration}"
 
 
 def _resolve_backend_name(cli_backend: str | None, state_backend: str | None) -> str:
