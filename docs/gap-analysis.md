@@ -27,7 +27,7 @@ Evidence:
 
 Gaps:
 - No startup watchdog/timeout; startup can still stall if dependency calls block indefinitely.
-- No explicit test validating full startup fallback path end-to-end when VLC fails.
+- Startup fallback path now has integration coverage (`tests/test_startup_resilience.py`), but full-suite execution still depends on local optional deps.
 
 ### WF-02: Navigate playlist
 
@@ -141,6 +141,7 @@ Acceptance tests:
 
 4. `BL-004` Add startup resilience checks and tests  
 Workflows: WF-01  
+Status: `Done` (2026-02-13)
 Proposed implementation:
 - Add integration test for VLC-fallback path in app initialization.
 - Add startup failure-path assertions (error modal + usable UI).
@@ -174,7 +175,6 @@ Proposed implementation:
 
 ## Recommended Execution Order
 
-1. `BL-004` startup resilience tests
-2. `BL-005` focus/navigation regression matrix
-3. `BL-006` playlist editing integration expansion
-4. `BL-007` + `BL-008` + `BL-009` polish/documentation
+1. `BL-005` focus/navigation regression matrix
+2. `BL-006` playlist editing integration expansion
+3. `BL-007` + `BL-008` + `BL-009` polish/documentation
