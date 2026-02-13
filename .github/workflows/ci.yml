@@ -39,16 +39,16 @@ jobs:
 
       - name: Lint
         run: |
-          ruff check .
-          ruff format --check .
+          python -m ruff check .
+          python -m ruff format --check .
 
 
       - name: Typecheck
-        run: mypy src
+        run: python -m mypy src
 
 
       - name: Tests
-        run: pytest
+        run: python -m pytest
 
       - name: Build
         run: |

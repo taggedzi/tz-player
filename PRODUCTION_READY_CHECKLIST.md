@@ -20,9 +20,9 @@ Backlog status:
 
 Known remaining release tasks:
 
-- [ ] Update version/changelog for the release candidate.
-- [ ] Verify CI runs the same gate commands on PR.
-- [ ] Run VLC-specific smoke tests in an environment with `TZ_PLAYER_TEST_VLC=1`.
+- [x] Update version/changelog for the release candidate.
+- [x] Verify CI runs the same gate commands on PR (`.github/workflows/ci.yml`).
+- [ ] Run VLC-specific smoke tests in an environment with `TZ_PLAYER_TEST_VLC=1` (see `docs/vlc-smoke-test.md`).
 
 ## Libraries
 
