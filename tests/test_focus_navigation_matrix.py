@@ -52,6 +52,51 @@ class KeyCaptureApp(TzPlayerApp):
     async def action_stop(self) -> None:
         self.calls.append("stop")
 
+    async def action_seek_back(self) -> None:
+        self.calls.append("seek_back")
+
+    async def action_seek_forward(self) -> None:
+        self.calls.append("seek_forward")
+
+    async def action_seek_back_big(self) -> None:
+        self.calls.append("seek_back_big")
+
+    async def action_seek_forward_big(self) -> None:
+        self.calls.append("seek_forward_big")
+
+    async def action_seek_start(self) -> None:
+        self.calls.append("seek_start")
+
+    async def action_seek_end(self) -> None:
+        self.calls.append("seek_end")
+
+    async def action_volume_down(self) -> None:
+        self.calls.append("volume_down")
+
+    async def action_volume_up(self) -> None:
+        self.calls.append("volume_up")
+
+    async def action_volume_down_big(self) -> None:
+        self.calls.append("volume_down_big")
+
+    async def action_volume_up_big(self) -> None:
+        self.calls.append("volume_up_big")
+
+    async def action_speed_down(self) -> None:
+        self.calls.append("speed_down")
+
+    async def action_speed_up(self) -> None:
+        self.calls.append("speed_up")
+
+    async def action_speed_reset(self) -> None:
+        self.calls.append("speed_reset")
+
+    async def action_repeat_mode(self) -> None:
+        self.calls.append("repeat_mode")
+
+    async def action_shuffle(self) -> None:
+        self.calls.append("shuffle")
+
 
 async def _configure_app(app: KeyCaptureApp, tmp_path: Path) -> PlaylistPane:
     await app.store.initialize()
@@ -105,8 +150,43 @@ def test_key_routing_matrix_across_focus_targets(tmp_path, monkeypatch) -> None:
                 await pilot.press("p")
                 await pilot.press("space")
                 await pilot.press("x")
+                await pilot.press("left")
+                await pilot.press("right")
+                await pilot.press("shift+left")
+                await pilot.press("shift+right")
+                await pilot.press("home")
+                await pilot.press("end")
+                await pilot.press("-")
+                await pilot.press("+")
+                await pilot.press("shift+-")
+                await pilot.press("shift+=")
+                await pilot.press("[")
+                await pilot.press("]")
+                await pilot.press("\\")
+                await pilot.press("r")
+                await pilot.press("s")
                 await asyncio.sleep(0)
-                assert app.calls == ["next", "previous", "play_pause", "stop"]
+                assert app.calls == [
+                    "next",
+                    "previous",
+                    "play_pause",
+                    "stop",
+                    "seek_back",
+                    "seek_forward",
+                    "seek_back_big",
+                    "seek_forward_big",
+                    "seek_start",
+                    "seek_end",
+                    "volume_down",
+                    "volume_up",
+                    "volume_down_big",
+                    "volume_up_big",
+                    "speed_down",
+                    "speed_up",
+                    "speed_reset",
+                    "repeat_mode",
+                    "shuffle",
+                ]
             app.exit()
 
     _run(run_app())
