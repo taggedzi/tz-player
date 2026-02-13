@@ -1,0 +1,58 @@
+# Repository-level configuration for Repo Interrogator.
+
+[limits]
+max_file_bytes = 1048576
+max_open_lines = 500
+max_total_bytes_per_response = 262144
+max_search_hits = 50
+max_references = 50
+
+[index]
+include_extensions = [
+  ".py",
+  ".js", ".jsx",
+  ".ts", ".tsx",
+  ".java",
+  ".go",
+  ".rs",
+  ".c", ".h", ".cc", ".hh", ".cpp", ".hpp", ".cxx",
+  ".cs",
+  ".md", ".rst", ".toml", ".yaml", ".yml", ".json", ".ini", ".cfg"
+]
+
+exclude_globs = [
+  "**/.git/**",
+  "**/.github/**",
+  "**/.venv/**",
+  "**/.ubuntu-venv/**",
+  "**/__pycache__/**",
+  "**/.repo_mcp/**",
+  "**/.mypy_cache/**",
+  "**/.pytest_cache/**",
+  "**/.ruff_cache/**",
+  "**/.tox/**",
+  "**/.nox/**",
+  "**/.cache/**",
+  "**/node_modules/**",
+  "**/.pnpm-store/**",
+  "**/.yarn/**",
+  "**/.npm/**",
+  "**/.next/**",
+  "**/.nuxt/**",
+  "**/.svelte-kit/**",
+  "**/.gradle/**",
+  "**/.idea/**",
+  "**/.vscode/**",
+  "**/dist/**",
+  "**/build/**",
+  "**/target/**",
+  "**/bin/**",
+  "**/obj/**",
+  "**/out/**",
+  "**/coverage/**",
+  "**/tmp/**",
+  "**/temp/**"
+]
+
+[adapters]
+python_enabled = true
