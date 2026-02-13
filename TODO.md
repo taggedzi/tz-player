@@ -189,7 +189,7 @@ Each task includes:
 - Tests:
   - Add focused UI tests for mouse click/drag and focus recovery.
 - Status: `done`
-- Commit:
+- Commit: `5e7b9d3`
 
 ### T-015 Docs parity and troubleshooting
 - Spec Ref: Sections `9`, `11`
