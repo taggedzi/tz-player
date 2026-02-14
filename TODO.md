@@ -77,8 +77,8 @@ Execution tracker derived from `SPEC.md`.
   - `docs/usage.md` includes practical notes for choosing and cycling visualizers.
 - Tests:
   - N/A (docs), validated by review checklist.
-- Status: `todo`
-- Commit:
+- Status: `done`
+- Commit: `66d6195`
 
 ### VIZ-006 Visualizer Acceptance Coverage Update
 - Spec Ref: `WF-06`, Section `11`
@@ -88,8 +88,8 @@ Execution tracker derived from `SPEC.md`.
   - Release checklist reflects any environment-gated visualizer checks.
 - Tests:
   - N/A (docs), validated by review checklist.
-- Status: `todo`
-- Commit:
+- Status: `done`
+- Commit: `66d6195`
 
 ### VIZ-007 PCM Envelope Precompute and Time-Synced VU Source
 - Spec Ref: `WF-06`, Sections `5`, `6`, `9.1`
@@ -103,8 +103,8 @@ Execution tracker derived from `SPEC.md`.
   - Unit tests for envelope generation normalization, bucket alignment, and interpolation.
   - Unit tests for cache hit/miss/invalidation behavior.
   - Integration test proving VU uses envelope source during real playback path (without VLC callbacks).
-- Status: `in_progress`
-- Commit: `67c0e8f`
+- Status: `done`
+- Commit: `22463a9`, `67c0e8f`, `b8dc538`
 
 ### VIZ-009 FFmpeg External-Only Policy and Runtime Gating
 - Spec Ref: Sections `6`, `7`, `9`, `11`
@@ -116,8 +116,8 @@ Execution tracker derived from `SPEC.md`.
 - Tests:
   - Unit tests for ffmpeg capability detection and no-ffmpeg fallback behavior.
   - Packaging/release checklist update verifying no bundled external codec binaries.
-- Status: `in_progress`
-- Commit: `507283b`
+- Status: `done`
+- Commit: `507283b`, `1085e73`, `80b50c6`, `66d6195`
 
 ### VIZ-010 `doctor` Command for Dependency Diagnostics
 - Spec Ref: `WF-07`, Sections `9`, `10`, `11`
@@ -174,6 +174,22 @@ Execution tracker derived from `SPEC.md`.
   - Stress test confirming no event-loop blocking under rapid navigation.
 - Status: `done`
 - Commit: `b8dc538`
+
+### VIZ-013 Release Guardrails for External Media Tooling
+- Spec Ref: Sections `7`, `9`, `11`
+- Scope: Add explicit release-time checks that external media binaries (VLC/FFmpeg) are never bundled by project packaging flows.
+- Acceptance:
+  - Release checklist explicitly verifies that build artifacts do not contain bundled `ffmpeg`/`vlc`/`libvlc` binaries.
+  - CI or documented release script includes artifact inspection commands.
+  - `README`/docs clearly state external-tool policy at release section.
+- Subtasks:
+  - Add artifact inspection step(s) to release docs/checklist.
+  - Add a simple CI/docs smoke command example to inspect `dist/*` contents.
+  - Add troubleshooting note for false positives on platform-specific filenames.
+- Tests:
+  - N/A (release/docs policy), validated by release checklist execution.
+- Status: `todo`
+- Commit:
 
 ## Archived Completed Work
 
