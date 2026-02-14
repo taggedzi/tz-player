@@ -115,6 +115,7 @@ Execution tracker derived from `SPEC.md`.
   - Unit/integration tests asserting transition logs are emitted exactly on source changes.
   - Regression test ensuring no repeated spam when source is stable.
 - Status: `done`
+- Commit: `ad9eb5f`
 
 ### T-025 Envelope Cache Miss/Populate Observability Completion
 - Spec Ref: Section `9` (Observability)
