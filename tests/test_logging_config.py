@@ -197,6 +197,42 @@ def test_app_main_returns_nonzero_on_startup_failure(
     assert "Startup failed." in captured.err
 
 
+def test_app_main_doctor_path_returns_report_exit_code(
+    monkeypatch, tmp_path, capsys
+) -> None:
+    args = SimpleNamespace(
+        command="doctor",
+        verbose=False,
+        quiet=False,
+        log_file=None,
+        backend="vlc",
+    )
+
+    class FakeParser:
+        def parse_args(self):
+            return args
+
+    class ForbiddenApp:
+        def __init__(self, *, backend_name: str | None = None) -> None:
+            raise AssertionError("TUI app should not be constructed in doctor mode")
+
+    class FakeReport:
+        exit_code = 2
+
+    monkeypatch.setattr(app_module, "build_parser", lambda: FakeParser())
+    monkeypatch.setattr(app_module, "setup_logging", lambda **kwargs: None)
+    monkeypatch.setattr(app_module, "log_dir", lambda: tmp_path / "logs")
+    monkeypatch.setattr(app_module, "run_doctor", lambda _backend: FakeReport())
+    monkeypatch.setattr(app_module, "render_report", lambda _report: "doctor output")
+    monkeypatch.setattr(app_module, "TzPlayerApp", ForbiddenApp)
+
+    rc = app_module.main()
+    captured = capsys.readouterr()
+
+    assert rc == 2
+    assert "doctor output" in captured.out
+
+
 def test_gui_main_returns_nonzero_on_startup_failure(
     monkeypatch, tmp_path, capsys
 ) -> None:

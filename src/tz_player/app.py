@@ -20,6 +20,7 @@ from textual.timer import Timer
 from textual.widgets import Footer, Header, Static
 
 from . import __version__
+from .doctor import render_report, run_doctor
 from .events import PlayerStateChanged, TrackChanged
 from .logging_utils import setup_logging
 from .paths import db_path, log_dir, state_path
@@ -928,6 +929,13 @@ def build_parser() -> argparse.ArgumentParser:
         prog="tz-player", description="TaggedZ's command line music player."
     )
     parser.add_argument(
+        "command",
+        nargs="?",
+        choices=("run", "doctor"),
+        default="run",
+        help="Run player UI (default) or print environment diagnostics.",
+    )
+    parser.add_argument(
         "--version", action="version", version=f"%(prog)s {__version__}"
     )
     parser.add_argument("--verbose", action="store_true", help="Enable verbose output")
@@ -953,6 +961,10 @@ def main() -> int:
             level=level,
             log_file=Path(args.log_file) if args.log_file else None,
         )
+        if getattr(args, "command", "run") == "doctor":
+            report = run_doctor(args.backend or "fake")
+            print(render_report(report))
+            return report.exit_code
         logging.getLogger(__name__).info("Starting tz-player TUI")
         TzPlayerApp(backend_name=args.backend).run()
         return 0

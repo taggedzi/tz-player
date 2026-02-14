@@ -133,7 +133,7 @@ Execution tracker derived from `SPEC.md`.
 - Tests:
   - CLI tests for success/failure exit codes and key output lines.
   - Unit tests for tool probing functions (mock PATH/process output).
-- Status: `todo`
+- Status: `done`
 - Commit:
 
 ### VIZ-011 UX Wiring for Optional FFmpeg in VU/Envelope Flow
