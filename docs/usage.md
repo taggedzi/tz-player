@@ -6,6 +6,12 @@ Run the TUI:
 tz-player
 ```
 
+Run environment diagnostics:
+
+```
+tz-player doctor
+```
+
 Select a playback backend:
 
 ```
@@ -30,6 +36,11 @@ Logging and diagnostics:
 - Without `--log-file`, logs are written to the app log directory as `tz-player.log`.
   - Typical default location pattern: `<user_data_dir>/logs/tz-player.log`.
 - Both console and rotating file logging are enabled by default.
+- `doctor` command behavior:
+  - `tz-player doctor` checks `tinytag`, `vlc/libvlc`, and `ffmpeg`.
+  - Exit code is `0` when required checks pass for the selected backend.
+  - Exit code is non-zero when required checks fail (for example `--backend vlc` without libVLC).
+  - Example: `tz-player doctor --backend vlc`
 
 Theme:
 - The header theme selector includes a custom `cyberpunk-clean` theme using teal structure with sparing yellow highlights.
@@ -92,6 +103,11 @@ Common failure cases:
 - Symptom: app cannot initialize VLC backend.
 - Behavior: app falls back to `fake` backend and shows an actionable error.
 - Next step: install VLC/libVLC and re-run with `--backend vlc`.
+
+5. Missing ffmpeg for non-WAV VU envelope analysis:
+- Symptom: VU source stays in fallback mode for MP3/FLAC/OGG and visualizer shows an ffmpeg diagnostic notice.
+- Behavior: playback is unaffected; visualization uses fallback levels.
+- Next step: install ffmpeg and run `tz-player doctor` to confirm detection.
 
 2. State file unreadable/corrupt:
 - Symptom: startup warning/error about state load.

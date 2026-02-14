@@ -158,7 +158,7 @@ Execution tracker derived from `SPEC.md`.
   - `docs/workflow-acceptance.md` maps new diagnostic/policy tests.
 - Tests:
   - N/A (docs), validated by review checklist.
-- Status: `todo`
+- Status: `done`
 - Commit:
 
 ### VIZ-008 Next-Track Envelope Prewarm

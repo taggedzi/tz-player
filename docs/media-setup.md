@@ -60,6 +60,16 @@ ffmpeg -version
 python -c "import vlc; print(vlc.__version__)"
 ```
 
+```bash
+tz-player doctor --backend vlc
+```
+
+Recommended verification flow:
+
+1. Install VLC and optional FFmpeg via your package manager.
+2. Run `tz-player doctor --backend vlc`.
+3. Confirm required checks are `[OK]`.
+
 ## Notes
 
 - Keep VLC/FFmpeg as system-installed tools rather than bundling binaries if you want simpler license compliance.
