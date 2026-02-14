@@ -102,6 +102,54 @@ def test_ensure_envelope_for_track_upserts_when_analysis_available(
     assert store.upserts == [("/tmp/song.mp3", 2, 1200)]
 
 
+def test_ensure_envelope_logs_miss_and_populate(tmp_path, monkeypatch, caplog) -> None:
+    _setup_dirs(tmp_path, monkeypatch)
+    app = app_module.TzPlayerApp(auto_init=False)
+    store = _StoreStub(has_hit=False)
+    app.audio_envelope_store = store  # type: ignore[assignment]
+
+    def _analyze(_path):  # type: ignore[no-untyped-def]
+        return EnvelopeAnalysisResult(
+            duration_ms=1200,
+            points=[
+                (0, 0.1, 0.2),
+                (500, 0.4, 0.5),
+            ],
+        )
+
+    monkeypatch.setattr(app_module, "analyze_track_envelope", _analyze)
+    with caplog.at_level("DEBUG"):
+        _run(app._ensure_envelope_for_track(_track()))
+
+    assert any(
+        "Envelope cache miss for /tmp/song.mp3" in r.message for r in caplog.records
+    )
+    assert any(
+        "Envelope analyzed for /tmp/song.mp3 (2 points)" in r.message
+        for r in caplog.records
+    )
+
+
+def test_ensure_envelope_cache_hit_does_not_log_miss(
+    tmp_path, monkeypatch, caplog
+) -> None:
+    _setup_dirs(tmp_path, monkeypatch)
+    app = app_module.TzPlayerApp(auto_init=False)
+    store = _StoreStub(has_hit=True)
+    app.audio_envelope_store = store  # type: ignore[assignment]
+
+    monkeypatch.setattr(app_module, "analyze_track_envelope", lambda _path: None)
+    with caplog.at_level("DEBUG"):
+        _run(app._ensure_envelope_for_track(_track()))
+
+    assert any(
+        "Envelope cache hit for /tmp/song.mp3" in r.message for r in caplog.records
+    )
+    assert not any(
+        "Envelope cache miss for /tmp/song.mp3" in r.message for r in caplog.records
+    )
+
+
 def test_missing_ffmpeg_sets_notice_and_warns_once(
     tmp_path, monkeypatch, caplog
 ) -> None:

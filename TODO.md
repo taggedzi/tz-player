@@ -129,7 +129,7 @@ Execution tracker derived from `SPEC.md`.
 - Tests:
   - Integration test for miss path logging and populate logging.
   - Regression test for hit path without miss noise.
-- Status: `todo`
+- Status: `done`
 
 ## Archived Completed Work
 

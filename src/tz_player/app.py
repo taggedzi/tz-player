@@ -712,6 +712,7 @@ class TzPlayerApp(App):
                 logger.debug("Envelope cache hit for %s", path)
                 self._update_audio_level_notice(str(path))
                 return
+            logger.debug("Envelope cache miss for %s; starting analysis.", path)
             result = await run_blocking(analyze_track_envelope, path)
             if result is None or not result.points:
                 if requires_ffmpeg_for_envelope(path) and not ffmpeg_available():
