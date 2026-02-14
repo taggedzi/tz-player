@@ -25,6 +25,7 @@ from .events import PlayerStateChanged, TrackChanged
 from .logging_utils import setup_logging
 from .paths import db_path, log_dir, state_path
 from .runtime_config import resolve_log_level
+from .services.audio_envelope_store import SqliteEnvelopeStore
 from .services.fake_backend import FakePlaybackBackend
 from .services.metadata_service import MetadataService
 from .services.player_service import PlayerService, PlayerState, TrackInfo
@@ -207,6 +208,7 @@ class TzPlayerApp(App):
         self.player_state = PlayerState()
         self.current_track: TrackInfo | None = None
         self.metadata_service: MetadataService | None = None
+        self.audio_envelope_store: SqliteEnvelopeStore | None = None
         self._metadata_refresh_task: asyncio.Task[None] | None = None
         self._metadata_pending_ids: set[int] = set()
         self._state_save_task: asyncio.Task[None] | None = None
@@ -245,6 +247,8 @@ class TzPlayerApp(App):
             self.state = replace(self.state, playback_backend=backend_name)
             await run_blocking(save_state, state_path(), self.state)
             await self.store.initialize()
+            self.audio_envelope_store = SqliteEnvelopeStore(db_path())
+            await self.audio_envelope_store.initialize()
             playlist_id = await self.store.ensure_playlist("Default")
             if self.state.playlist_id != playlist_id:
                 self.state = replace(self.state, playlist_id=playlist_id)
@@ -259,6 +263,7 @@ class TzPlayerApp(App):
                 next_track_provider=self._next_track_provider,
                 prev_track_provider=self._prev_track_provider,
                 playlist_item_ids_provider=self._playlist_item_ids_provider,
+                envelope_provider=self.audio_envelope_store,
                 initial_state=self.player_state,
             )
             self.metadata_service = MetadataService(
@@ -280,6 +285,7 @@ class TzPlayerApp(App):
                         next_track_provider=self._next_track_provider,
                         prev_track_provider=self._prev_track_provider,
                         playlist_item_ids_provider=self._playlist_item_ids_provider,
+                        envelope_provider=self.audio_envelope_store,
                         initial_state=self.player_state,
                     )
                     await self.player_service.start()

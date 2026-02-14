@@ -11,7 +11,10 @@ from dataclasses import dataclass, replace
 from typing import Callable, Literal
 
 from tz_player.events import PlayerStateChanged, TrackChanged
-from tz_player.services.audio_level_service import AudioLevelService
+from tz_player.services.audio_level_service import (
+    AudioLevelService,
+    EnvelopeLevelProvider,
+)
 from tz_player.services.playback_backend import (
     BackendError,
     BackendEvent,
@@ -73,6 +76,7 @@ class PlayerService:
         prev_track_provider: Callable[[int, int, bool], Awaitable[int | None]]
         | None = None,
         playlist_item_ids_provider: Callable[[int], Awaitable[list[int]]] | None = None,
+        envelope_provider: EnvelopeLevelProvider | None = None,
         shuffle_random: random.Random | None = None,
         default_duration_ms: int = 180_000,
         initial_state: PlayerState | None = None,
@@ -94,7 +98,10 @@ class PlayerService:
         self._shuffle_order: list[int] = []
         self._shuffle_index: int | None = None
         self._shuffle_playlist_id: int | None = None
-        self._audio_level_service = AudioLevelService(live_provider=backend)
+        self._audio_level_service = AudioLevelService(
+            live_provider=backend,
+            envelope_provider=envelope_provider,
+        )
         self._backend.set_event_handler(self._handle_backend_event)
 
     @property

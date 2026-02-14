@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 SCHEMA_V1_STATEMENTS = [
     """
@@ -69,6 +69,10 @@ def create_schema(conn: sqlite3.Connection) -> None:
         version = 1
     if version == 1:
         _migrate_v1_to_v2(conn)
+        conn.execute("PRAGMA user_version = 2")
+        version = 2
+    if version == 2:
+        _migrate_v2_to_v3(conn)
         conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
 
 
@@ -78,7 +82,7 @@ def _create_schema_v1(conn: sqlite3.Connection) -> None:
 
 
 def _migrate_v1_to_v2(conn: sqlite3.Connection) -> None:
-    conn.execute("BEGIN IMMEDIATE")
+    _begin_immediate(conn)
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS playlist_items_new (
@@ -107,3 +111,43 @@ def _migrate_v1_to_v2(conn: sqlite3.Connection) -> None:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_playlist_items_playlist_track ON playlist_items(playlist_id, track_id)"
     )
+
+
+def _migrate_v2_to_v3(conn: sqlite3.Connection) -> None:
+    _begin_immediate(conn)
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS audio_envelopes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            path_norm TEXT NOT NULL UNIQUE,
+            mtime_ns INTEGER,
+            size_bytes INTEGER,
+            duration_ms INTEGER NOT NULL,
+            analysis_version INTEGER NOT NULL,
+            computed_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS audio_envelope_points (
+            envelope_id INTEGER NOT NULL,
+            position_ms INTEGER NOT NULL,
+            level_left REAL NOT NULL,
+            level_right REAL NOT NULL,
+            PRIMARY KEY (envelope_id, position_ms),
+            FOREIGN KEY(envelope_id) REFERENCES audio_envelopes(id) ON DELETE CASCADE
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_audio_envelopes_path_norm ON audio_envelopes(path_norm)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_audio_points_envelope_pos ON audio_envelope_points(envelope_id, position_ms)"
+    )
+
+
+def _begin_immediate(conn: sqlite3.Connection) -> None:
+    if not conn.in_transaction:
+        conn.execute("BEGIN IMMEDIATE")

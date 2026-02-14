@@ -33,7 +33,14 @@ def test_playlist_store_basic(tmp_path) -> None:
                 "SELECT name FROM sqlite_master WHERE type = 'table'"
             )
         }
-    assert {"tracks", "track_meta", "playlists", "playlist_items"}.issubset(tables)
+    assert {
+        "tracks",
+        "track_meta",
+        "playlists",
+        "playlist_items",
+        "audio_envelopes",
+        "audio_envelope_points",
+    }.issubset(tables)
 
     playlist_id = _run(store.create_playlist("Favorites"))
     track_paths = [tmp_path / f"track_{idx}.mp3" for idx in range(3)]
@@ -192,7 +199,7 @@ def test_migration_adds_item_id(tmp_path) -> None:
         columns = [row[1] for row in conn.execute("PRAGMA table_info(playlist_items)")]
         assert "id" in columns
         version = conn.execute("PRAGMA user_version").fetchone()[0]
-        assert version == 2
+        assert version == 3
 
 
 def test_search_item_ids_and_fetch_by_item_ids(tmp_path) -> None:

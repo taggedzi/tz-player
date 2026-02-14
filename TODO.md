@@ -103,7 +103,7 @@ Execution tracker derived from `SPEC.md`.
   - Unit tests for envelope generation normalization, bucket alignment, and interpolation.
   - Unit tests for cache hit/miss/invalidation behavior.
   - Integration test proving VU uses envelope source during real playback path (without VLC callbacks).
-- Status: `todo`
+- Status: `in_progress`
 - Commit:
 
 ### VIZ-008 Next-Track Envelope Prewarm
