@@ -13,6 +13,7 @@ from .playback_backend import (
     BackendError,
     BackendEvent,
     BackendStatus,
+    LevelSample,
     MediaChanged,
     PositionUpdated,
     StateChanged,
@@ -98,6 +99,10 @@ class VLCPlaybackBackend:
 
     async def get_state(self) -> BackendStatus:
         return await self._submit("get_state")
+
+    async def get_level_sample(self) -> LevelSample | None:
+        # Optional-gated: python-vlc level extraction is backend/platform dependent.
+        return None
 
     async def _submit(self, name: str, *args: Any) -> Any:
         if self._loop is None:

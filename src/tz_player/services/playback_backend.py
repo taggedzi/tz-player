@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Literal, Protocol
+from typing import Literal, Protocol, runtime_checkable
 
 BackendStatus = Literal["idle", "loading", "playing", "paused", "stopped", "error"]
 
@@ -33,6 +33,17 @@ class MediaChanged(BackendEvent):
 @dataclass(frozen=True)
 class BackendError(BackendEvent):
     message: str
+
+
+@dataclass(frozen=True)
+class LevelSample:
+    left: float
+    right: float
+
+
+@runtime_checkable
+class PlaybackLevelProvider(Protocol):
+    async def get_level_sample(self) -> LevelSample | None: ...
 
 
 class PlaybackBackend(Protocol):

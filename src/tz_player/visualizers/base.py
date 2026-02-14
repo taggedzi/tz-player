@@ -30,6 +30,8 @@ class VisualizerFrameInput:
     title: str | None
     artist: str | None
     album: str | None
+    level_left: float | None = None
+    level_right: float | None = None
 
 
 class VisualizerPlugin(Protocol):

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from tz_player.services.playback_backend import StateChanged
 from tz_player.services.vlc_backend import VLCPlaybackBackend, _Command
 
@@ -55,3 +57,9 @@ def test_handle_command_play_stop_no_statechanged() -> None:
     backend._handle_command(_Command("stop", (), None), instance, player)
     assert player.stop_called is True
     assert not any(isinstance(event, StateChanged) for event in backend.emitted)
+
+
+def test_get_level_sample_returns_none_when_not_supported() -> None:
+    backend = VLCPlaybackBackend()
+    sample = asyncio.run(backend.get_level_sample())
+    assert sample is None

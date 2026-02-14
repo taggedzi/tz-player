@@ -9,6 +9,7 @@ from .base import VisualizerPlugin
 from .basic import BasicVisualizer
 from .hackscope import HackScopeVisualizer
 from .matrix import MatrixBlueVisualizer, MatrixGreenVisualizer, MatrixRedVisualizer
+from .vu import VuReactiveVisualizer
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,7 @@ class VisualizerRegistry:
                 MatrixBlueVisualizer,
                 MatrixRedVisualizer,
                 HackScopeVisualizer,
+                VuReactiveVisualizer,
             ]
         )
         default_id = "basic"

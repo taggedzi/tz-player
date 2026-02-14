@@ -665,6 +665,8 @@ class TzPlayerApp(App):
             if self.current_track is not None
             else None,
             album=self.current_track.album if self.current_track is not None else None,
+            level_left=self.player_state.level_left,
+            level_right=self.player_state.level_right,
         )
         try:
             output = self.visualizer_host.render_frame(frame, context)

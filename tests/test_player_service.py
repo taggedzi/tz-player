@@ -62,6 +62,46 @@ def test_play_progresses_and_pause_freezes() -> None:
     _run(run())
 
 
+def test_fake_backend_level_sample_contract() -> None:
+    async def run() -> None:
+        backend = FakePlaybackBackend(tick_interval_ms=50)
+        await backend.start()
+        assert await backend.get_level_sample() is None
+        await backend.play(1, "/tmp/song.mp3", 0, duration_ms=500)
+        sample = await backend.get_level_sample()
+        assert sample is not None
+        assert 0.0 <= sample.left <= 1.0
+        assert 0.0 <= sample.right <= 1.0
+        await backend.shutdown()
+
+    _run(run())
+
+
+def test_play_emits_backend_level_samples_into_player_state() -> None:
+    async def emit_event(_event: object) -> None:
+        return None
+
+    async def run() -> None:
+        service = PlayerService(
+            emit_event=emit_event,
+            track_info_provider=_track_info_provider,
+            backend=FakePlaybackBackend(tick_interval_ms=50),
+        )
+        await service.start()
+        await service.play_item(1, 1)
+        await asyncio.sleep(0.35)
+        assert service.state.level_left is not None
+        assert service.state.level_right is not None
+        assert 0.0 <= service.state.level_left <= 1.0
+        assert 0.0 <= service.state.level_right <= 1.0
+        await service.stop()
+        assert service.state.level_left is None
+        assert service.state.level_right is None
+        await service.shutdown()
+
+    _run(run())
+
+
 def test_start_applies_initial_volume_and_speed_to_backend() -> None:
     class RecordingBackend:
         def __init__(self) -> None:

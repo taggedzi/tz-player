@@ -187,7 +187,7 @@ This section documents planned extra-scope visualizers before implementation.
 ### 3) Audio-Reactive VU Meter
 
 - Goal: level-based meter tied to real playback energy when signal data exists.
-- Planned ID:
+- Implemented ID:
   - `vu.reactive`
 - Contract:
   - consume normalized levels from backend/provider contract

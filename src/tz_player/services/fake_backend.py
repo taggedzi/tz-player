@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from .playback_backend import (
     BackendEvent,
     BackendStatus,
+    LevelSample,
     MediaChanged,
     PositionUpdated,
     StateChanged,
@@ -128,6 +129,21 @@ class FakePlaybackBackend:
     async def get_state(self) -> BackendStatus:
         async with self._lock:
             return self._state.status
+
+    async def get_level_sample(self) -> LevelSample | None:
+        async with self._lock:
+            if self._state.status not in {"playing", "paused"}:
+                return None
+            position_ms = self._state.position_ms
+            duration_ms = self._state.duration_ms
+            speed = self._state.speed
+        if duration_ms <= 0:
+            phase = position_ms / 1000.0
+        else:
+            phase = (position_ms / duration_ms) * 6.28318 * 4.0
+        left = _clamp_float(0.20 + (0.60 * ((phase * 1.9) % 1.0)), 0.0, 1.0)
+        right = _clamp_float(0.20 + (0.60 * (((phase + speed) * 1.7) % 1.0)), 0.0, 1.0)
+        return LevelSample(left=left, right=right)
 
     async def _ticker_loop(self) -> None:
         try:
