@@ -172,7 +172,7 @@ Execution tracker derived from `SPEC.md`.
   - Unit tests for next-track prediction routing (repeat/shuffle aware).
   - Integration test verifying prewarm completion and envelope availability at transition.
   - Stress test confirming no event-loop blocking under rapid navigation.
-- Status: `todo`
+- Status: `done`
 - Commit:
 
 ## Archived Completed Work

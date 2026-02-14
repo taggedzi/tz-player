@@ -218,6 +218,8 @@ class TzPlayerApp(App):
         self._metadata_refresh_task: asyncio.Task[None] | None = None
         self._metadata_pending_ids: set[int] = set()
         self._envelope_analysis_tasks: dict[str, asyncio.Task[None]] = {}
+        self._next_prewarm_task: asyncio.Task[None] | None = None
+        self._next_prewarm_context: tuple[int, int, str, bool, int] | None = None
         self._envelope_missing_ffmpeg_warned: set[str] = set()
         self._audio_level_notice: str | None = None
         self._state_save_task: asyncio.Task[None] | None = None
@@ -340,6 +342,7 @@ class TzPlayerApp(App):
                 *self._envelope_analysis_tasks.values(), return_exceptions=True
             )
             self._envelope_analysis_tasks.clear()
+        self._cancel_next_track_prewarm()
         if self.player_service is not None:
             await self.player_service.shutdown()
 
@@ -539,6 +542,7 @@ class TzPlayerApp(App):
         self._render_visualizer_frame()
 
     async def handle_playlist_cleared(self) -> None:
+        self._cancel_next_track_prewarm()
         if self.player_service is not None:
             await self.player_service.stop()
         self.current_track = None
@@ -551,6 +555,7 @@ class TzPlayerApp(App):
     async def _handle_player_event(self, event: object) -> None:
         if isinstance(event, PlayerStateChanged):
             self.player_state = event.state
+            self._schedule_next_track_prewarm()
             playing_id = (
                 event.state.item_id
                 if event.state.status in {"playing", "paused"}
@@ -596,6 +601,79 @@ class TzPlayerApp(App):
         task = asyncio.create_task(self._ensure_envelope_for_track(track))
         self._envelope_analysis_tasks[key] = task
         task.add_done_callback(self._make_envelope_task_cleanup(key))
+
+    def _schedule_next_track_prewarm(self, *, force: bool = False) -> None:
+        if self.player_service is None or self.audio_envelope_store is None:
+            self._cancel_next_track_prewarm()
+            return
+        state = self.player_state
+        if (
+            state.status != "playing"
+            or state.playlist_id is None
+            or state.item_id is None
+        ):
+            self._cancel_next_track_prewarm()
+            return
+        context = (
+            state.playlist_id,
+            state.item_id,
+            state.repeat_mode,
+            state.shuffle,
+            state.position_ms // 5000,
+        )
+        if (
+            not force
+            and self._next_prewarm_context == context
+            and self._next_prewarm_task is not None
+            and not self._next_prewarm_task.done()
+        ):
+            return
+        self._cancel_next_track_prewarm()
+        self._next_prewarm_context = context
+        self._next_prewarm_task = asyncio.create_task(
+            self._run_next_track_prewarm(context)
+        )
+
+    def _cancel_next_track_prewarm(self) -> None:
+        if self._next_prewarm_task is not None:
+            self._next_prewarm_task.cancel()
+            self._next_prewarm_task = None
+        self._next_prewarm_context = None
+
+    async def _run_next_track_prewarm(
+        self, context: tuple[int, int, str, bool, int]
+    ) -> None:
+        try:
+            await asyncio.sleep(0.2)
+            if self._next_prewarm_context != context:
+                return
+            if self.player_service is None:
+                return
+            next_item_id = await self.player_service.predict_next_item_id()
+            if next_item_id is None:
+                return
+            playlist_id = self.player_state.playlist_id
+            if playlist_id is None:
+                return
+            row = await self.store.get_item_row(playlist_id, next_item_id)
+            if row is None:
+                return
+            await self._ensure_envelope_for_track(
+                TrackInfo(
+                    title=row.title,
+                    artist=row.artist,
+                    album=row.album,
+                    year=row.year,
+                    path=str(row.path),
+                    duration_ms=row.duration_ms,
+                )
+            )
+        except asyncio.CancelledError:
+            return
+        finally:
+            if self._next_prewarm_context == context:
+                self._next_prewarm_context = None
+                self._next_prewarm_task = None
 
     def _make_envelope_task_cleanup(
         self, path_key: str
@@ -769,11 +847,12 @@ class TzPlayerApp(App):
         pane.update(Text.from_ansi(render_text))
 
     def _update_audio_level_notice(self, track_path: str) -> None:
-        if (
-            self.current_track is None
-            or self.current_track.path != track_path
-            or self.player_state.level_source == "envelope"
-        ):
+        if self.current_track is None:
+            self._audio_level_notice = None
+            return
+        if self.current_track.path != track_path:
+            return
+        if self.player_state.level_source == "envelope":
             self._audio_level_notice = None
             return
         if requires_ffmpeg_for_envelope(track_path) and not ffmpeg_available():

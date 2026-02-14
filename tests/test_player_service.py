@@ -354,6 +354,66 @@ def test_next_prev_navigation() -> None:
     _run(run())
 
 
+def test_predict_next_item_id_repeat_and_linear_provider() -> None:
+    async def emit_event(_event: object) -> None:
+        return None
+
+    async def next_provider(_playlist_id: int, item_id: int, wrap: bool) -> int | None:
+        if item_id == 1:
+            return 2
+        return 1 if wrap else None
+
+    async def run() -> None:
+        service = PlayerService(
+            emit_event=emit_event,
+            track_info_provider=_track_info_provider,
+            backend=FakePlaybackBackend(tick_interval_ms=50),
+            next_track_provider=next_provider,
+            initial_state=PlayerState(
+                playlist_id=1, item_id=1, repeat_mode="OFF", shuffle=False
+            ),
+        )
+        assert await service.predict_next_item_id() == 2
+        service._state = replace(service._state, repeat_mode="ONE")
+        assert await service.predict_next_item_id() == 1
+        service._state = replace(service._state, repeat_mode="ALL", item_id=5)
+        assert await service.predict_next_item_id() == 1
+
+    _run(run())
+
+
+def test_predict_next_item_id_shuffle_path() -> None:
+    async def emit_event(_event: object) -> None:
+        return None
+
+    async def track_info(_playlist_id: int, item_id: int) -> TrackInfo:
+        return TrackInfo(
+            title=f"Song {item_id}",
+            artist=None,
+            album=None,
+            year=None,
+            path=f"/tmp/{item_id}.mp3",
+            duration_ms=400,
+        )
+
+    async def run() -> None:
+        service = PlayerService(
+            emit_event=emit_event,
+            track_info_provider=track_info,
+            backend=FakePlaybackBackend(tick_interval_ms=50),
+            playlist_item_ids_provider=_playlist_item_ids_provider([1, 2, 3]),
+            shuffle_random=random.Random(7),
+            initial_state=PlayerState(
+                playlist_id=1, item_id=1, repeat_mode="ALL", shuffle=True
+            ),
+        )
+        next_id = await service.predict_next_item_id()
+        assert next_id in {2, 3}
+        assert next_id != 1
+
+    _run(run())
+
+
 def test_track_end_advance_not_blocked_by_stale_stop_latch() -> None:
     class SilentStopBackend:
         def __init__(self) -> None:
