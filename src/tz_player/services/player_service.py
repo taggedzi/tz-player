@@ -129,6 +129,8 @@ class PlayerService:
                 level_right=None,
                 error=None,
             )
+            # A stale manual-stop latch must never suppress natural track-end advance.
+            self._stop_requested = False
             self._end_handled_item_id = None
             shuffle_enabled = self._state.shuffle
         await self._emit_state()

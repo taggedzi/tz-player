@@ -11,6 +11,7 @@ from tz_player.services.playback_backend import (
     BackendError,
     MediaChanged,
     PositionUpdated,
+    StateChanged,
 )
 from tz_player.services.player_service import PlayerService, PlayerState, TrackInfo
 
@@ -305,6 +306,87 @@ def test_next_prev_navigation() -> None:
         await service.next_track()
         assert service.state.item_id == 3
         await service.previous_track()
+        assert service.state.item_id == 2
+        await service.shutdown()
+
+    _run(run())
+
+
+def test_track_end_advance_not_blocked_by_stale_stop_latch() -> None:
+    class SilentStopBackend:
+        def __init__(self) -> None:
+            self.handler = None
+
+        def set_event_handler(self, handler) -> None:  # type: ignore[no-untyped-def]
+            self.handler = handler
+
+        async def start(self) -> None:
+            return None
+
+        async def shutdown(self) -> None:
+            return None
+
+        async def play(  # type: ignore[no-untyped-def]
+            self, item_id, track_path, start_ms=0, *, duration_ms=None
+        ) -> None:
+            return None
+
+        async def toggle_pause(self) -> None:
+            return None
+
+        async def stop(self) -> None:
+            # Intentionally emits no StateChanged("stopped"), leaving stop latch stale.
+            return None
+
+        async def seek_ms(self, position_ms: int) -> None:
+            return None
+
+        async def set_volume(self, volume: int) -> None:
+            return None
+
+        async def set_speed(self, speed: float) -> None:
+            return None
+
+        async def get_position_ms(self) -> int:
+            return 0
+
+        async def get_duration_ms(self) -> int:
+            return 1000
+
+        async def get_state(self) -> str:
+            return "playing"
+
+    async def emit_event(_event: object) -> None:
+        return None
+
+    async def track_info(_playlist_id: int, item_id: int) -> TrackInfo:
+        return TrackInfo(
+            title=f"Song {item_id}",
+            artist=None,
+            album=None,
+            year=None,
+            path=f"/tmp/{item_id}.mp3",
+            duration_ms=400,
+        )
+
+    async def next_provider(_playlist_id: int, item_id: int, _wrap: bool) -> int | None:
+        if item_id == 1:
+            return 2
+        return None
+
+    async def run() -> None:
+        backend = SilentStopBackend()
+        service = PlayerService(
+            emit_event=emit_event,
+            track_info_provider=track_info,
+            backend=backend,  # type: ignore[arg-type]
+            next_track_provider=next_provider,
+            initial_state=PlayerState(playlist_id=1, item_id=1, status="playing"),
+        )
+        await service.start()
+        await service.stop()  # Leaves stale stop latch in this backend simulation.
+        await service.play_item(1, 1)  # Must clear latch.
+        await service._handle_backend_event(StateChanged("stopped"))  # Natural end.
         assert service.state.item_id == 2
         await service.shutdown()
 
