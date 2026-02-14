@@ -69,3 +69,16 @@ def test_hackscope_render_idle_when_not_playing() -> None:
     output = plugin.render(_frame(width=60, height=8, status="stopped"))
     assert "IDLE" in output
     assert "waiting for active playback stream" in output
+
+
+def test_hackscope_ansi_output_has_no_partial_escape_sequences() -> None:
+    plugin = HackScopeVisualizer()
+    plugin.on_activate(VisualizerContext(ansi_enabled=True, unicode_enabled=True))
+    output = plugin.render(_frame(width=70, height=12, frame_index=31))
+    for line in output.splitlines():
+        cleaned = line
+        while "\x1b[" in cleaned:
+            start = cleaned.find("\x1b[")
+            end = cleaned.find("m", start + 2)
+            assert end != -1
+            cleaned = cleaned[:start] + cleaned[end + 1 :]

@@ -520,7 +520,7 @@ def _c(text: str, code: str, enabled: bool) -> str:
 def _apply_ambient(
     frame: str, width: int, height: int, seed: int, global_frame: int, use_ansi: bool
 ) -> str:
-    ambient = _ambient_lines(width, height, seed, global_frame, use_ansi)
+    ambient = _ambient_lines(width, height, seed, global_frame)
     lines = frame.splitlines()
     while len(lines) < height:
         lines.append("")
@@ -530,11 +530,9 @@ def _apply_ambient(
     return "\n".join(out)
 
 
-def _ambient_lines(
-    width: int, height: int, seed: int, global_frame: int, use_ansi: bool
-) -> list[str]:
+def _ambient_lines(width: int, height: int, seed: int, global_frame: int) -> list[str]:
     rng = random.Random((seed ^ (global_frame * 0x9E3779B1)) & 0xFFFFFFFF)
-    density = 0.012
+    density = 0.004
     chars = ".:·"
     out: list[str] = []
     for row in range(height):
@@ -545,14 +543,7 @@ def _ambient_lines(
             chars[rng.randrange(len(chars))] if rng.random() < density else " "
             for _ in range(width)
         )
-        if use_ansi:
-            line = "".join(
-                f"{_ANSI_DIM}{ch}{_ANSI_RESET}" if ch != " " else " " for ch in line
-            )
         out.append(line)
-    if height > 1:
-        scan_row = 1 + ((global_frame // 80) % max(1, height - 1))
-        out[scan_row] = "." * width
     return out
 
 
