@@ -52,6 +52,7 @@ class VuReactiveVisualizer:
         meter_width = max(8, min(width - 12, 48))
         lines = [
             f"VU REACTIVE [{source}]",
+            _source_line(source),
             _meter_line("L", self._left_smooth, meter_width, self._ansi_enabled),
             _meter_line("R", self._right_smooth, meter_width, self._ansi_enabled),
             _meter_line("M", mono, meter_width, self._ansi_enabled),
@@ -122,6 +123,12 @@ def _status_line(frame: VisualizerFrameInput) -> str:
         f"TIME {_fmt_clock(frame.position_s)}/{_fmt_clock(frame.duration_s)} | "
         f"{int(round(pct * 100)):3d}%"
     )
+
+
+def _source_line(source: str) -> str:
+    if source == "LIVE":
+        return "SRC LIVE LEVELS"
+    return "SRC SIMULATED FALLBACK"
 
 
 def _history_block(

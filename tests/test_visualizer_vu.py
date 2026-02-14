@@ -54,6 +54,7 @@ def test_vu_render_uses_live_levels_when_available() -> None:
         _frame(width=72, height=8, frame_index=3, level_left=1.2, level_right=0.8)
     )
     assert "VU REACTIVE [LIVE]" in output
+    assert "SRC LIVE LEVELS" in output
     assert "L [" in output
     assert "R [" in output
 
@@ -63,6 +64,7 @@ def test_vu_render_falls_back_when_levels_unavailable() -> None:
     plugin.on_activate(VisualizerContext(ansi_enabled=False, unicode_enabled=True))
     output = plugin.render(_frame(width=72, height=8, frame_index=3))
     assert "VU REACTIVE [SIM-R]" in output
+    assert "SRC SIMULATED FALLBACK" in output
 
 
 def test_vu_fallback_without_levels_moves_when_playing() -> None:
