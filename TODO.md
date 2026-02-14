@@ -130,6 +130,7 @@ Execution tracker derived from `SPEC.md`.
   - Integration test for miss path logging and populate logging.
   - Regression test for hit path without miss noise.
 - Status: `done`
+- Commit: `21aca99`
 
 ## Archived Completed Work
 
