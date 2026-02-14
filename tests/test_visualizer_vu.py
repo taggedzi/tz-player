@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import re
+
 from tz_player.visualizers.base import VisualizerContext, VisualizerFrameInput
 from tz_player.visualizers.registry import VisualizerRegistry
 from tz_player.visualizers.vu import VuReactiveVisualizer
+
+_SGR_PATTERN = re.compile(r"\x1b\[[0-9;]*m")
 
 
 def _frame(
@@ -79,3 +83,30 @@ def test_vu_render_respects_resize_bounds() -> None:
     lines = output.splitlines()
     assert len(lines) == 4
     assert all(len(line) <= 20 for line in lines)
+
+
+def test_vu_ansi_output_has_color_bands_and_safe_width() -> None:
+    plugin = VuReactiveVisualizer()
+    plugin.on_activate(VisualizerContext(ansi_enabled=True, unicode_enabled=True))
+    output = ""
+    for idx in range(8):
+        output = plugin.render(
+            _frame(
+                width=40,
+                height=6,
+                frame_index=idx,
+                level_left=1.0,
+                level_right=1.0,
+            )
+        )
+    assert "\x1b[38;2;53;230;138m" in output
+    assert "\x1b[38;2;242;201;76m" in output
+    assert "\x1b[38;2;255;90;54m" in output
+    for line in output.splitlines():
+        assert len(_SGR_PATTERN.sub("", line)) <= 40
+        cleaned = line
+        while "\x1b[" in cleaned:
+            start = cleaned.find("\x1b[")
+            end = cleaned.find("m", start + 2)
+            assert end != -1
+            cleaned = cleaned[:start] + cleaned[end + 1 :]

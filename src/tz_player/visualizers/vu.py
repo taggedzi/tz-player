@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import math
+import re
 from dataclasses import dataclass, field
 
 from .base import VisualizerContext, VisualizerFrameInput
+
+_SGR_PATTERN = re.compile(r"\x1b\[[0-9;]*m")
 
 
 @dataclass
@@ -49,9 +52,9 @@ class VuReactiveVisualizer:
         meter_width = max(8, min(width - 12, 48))
         lines = [
             f"VU REACTIVE [{source}]",
-            _meter_line("L", self._left_smooth, meter_width),
-            _meter_line("R", self._right_smooth, meter_width),
-            _meter_line("M", mono, meter_width),
+            _meter_line("L", self._left_smooth, meter_width, self._ansi_enabled),
+            _meter_line("R", self._right_smooth, meter_width, self._ansi_enabled),
+            _meter_line("M", mono, meter_width, self._ansi_enabled),
             _status_line(frame),
             _history_line(self._history, width),
         ]
@@ -81,12 +84,30 @@ def _smooth(current: float, target: float) -> float:
     return _clamp(current + ((target - current) * alpha))
 
 
-def _meter_line(label: str, value: float, width: int) -> str:
+def _meter_line(label: str, value: float, width: int, ansi_enabled: bool) -> str:
     fill = int(round(_clamp(value) * width))
     empty = max(0, width - fill)
-    bar = ("#" * fill) + ("-" * empty)
+    bar = _color_meter(fill, empty, width, ansi_enabled)
     pct = int(round(_clamp(value) * 100))
     return f"{label} [{bar}] {pct:3d}%"
+
+
+def _color_meter(fill: int, empty: int, width: int, ansi_enabled: bool) -> str:
+    if not ansi_enabled:
+        return ("#" * fill) + ("-" * empty)
+    green_end = int(width * 0.7)
+    yellow_end = int(width * 0.9)
+    parts: list[str] = []
+    for idx in range(fill):
+        if idx < green_end:
+            parts.append("\x1b[38;2;53;230;138m#\x1b[0m")
+        elif idx < yellow_end:
+            parts.append("\x1b[38;2;242;201;76m#\x1b[0m")
+        else:
+            parts.append("\x1b[38;2;255;90;54m#\x1b[0m")
+    if empty > 0:
+        parts.append("-" * empty)
+    return "".join(parts)
 
 
 def _status_line(frame: VisualizerFrameInput) -> str:
@@ -116,7 +137,7 @@ def _history_line(history: list[float], width: int) -> str:
 
 
 def _fit_lines(lines: list[str], width: int, height: int) -> str:
-    clipped = [line[:width] for line in lines[:height]]
+    clipped = [_pad_line(line, width) for line in lines[:height]]
     while len(clipped) < height:
         clipped.append(" " * width)
     return "\n".join(clipped)
@@ -132,3 +153,33 @@ def _fmt_clock(value: float | None) -> str:
 
 def _clamp(value: float) -> float:
     return max(0.0, min(1.0, float(value)))
+
+
+def _pad_line(text: str, width: int) -> str:
+    visible = len(_strip_sgr(text))
+    if visible > width:
+        return _truncate_ansi(text, width)
+    if visible < width:
+        return text + (" " * (width - visible))
+    return text
+
+
+def _truncate_ansi(text: str, width: int) -> str:
+    parts = _SGR_PATTERN.split(text)
+    codes = _SGR_PATTERN.findall(text)
+    out: list[str] = []
+    remaining = width
+    for idx, chunk in enumerate(parts):
+        if remaining <= 0:
+            break
+        if chunk:
+            take = min(len(chunk), remaining)
+            out.append(chunk[:take])
+            remaining -= take
+        if idx < len(codes):
+            out.append(codes[idx])
+    return "".join(out)
+
+
+def _strip_sgr(text: str) -> str:
+    return _SGR_PATTERN.sub("", text)
