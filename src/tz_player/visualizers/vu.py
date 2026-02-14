@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import re
 from dataclasses import dataclass, field
 
@@ -69,11 +70,15 @@ def _extract_live_levels(frame: VisualizerFrameInput) -> tuple[float, float] | N
 def _fallback_levels(frame: VisualizerFrameInput) -> tuple[float, float]:
     if frame.status not in {"playing", "paused"}:
         return (0.0, 0.0)
-    # When no real levels are available, keep a stable baseline instead of synthetic motion.
     if frame.status == "paused":
         return (0.0, 0.0)
-    baseline = 0.02 if frame.volume > 0 else 0.0
-    return (baseline, baseline)
+    if frame.volume <= 0:
+        return (0.0, 0.0)
+    # Pseudo-reactive fallback for backends without level sampling (e.g. VLC).
+    t = (frame.position_s * max(frame.speed, 0.1)) + (frame.frame_index / 14.0)
+    left = 0.10 + 0.70 * (0.30 + 0.70 * (0.5 + 0.5 * math.sin((t * 5.4) + 0.3)))
+    right = 0.10 + 0.70 * (0.30 + 0.70 * (0.5 + 0.5 * math.sin((t * 6.1) + 1.2)))
+    return (_clamp(left), _clamp(right))
 
 
 def _smooth(current: float, target: float) -> float:
