@@ -660,9 +660,6 @@ class PlayerService:
                             level_source=source,
                         )
                         emit = True
-                    if backend_state != self._state.status:
-                        self._state = replace(self._state, status=backend_state)
-                        emit = True
                     if (
                         backend_state == "stopped"
                         and not self._stop_requested
@@ -673,6 +670,12 @@ class PlayerService:
                     ):
                         self._end_handled_item_id = self._state.item_id
                         handle_end = True
+                        logger.debug(
+                            "Poll fallback track-end: item_id=%s max_pos=%s duration=%s",
+                            self._state.item_id,
+                            self._max_position_seen_ms,
+                            self._state.duration_ms,
+                        )
                     if backend_state == "stopped" and self._stop_requested:
                         self._stop_requested = False
                     item_id = self._state.item_id
