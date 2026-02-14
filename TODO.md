@@ -212,3 +212,4 @@ All baseline and stabilization tasks are complete and archived here for traceabi
 - T-014 Mouse interaction acceptance coverage — `done` — `5e7b9d3`
 - T-015 Docs parity and troubleshooting — `done` — `fbfffa4`
 - T-016 v1 pre-release sweep — `done` — `ca3bc89`
+- T-017 VLC first-track transition hardening (end-of-track advance stability + timing correctness) — `done` — `7a18103`, `6619d42`, `e16884c`, `2d8858a`, `22c5f27`, `daae237`, `56f6527`, `aca36c3`, `3e5b543`, `e0b4727`

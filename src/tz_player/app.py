@@ -747,15 +747,7 @@ class TzPlayerApp(App):
     async def _next_track_provider(
         self, playlist_id: int, item_id: int, wrap: bool
     ) -> int | None:
-        next_id = await self.store.get_next_item_id(playlist_id, item_id, wrap=wrap)
-        logger.debug(
-            "Next track provider: playlist_id=%s item_id=%s wrap=%s -> %s",
-            playlist_id,
-            item_id,
-            wrap,
-            next_id,
-        )
-        return next_id
+        return await self.store.get_next_item_id(playlist_id, item_id, wrap=wrap)
 
     async def _prev_track_provider(
         self, playlist_id: int, item_id: int, wrap: bool
