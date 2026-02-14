@@ -11,9 +11,7 @@ From `pyproject.toml`:
 - `textual` (MIT)
 - `platformdirs` (MIT)
 - `python-vlc` (LGPL-2.1-or-later)
-- `mutagen` (GPL-2.0-or-later)
-
-The `mutagen` license is the primary licensing risk for MIT-only distribution goals.
+- `tinytag` (MIT)
 
 ## External Tools
 
@@ -33,9 +31,9 @@ Recommended compliance posture:
 - Third-party dependencies/tools do not change the text of your MIT license file.
 - Distribution obligations may still apply based on what you ship together.
 
-Key concern in current state:
+Current state:
 
-- `mutagen` is GPL-2.0-or-later. If your distribution policy requires avoiding GPL runtime dependencies, replace `mutagen` with a permissive alternative before release.
+- Runtime metadata extraction now uses `tinytag` (MIT) to keep metadata dependency licensing permissive.
 
 ## Safe Distribution Checklist
 
@@ -43,7 +41,7 @@ Key concern in current state:
 2. Include `THIRD_PARTY_LICENSES.md` in repository and release artifacts.
 3. Keep VLC/FFmpeg external (user-installed), not bundled.
 4. If shipping binaries/installers, document exactly which third-party components are included.
-5. If GPL dependencies are unacceptable for your policy, remove/replace them before publishing.
+5. Re-check dependency license set before each release.
 
 ## Primary Sources
 
@@ -51,4 +49,4 @@ Key concern in current state:
 - VLC legal information: https://www.videolan.org/legal.html
 - libVLC overview: https://www.videolan.org/vlc/libvlc.html
 - Python VLC binding: https://pypi.org/project/python-vlc/
-- Mutagen (license metadata): https://pypi.org/project/mutagen/
+- TinyTag (license metadata): https://pypi.org/project/tinytag/

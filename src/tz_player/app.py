@@ -11,7 +11,6 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Callable, Literal, cast
 
-from mutagen import File as MutagenFile
 from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
@@ -27,6 +26,7 @@ from .paths import db_path, log_dir, state_path
 from .runtime_config import resolve_log_level
 from .services.audio_envelope_analysis import analyze_track_envelope
 from .services.audio_envelope_store import SqliteEnvelopeStore
+from .services.audio_tags import read_audio_tags
 from .services.fake_backend import FakePlaybackBackend
 from .services.metadata_service import MetadataService
 from .services.player_service import PlayerService, PlayerState, TrackInfo
@@ -904,28 +904,8 @@ def _format_track_info_panel(track: TrackInfo | None) -> Text:
 
 
 def _read_track_extras(path: Path) -> tuple[str | None, int | None]:
-    try:
-        audio = MutagenFile(path, easy=True)
-    except Exception:
-        return None, None
-    if audio is None:
-        return None, None
-    genre = _first_tag(audio.tags or {}, "genre")
-    bitrate = getattr(audio.info, "bitrate", None)
-    bitrate_kbps = None
-    if isinstance(bitrate, (int, float)) and bitrate > 0:
-        bitrate_kbps = int(round(float(bitrate) / 1000.0))
-    return genre, bitrate_kbps
-
-
-def _first_tag(tags: dict, key: str) -> str | None:
-    value = tags.get(key)
-    if isinstance(value, list) and value:
-        first = value[0]
-        return str(first) if first is not None else None
-    if isinstance(value, str):
-        return value
-    return None
+    tags = read_audio_tags(path)
+    return tags.genre, tags.bitrate_kbps
 
 
 def _resolve_backend_name(cli_backend: str | None, state_backend: str | None) -> str:

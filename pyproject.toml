@@ -31,7 +31,7 @@ classifiers = [
 dependencies = [
   "textual>=0.59",
   "platformdirs>=4.2",
-  "mutagen>=1.47",
+  "tinytag>=2.0",
   "python-vlc>=3.0.0",
 ]
 

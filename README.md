@@ -45,7 +45,7 @@ Install guidance:
 - Third-party notices: `THIRD_PARTY_LICENSES.md`
 - Compliance notes and distribution guidance: `docs/license-compliance.md`
 
-Important: this project currently depends on `mutagen` (GPL-2.0-or-later). Review `docs/license-compliance.md` before distributing binaries/packages.
+Metadata extraction uses `tinytag` (MIT) to keep runtime licensing permissive.
 
 
 ## Generate From Template

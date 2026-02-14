@@ -91,7 +91,7 @@ Gaps:
 
 1. Test reliability blocker  
 Status: mitigated in `BL-003` by isolating blocking test paths and adding timeout discipline in the metadata path tests.  
-Residual risk: full suite reliability still depends on local dependency setup (`mutagen`, `vlc`).
+Residual risk: full suite reliability still depends on local dependency setup (`tinytag`, `vlc`).
 
 2. Keyboard/focus contract is not fully specified in code  
 No explicit focus-state machine; behavior is distributed across app/pane/input event handlers.

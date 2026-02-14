@@ -18,9 +18,9 @@ This summary is informational and not legal advice.
   - License: LGPL-2.1-or-later
   - Source: https://pypi.org/project/python-vlc/
 
-- mutagen
-  - License: GPL-2.0-or-later
-  - Source: https://pypi.org/project/mutagen/
+- tinytag
+  - License: MIT
+  - Source: https://pypi.org/project/tinytag/
 
 ## Optional External Tools
 

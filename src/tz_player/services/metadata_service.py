@@ -1,17 +1,15 @@
-"""Async metadata service backed by mutagen."""
+"""Async metadata service for track metadata extraction."""
 
 from __future__ import annotations
 
 import asyncio
 import logging
-import re
 from collections.abc import Awaitable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from mutagen import File as MutagenFile
-
+from tz_player.services.audio_tags import read_audio_tags
 from tz_player.services.playlist_store import (
     PlaylistStore,
     TrackMeta,
@@ -151,51 +149,15 @@ class MetadataPayload:
 
 
 def _read_metadata(path: Path) -> MetadataPayload:
-    try:
-        audio = MutagenFile(path, easy=True)
-    except Exception as exc:
-        return MetadataPayload(error=str(exc))
-    if audio is None:
-        return MetadataPayload(error="Unsupported or unreadable file")
-    tags = audio.tags or {}
-    title = _first_tag(tags, "title")
-    artist = _first_tag(tags, "artist")
-    album = _first_tag(tags, "album")
-    year_raw = _first_tag(tags, "date") or _first_tag(tags, "year")
-    year = _parse_year(year_raw)
-    duration_ms = None
-    length = getattr(audio.info, "length", None)
-    if isinstance(length, (int, float)):
-        duration_ms = int(length * 1000)
+    tags = read_audio_tags(path)
     return MetadataPayload(
-        title=title,
-        artist=artist,
-        album=album,
-        year=year,
-        duration_ms=duration_ms,
+        title=tags.title,
+        artist=tags.artist,
+        album=tags.album,
+        year=tags.year,
+        duration_ms=tags.duration_ms,
+        error=tags.error,
     )
-
-
-def _first_tag(tags: dict, key: str) -> str | None:
-    value = tags.get(key)
-    if isinstance(value, list) and value:
-        first = value[0]
-        return str(first) if first is not None else None
-    if isinstance(value, str):
-        return value
-    return None
-
-
-def _parse_year(value: str | None) -> int | None:
-    if not value:
-        return None
-    match = re.search(r"\b(\d{4})\b", value)
-    if match:
-        try:
-            return int(match.group(1))
-        except ValueError:
-            return None
-    return None
 
 
 def _meta_is_fresh(snapshot: TrackMetaSnapshot | None) -> bool:
