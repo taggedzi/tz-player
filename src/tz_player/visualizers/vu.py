@@ -36,7 +36,7 @@ class VuReactiveVisualizer:
             source = "LIVE"
         else:
             left_target, right_target = _fallback_levels(frame)
-            source = "SIM"
+            source = "SIM-R"
 
         self._left_smooth = _smooth(self._left_smooth, left_target)
         self._right_smooth = _smooth(self._right_smooth, right_target)
@@ -49,11 +49,11 @@ class VuReactiveVisualizer:
         meter_width = max(8, min(width - 12, 48))
         lines = [
             f"VU REACTIVE [{source}]",
-            _meter_line("L", self._left_smooth, meter_width, self._ansi_enabled),
-            _meter_line("R", self._right_smooth, meter_width, self._ansi_enabled),
-            _meter_line("M", mono, meter_width, self._ansi_enabled),
+            _meter_line("L", self._left_smooth, meter_width),
+            _meter_line("R", self._right_smooth, meter_width),
+            _meter_line("M", mono, meter_width),
             _status_line(frame),
-            _history_line(self._history, width, self._ansi_enabled),
+            _history_line(self._history, width),
         ]
         return _fit_lines(lines, width, height)
 
@@ -71,8 +71,8 @@ def _fallback_levels(frame: VisualizerFrameInput) -> tuple[float, float]:
     if frame.status == "paused":
         pulse = 0.04 + 0.03 * (0.5 + 0.5 * math.sin(t * 0.6))
         return (pulse, pulse)
-    left = 0.22 + 0.35 * (0.5 + 0.5 * math.sin((t * 2.1) + 0.2))
-    right = 0.22 + 0.35 * (0.5 + 0.5 * math.sin((t * 2.6) + 1.1))
+    left = 0.12 + 0.76 * (0.35 + 0.65 * (0.5 + 0.5 * math.sin((t * 6.4) + 0.2)))
+    right = 0.12 + 0.76 * (0.35 + 0.65 * (0.5 + 0.5 * math.sin((t * 7.1) + 1.1)))
     return (_clamp(left), _clamp(right))
 
 
@@ -81,34 +81,12 @@ def _smooth(current: float, target: float) -> float:
     return _clamp(current + ((target - current) * alpha))
 
 
-def _meter_line(label: str, value: float, width: int, ansi_enabled: bool) -> str:
+def _meter_line(label: str, value: float, width: int) -> str:
     fill = int(round(_clamp(value) * width))
     empty = max(0, width - fill)
     bar = ("#" * fill) + ("-" * empty)
-    if ansi_enabled:
-        bar = _color_bar(bar, fill)
     pct = int(round(_clamp(value) * 100))
     return f"{label} [{bar}] {pct:3d}%"
-
-
-def _color_bar(bar: str, fill: int) -> str:
-    if fill <= 0:
-        return bar
-    head = min(fill, len(bar))
-    green_stop = int(head * 0.7)
-    yellow_stop = int(head * 0.9)
-    out: list[str] = []
-    for idx, ch in enumerate(bar):
-        if idx >= head:
-            out.append(ch)
-            continue
-        if idx < green_stop:
-            out.append(f"\x1b[38;2;53;230;138m{ch}\x1b[0m")
-        elif idx < yellow_stop:
-            out.append(f"\x1b[38;2;242;201;76m{ch}\x1b[0m")
-        else:
-            out.append(f"\x1b[38;2;255;90;54m{ch}\x1b[0m")
-    return "".join(out)
 
 
 def _status_line(frame: VisualizerFrameInput) -> str:
@@ -123,7 +101,7 @@ def _status_line(frame: VisualizerFrameInput) -> str:
     )
 
 
-def _history_line(history: list[float], width: int, ansi_enabled: bool) -> str:
+def _history_line(history: list[float], width: int) -> str:
     span = max(8, min(width - 14, 64))
     if not history:
         return "H [................................]"
@@ -134,8 +112,6 @@ def _history_line(history: list[float], width: int, ansi_enabled: bool) -> str:
         idx = int(round(_clamp(level) * (len(glyphs) - 1)))
         chars.append(glyphs[idx])
     history_text = "".join(chars).rjust(span, ".")
-    if ansi_enabled:
-        history_text = f"\x1b[38;2;0;215;230m{history_text}\x1b[0m"
     return f"H {history_text}"
 
 
