@@ -104,7 +104,7 @@ Execution tracker derived from `SPEC.md`.
   - Unit tests for cache hit/miss/invalidation behavior.
   - Integration test proving VU uses envelope source during real playback path (without VLC callbacks).
 - Status: `in_progress`
-- Commit:
+- Commit: `67c0e8f`
 
 ### VIZ-008 Next-Track Envelope Prewarm
 - Spec Ref: `WF-06`, Sections `5`, `6`
