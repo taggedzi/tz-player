@@ -64,7 +64,8 @@ Execution tracker derived from `SPEC.md`.
   - Docs remain internally consistent (`README`, usage/licensing docs, acceptance mapping as needed).
 - Tests:
   - N/A (docs/spec parity), validated by review checklist.
-- Status: `todo`
+- Status: `done`
+- Commit: `8e06f9f`
 
 ### T-022 Error Message Quality Consistency Pass
 - Spec Ref: Section `8` (Reliability and Error Handling), Error message quality contract
