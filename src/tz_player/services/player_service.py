@@ -31,6 +31,7 @@ REPEAT = Literal["OFF", "ONE", "ALL"]
 SPEED_MIN = 0.5
 SPEED_MAX = 4.0
 SPEED_STEP = 0.25
+STALE_STOP_START_WINDOW_MS = 750
 
 
 @dataclass(frozen=True)
@@ -417,9 +418,9 @@ class PlayerService:
                     and not self._stop_requested
                     and previous_status in {"playing", "paused"}
                     and self._state.duration_ms > 0
-                    and self._state.position_ms < max(0, self._state.duration_ms - 500)
+                    and self._state.position_ms <= STALE_STOP_START_WINDOW_MS
                 ):
-                    # Guard against late/stale backend "stopped" events from a prior track.
+                    # Guard only clearly stale stops shortly after a new track start.
                     return
                 if event.status != self._state.status:
                     self._state = replace(self._state, status=event.status)
