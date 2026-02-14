@@ -34,6 +34,9 @@ class SqliteEnvelopeStore(EnvelopeLevelProvider):
     ) -> LevelSample | None:
         return self._get_level_at_sync(Path(track_path), position_ms)
 
+    async def has_envelope(self, track_path: Path | str) -> bool:
+        return self._has_envelope_sync(Path(track_path))
+
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self._db_path, timeout=30)
         conn.row_factory = sqlite3.Row
@@ -202,6 +205,29 @@ class SqliteEnvelopeStore(EnvelopeLevelProvider):
                 left=_clamp(l0 + ((l1 - l0) * ratio)),
                 right=_clamp(r0 + ((r1 - r0) * ratio)),
             )
+
+    def _has_envelope_sync(self, track_path: Path) -> bool:
+        path_norm = _normalize_path(track_path)
+        mtime_ns, size_bytes = _stat_path(track_path)
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT 1
+                FROM audio_envelopes AS e
+                WHERE e.path_norm = ?
+                  AND e.analysis_version = ?
+                  AND e.mtime_ns IS ?
+                  AND e.size_bytes IS ?
+                  AND EXISTS (
+                      SELECT 1
+                      FROM audio_envelope_points AS p
+                      WHERE p.envelope_id = e.id
+                  )
+                LIMIT 1
+                """,
+                (path_norm, self._analysis_version, mtime_ns, size_bytes),
+            ).fetchone()
+            return row is not None
 
 
 def _normalize_path(path: Path) -> str:

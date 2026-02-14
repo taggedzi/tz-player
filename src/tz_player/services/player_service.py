@@ -102,6 +102,7 @@ class PlayerService:
             live_provider=backend,
             envelope_provider=envelope_provider,
         )
+        self._current_track_path: str | None = None
         self._backend.set_event_handler(self._handle_backend_event)
 
     @property
@@ -153,12 +154,14 @@ class PlayerService:
             else self._default_duration_ms
         )
         if track_info is None:
+            self._current_track_path = None
             async with self._lock:
                 self._state = replace(
                     self._state, status="error", error="Track not found."
                 )
             await self._emit_state()
             return
+        self._current_track_path = track_info.path
         try:
             await self._backend.play(
                 item_id,
@@ -193,6 +196,7 @@ class PlayerService:
         await self._emit_state()
 
     async def stop(self) -> None:
+        self._current_track_path = None
         async with self._lock:
             self._stop_requested = True
             self._state = replace(self._state, status="stopped", position_ms=0)
@@ -545,7 +549,7 @@ class PlayerService:
                         duration_ms=duration,
                         volume=self._state.volume,
                         speed=self._state.speed,
-                        track_path=None,
+                        track_path=self._current_track_path,
                     )
                 except Exception:  # pragma: no cover - backend safety net
                     continue

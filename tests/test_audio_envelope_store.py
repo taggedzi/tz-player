@@ -39,6 +39,7 @@ def test_envelope_store_cache_hit_and_interpolation(tmp_path) -> None:
     assert sample is not None
     assert round(sample.left, 2) == 0.50
     assert round(sample.right, 2) == 0.25
+    assert _run(store.has_envelope(track)) is True
 
 
 def test_envelope_store_miss_when_fingerprint_changes(tmp_path) -> None:
@@ -65,6 +66,7 @@ def test_envelope_store_miss_when_fingerprint_changes(tmp_path) -> None:
     # Change fingerprint by mutating file content/size.
     _touch(track, b"abcdefXYZ")
     assert _run(store.get_level_at(str(track), 200)) is None
+    assert _run(store.has_envelope(track)) is False
 
 
 def test_envelope_store_out_of_range_uses_nearest_sample(tmp_path) -> None:

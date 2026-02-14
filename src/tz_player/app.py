@@ -9,7 +9,7 @@ import sys
 import time
 from dataclasses import replace
 from pathlib import Path
-from typing import Literal, cast
+from typing import Callable, Literal, cast
 
 from mutagen import File as MutagenFile
 from rich.text import Text
@@ -25,6 +25,7 @@ from .events import PlayerStateChanged, TrackChanged
 from .logging_utils import setup_logging
 from .paths import db_path, log_dir, state_path
 from .runtime_config import resolve_log_level
+from .services.audio_envelope_analysis import analyze_track_envelope
 from .services.audio_envelope_store import SqliteEnvelopeStore
 from .services.fake_backend import FakePlaybackBackend
 from .services.metadata_service import MetadataService
@@ -211,6 +212,7 @@ class TzPlayerApp(App):
         self.audio_envelope_store: SqliteEnvelopeStore | None = None
         self._metadata_refresh_task: asyncio.Task[None] | None = None
         self._metadata_pending_ids: set[int] = set()
+        self._envelope_analysis_tasks: dict[str, asyncio.Task[None]] = {}
         self._state_save_task: asyncio.Task[None] | None = None
         self._last_persisted: (
             tuple[int | None, int | None, int, float, str, bool] | None
@@ -324,6 +326,13 @@ class TzPlayerApp(App):
 
     async def on_unmount(self) -> None:
         self._stop_visualizer()
+        for task in self._envelope_analysis_tasks.values():
+            task.cancel()
+        if self._envelope_analysis_tasks:
+            await asyncio.gather(
+                *self._envelope_analysis_tasks.values(), return_exceptions=True
+            )
+            self._envelope_analysis_tasks.clear()
         if self.player_service is not None:
             await self.player_service.shutdown()
 
@@ -549,6 +558,8 @@ class TzPlayerApp(App):
         elif isinstance(event, TrackChanged):
             self.current_track = event.track_info
             self._update_current_track_pane()
+            if event.track_info is not None:
+                self._schedule_envelope_analysis(event.track_info)
             item_id = self.player_state.item_id
             if (
                 item_id is not None
@@ -564,6 +575,50 @@ class TzPlayerApp(App):
                         self.metadata_service.ensure_metadata([track_id]),
                         exclusive=False,
                     )
+
+    def _schedule_envelope_analysis(self, track: TrackInfo) -> None:
+        if self.audio_envelope_store is None:
+            return
+        key = track.path
+        if not key:
+            return
+        existing = self._envelope_analysis_tasks.get(key)
+        if existing is not None and not existing.done():
+            return
+        task = asyncio.create_task(self._ensure_envelope_for_track(track))
+        self._envelope_analysis_tasks[key] = task
+        task.add_done_callback(self._make_envelope_task_cleanup(key))
+
+    def _make_envelope_task_cleanup(
+        self, path_key: str
+    ) -> Callable[[asyncio.Task[None]], None]:
+        def _cleanup(_task: asyncio.Task[None]) -> None:
+            self._envelope_analysis_tasks.pop(path_key, None)
+
+        return _cleanup
+
+    async def _ensure_envelope_for_track(self, track: TrackInfo) -> None:
+        if self.audio_envelope_store is None:
+            return
+        path = Path(track.path)
+        try:
+            if await self.audio_envelope_store.has_envelope(path):
+                logger.debug("Envelope cache hit for %s", path)
+                return
+            result = await run_blocking(analyze_track_envelope, path)
+            if result is None or not result.points:
+                logger.debug("Envelope analysis unavailable for %s", path)
+                return
+            await self.audio_envelope_store.upsert_envelope(
+                path,
+                result.points,
+                duration_ms=max(1, result.duration_ms),
+            )
+            logger.info(
+                "Envelope analyzed for %s (%d points)", path, len(result.points)
+            )
+        except Exception as exc:
+            logger.warning("Envelope analysis failed for %s: %s", path, exc)
 
     async def _track_info_provider(
         self, playlist_id: int, item_id: int

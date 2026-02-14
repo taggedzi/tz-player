@@ -9,6 +9,7 @@ from dataclasses import replace
 from tz_player.services.fake_backend import FakePlaybackBackend
 from tz_player.services.playback_backend import (
     BackendError,
+    LevelSample,
     MediaChanged,
     PositionUpdated,
     StateChanged,
@@ -100,6 +101,45 @@ def test_play_emits_backend_level_samples_into_player_state() -> None:
         assert service.state.level_left is None
         assert service.state.level_right is None
         assert service.state.level_source is None
+        await service.shutdown()
+
+    _run(run())
+
+
+def test_player_service_uses_envelope_source_when_live_unavailable() -> None:
+    class NoLiveFakeBackend(FakePlaybackBackend):
+        async def get_level_sample(self) -> LevelSample | None:
+            return None
+
+    class EnvelopeProvider:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, int]] = []
+
+        async def get_level_at(
+            self, track_path: str, position_ms: int
+        ) -> LevelSample | None:
+            self.calls.append((track_path, position_ms))
+            return LevelSample(left=0.33, right=0.44)
+
+    async def emit_event(_event: object) -> None:
+        return None
+
+    async def run() -> None:
+        envelope = EnvelopeProvider()
+        service = PlayerService(
+            emit_event=emit_event,
+            track_info_provider=_track_info_provider,
+            backend=NoLiveFakeBackend(tick_interval_ms=50),
+            envelope_provider=envelope,
+        )
+        await service.start()
+        await service.play_item(1, 1)
+        await asyncio.sleep(0.35)
+        assert service.state.level_source == "envelope"
+        assert service.state.level_left == 0.33
+        assert service.state.level_right == 0.44
+        assert envelope.calls
+        assert envelope.calls[-1][0] == "/tmp/song.mp3"
         await service.shutdown()
 
     _run(run())
