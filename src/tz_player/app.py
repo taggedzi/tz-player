@@ -25,7 +25,11 @@ from .events import PlayerStateChanged, TrackChanged
 from .logging_utils import setup_logging
 from .paths import db_path, log_dir, state_path
 from .runtime_config import resolve_log_level
-from .services.audio_envelope_analysis import analyze_track_envelope
+from .services.audio_envelope_analysis import (
+    analyze_track_envelope,
+    ffmpeg_available,
+    requires_ffmpeg_for_envelope,
+)
 from .services.audio_envelope_store import SqliteEnvelopeStore
 from .services.audio_tags import read_audio_tags
 from .services.fake_backend import FakePlaybackBackend
@@ -214,6 +218,8 @@ class TzPlayerApp(App):
         self._metadata_refresh_task: asyncio.Task[None] | None = None
         self._metadata_pending_ids: set[int] = set()
         self._envelope_analysis_tasks: dict[str, asyncio.Task[None]] = {}
+        self._envelope_missing_ffmpeg_warned: set[str] = set()
+        self._audio_level_notice: str | None = None
         self._state_save_task: asyncio.Task[None] | None = None
         self._last_persisted: (
             tuple[int | None, int | None, int, float, str, bool] | None
@@ -583,6 +589,7 @@ class TzPlayerApp(App):
         key = track.path
         if not key:
             return
+        self._update_audio_level_notice(key)
         existing = self._envelope_analysis_tasks.get(key)
         if existing is not None and not existing.done():
             return
@@ -605,10 +612,21 @@ class TzPlayerApp(App):
         try:
             if await self.audio_envelope_store.has_envelope(path):
                 logger.debug("Envelope cache hit for %s", path)
+                self._update_audio_level_notice(str(path))
                 return
             result = await run_blocking(analyze_track_envelope, path)
             if result is None or not result.points:
-                logger.debug("Envelope analysis unavailable for %s", path)
+                if requires_ffmpeg_for_envelope(path) and not ffmpeg_available():
+                    path_key = str(path)
+                    if path_key not in self._envelope_missing_ffmpeg_warned:
+                        self._envelope_missing_ffmpeg_warned.add(path_key)
+                        logger.warning(
+                            "Envelope analysis unavailable for %s: ffmpeg not found on PATH; using fallback levels.",
+                            path,
+                        )
+                    self._update_audio_level_notice(path_key)
+                else:
+                    logger.debug("Envelope analysis unavailable for %s", path)
                 return
             await self.audio_envelope_store.upsert_envelope(
                 path,
@@ -618,6 +636,7 @@ class TzPlayerApp(App):
             logger.info(
                 "Envelope analyzed for %s (%d points)", path, len(result.points)
             )
+            self._update_audio_level_notice(str(path))
         except Exception as exc:
             logger.warning("Envelope analysis failed for %s: %s", path, exc)
 
@@ -738,8 +757,29 @@ class TzPlayerApp(App):
             pane.update("Visualizer unavailable")
             return
         notice = self.visualizer_host.consume_notice()
-        render_text = f"{notice}\n{output}" if notice else output
+        audio_notice = self._audio_level_notice
+        if notice and audio_notice:
+            render_text = f"{notice}\n{audio_notice}\n{output}"
+        elif notice:
+            render_text = f"{notice}\n{output}"
+        elif audio_notice:
+            render_text = f"{audio_notice}\n{output}"
+        else:
+            render_text = output
         pane.update(Text.from_ansi(render_text))
+
+    def _update_audio_level_notice(self, track_path: str) -> None:
+        if (
+            self.current_track is None
+            or self.current_track.path != track_path
+            or self.player_state.level_source == "envelope"
+        ):
+            self._audio_level_notice = None
+            return
+        if requires_ffmpeg_for_envelope(track_path) and not ffmpeg_available():
+            self._audio_level_notice = "DIAG: ffmpeg missing; envelope cache unavailable for this track (using fallback levels)."
+            return
+        self._audio_level_notice = None
 
     async def _handle_metadata_updated(self, track_ids: list[int]) -> None:
         pane = self.query_one(PlaylistPane)

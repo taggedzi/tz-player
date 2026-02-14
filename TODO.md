@@ -146,7 +146,7 @@ Execution tracker derived from `SPEC.md`.
 - Tests:
   - Integration tests for non-WAV track with missing ffmpeg -> fallback source token + messaging.
   - Regression test ensuring WAV analysis still works without ffmpeg.
-- Status: `todo`
+- Status: `done`
 - Commit:
 
 ### VIZ-012 Docs and Acceptance Mapping for Doctor + FFmpeg Policy

@@ -99,3 +99,50 @@ def test_ensure_envelope_for_track_upserts_when_analysis_available(
     _run(app._ensure_envelope_for_track(_track()))
 
     assert store.upserts == [("/tmp/song.mp3", 2, 1200)]
+
+
+def test_missing_ffmpeg_sets_notice_and_warns_once(
+    tmp_path, monkeypatch, caplog
+) -> None:
+    _setup_dirs(tmp_path, monkeypatch)
+    app = app_module.TzPlayerApp(auto_init=False)
+    store = _StoreStub(has_hit=False)
+    app.audio_envelope_store = store  # type: ignore[assignment]
+    app.current_track = _track()
+
+    monkeypatch.setattr(app_module, "analyze_track_envelope", lambda _path: None)
+    monkeypatch.setattr(app_module, "ffmpeg_available", lambda: False)
+    monkeypatch.setattr(app_module, "requires_ffmpeg_for_envelope", lambda _path: True)
+
+    with caplog.at_level("WARNING"):
+        _run(app._ensure_envelope_for_track(_track()))
+        _run(app._ensure_envelope_for_track(_track()))
+
+    assert app._audio_level_notice is not None
+    assert "ffmpeg missing" in app._audio_level_notice.lower()
+    warnings = [
+        rec.message for rec in caplog.records if "ffmpeg not found" in rec.message
+    ]
+    assert len(warnings) == 1
+
+
+def test_wav_path_without_ffmpeg_keeps_notice_clear(tmp_path, monkeypatch) -> None:
+    _setup_dirs(tmp_path, monkeypatch)
+    app = app_module.TzPlayerApp(auto_init=False)
+    store = _StoreStub(has_hit=False)
+    app.audio_envelope_store = store  # type: ignore[assignment]
+    app.current_track = TrackInfo(
+        title="Tone",
+        artist="A",
+        album="B",
+        year=2020,
+        path="/tmp/tone.wav",
+        duration_ms=1000,
+    )
+
+    monkeypatch.setattr(app_module, "analyze_track_envelope", lambda _path: None)
+    monkeypatch.setattr(app_module, "ffmpeg_available", lambda: False)
+    monkeypatch.setattr(app_module, "requires_ffmpeg_for_envelope", lambda _path: False)
+
+    _run(app._ensure_envelope_for_track(app.current_track))
+    assert app._audio_level_notice is None

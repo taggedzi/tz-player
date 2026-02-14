@@ -6,7 +6,10 @@ import math
 import wave
 from pathlib import Path
 
-from tz_player.services.audio_envelope_analysis import analyze_track_envelope
+from tz_player.services.audio_envelope_analysis import (
+    analyze_track_envelope,
+    requires_ffmpeg_for_envelope,
+)
 
 
 def _write_wave(path: Path, *, seconds: float = 0.5, sample_rate: int = 8000) -> None:
@@ -47,3 +50,9 @@ def test_analyze_track_envelope_limits_points(tmp_path) -> None:
 def test_analyze_track_envelope_returns_none_for_missing_file(tmp_path) -> None:
     missing = tmp_path / "missing.wav"
     assert analyze_track_envelope(missing) is None
+
+
+def test_requires_ffmpeg_for_envelope_by_extension() -> None:
+    assert requires_ffmpeg_for_envelope("/tmp/song.mp3") is True
+    assert requires_ffmpeg_for_envelope("/tmp/song.flac") is True
+    assert requires_ffmpeg_for_envelope("/tmp/song.wav") is False

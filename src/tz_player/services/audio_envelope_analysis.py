@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 _FFMPEG_SAMPLE_RATE = 44_100
 _FFMPEG_CHANNELS = 2
 _FFMPEG_BYTES_PER_SAMPLE = 2
+_WAVE_SUFFIXES = {".wav", ".wave"}
 
 
 @dataclass(frozen=True)
@@ -43,6 +44,14 @@ def analyze_track_envelope(
     if ffmpeg_result is None:
         return None
     return _limit_points(ffmpeg_result, max_points=max_points)
+
+
+def ffmpeg_available() -> bool:
+    return shutil.which("ffmpeg") is not None
+
+
+def requires_ffmpeg_for_envelope(path: Path | str) -> bool:
+    return Path(path).suffix.lower() not in _WAVE_SUFFIXES
 
 
 def _analyze_wave(path: Path, *, bucket_ms: int) -> EnvelopeAnalysisResult | None:
