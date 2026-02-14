@@ -52,8 +52,8 @@ Execution tracker derived from `SPEC.md`.
 - Tests:
   - Unit tests for level normalization, smoothing, clipping, and source label behavior.
   - Integration test with deterministic level provider stub and service source failover.
-- Status: `in_progress`
-- Commit:
+- Status: `done`
+- Commit: `453e715`, `67c0e8f`
 
 ### VIZ-004 Playback-Level Signal Provider Contract
 - Spec Ref: Sections `5`, `6`
@@ -66,8 +66,8 @@ Execution tracker derived from `SPEC.md`.
 - Tests:
   - Contract tests for source selection and provider shape/timing expectations.
   - Backend-specific tests for fake live provider and VLC unavailable behavior.
-- Status: `in_progress`
-- Commit:
+- Status: `done`
+- Commit: `453e715`, `22463a9`
 
 ### VIZ-005 Visualizer Catalog and UX Docs
 - Spec Ref: Sections `6`, `9`, `11`
@@ -105,6 +105,61 @@ Execution tracker derived from `SPEC.md`.
   - Integration test proving VU uses envelope source during real playback path (without VLC callbacks).
 - Status: `in_progress`
 - Commit: `67c0e8f`
+
+### VIZ-009 FFmpeg External-Only Policy and Runtime Gating
+- Spec Ref: Sections `6`, `7`, `9`, `11`
+- Scope: Enforce project policy that FFmpeg is never bundled/packaged and is only used when user-installed and discoverable.
+- Acceptance:
+  - Envelope analysis path remains optional and checks for `ffmpeg` on PATH at runtime.
+  - No release/build path attempts to download or bundle FFmpeg binaries.
+  - Clear internal policy notes are documented for maintainers and release flow.
+- Tests:
+  - Unit tests for ffmpeg capability detection and no-ffmpeg fallback behavior.
+  - Packaging/release checklist update verifying no bundled external codec binaries.
+- Status: `in_progress`
+- Commit: `507283b`
+
+### VIZ-010 `doctor` Command for Dependency Diagnostics
+- Spec Ref: `WF-07`, Sections `9`, `10`, `11`
+- Scope: Add a CLI diagnostics command to report backend/tool readiness and remediation guidance.
+- Acceptance:
+  - Add command: `tz-player doctor`.
+  - Reports status for:
+    - `python-vlc` import and libVLC availability
+    - `ffmpeg` binary discoverability/version
+    - metadata reader availability (`tinytag`)
+  - Exit code is non-zero when required runtime components for selected backend are missing.
+  - Output includes concrete install hints and docs links.
+- Tests:
+  - CLI tests for success/failure exit codes and key output lines.
+  - Unit tests for tool probing functions (mock PATH/process output).
+- Status: `todo`
+- Commit:
+
+### VIZ-011 UX Wiring for Optional FFmpeg in VU/Envelope Flow
+- Spec Ref: Sections `6`, `9`, `10`
+- Scope: Surface actionable user messaging when ffmpeg-backed envelope analysis is unavailable.
+- Acceptance:
+  - Status/diagnostic text clearly indicates when envelope source is unavailable due to missing ffmpeg for non-WAV files.
+  - Fallback path remains seamless (no playback interruption, no crashes).
+  - Log messages are concise and useful (missing tool vs decode failure).
+- Tests:
+  - Integration tests for non-WAV track with missing ffmpeg -> fallback source token + messaging.
+  - Regression test ensuring WAV analysis still works without ffmpeg.
+- Status: `todo`
+- Commit:
+
+### VIZ-012 Docs and Acceptance Mapping for Doctor + FFmpeg Policy
+- Spec Ref: `WF-06`, `WF-07`, Section `11`
+- Scope: Finalize user/operator docs for external-only ffmpeg usage and diagnostics workflow.
+- Acceptance:
+  - `docs/usage.md` documents `tz-player doctor` and interpretation.
+  - `docs/media-setup.md` references doctor workflow after install.
+  - `docs/workflow-acceptance.md` maps new diagnostic/policy tests.
+- Tests:
+  - N/A (docs), validated by review checklist.
+- Status: `todo`
+- Commit:
 
 ### VIZ-008 Next-Track Envelope Prewarm
 - Spec Ref: `WF-06`, Sections `5`, `6`
