@@ -534,7 +534,11 @@ class TzPlayerApp(App):
         except Exception as exc:
             logger.exception("Failed to switch visualizer to '%s': %s", next_id, exc)
             await self.push_screen(
-                ErrorModal("Failed to switch visualizer. See log file.")
+                ErrorModal(
+                    "Failed to switch visualizer.\n"
+                    "Likely cause: selected plugin failed during activation/render.\n"
+                    "Next step: choose another visualizer and review the log file."
+                )
             )
             return
         self.state = replace(self.state, visualizer_id=active)

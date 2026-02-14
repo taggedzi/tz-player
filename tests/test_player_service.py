@@ -303,7 +303,34 @@ def test_backend_event_handling_is_safe() -> None:
         assert service.state.duration_ms == 3000
         await service._handle_backend_event(BackendError("boom"))
         assert service.state.status == "error"
-        assert service.state.error == "boom"
+        assert service.state.error is not None
+        assert "Playback backend reported an error." in service.state.error
+        assert "Likely cause:" in service.state.error
+        assert "Next step:" in service.state.error
+        assert "Details: boom" in service.state.error
+
+    _run(run())
+
+
+def test_play_item_missing_track_sets_actionable_error() -> None:
+    async def emit_event(_event: object) -> None:
+        return None
+
+    async def missing_track(_playlist_id: int, _item_id: int) -> TrackInfo | None:
+        return None
+
+    async def run() -> None:
+        service = PlayerService(
+            emit_event=emit_event,
+            track_info_provider=missing_track,
+            backend=FakePlaybackBackend(tick_interval_ms=50),
+        )
+        await service.play_item(1, 1)
+        assert service.state.status == "error"
+        assert service.state.error is not None
+        assert "Failed to start playback for selected track." in service.state.error
+        assert "Likely cause:" in service.state.error
+        assert "Next step:" in service.state.error
 
     _run(run())
 

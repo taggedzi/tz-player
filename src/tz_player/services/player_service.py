@@ -36,6 +36,15 @@ STALE_STOP_START_WINDOW_MS = 750
 TRACK_END_GRACE_MS = 300
 
 
+def _format_user_error(
+    *, what_failed: str, likely_cause: str, next_step: str, detail: str | None = None
+) -> str:
+    message = f"{what_failed}\nLikely cause: {likely_cause}\nNext step: {next_step}"
+    if detail:
+        message = f"{message}\nDetails: {detail}"
+    return message
+
+
 @dataclass(frozen=True)
 class TrackInfo:
     title: str | None
@@ -164,7 +173,13 @@ class PlayerService:
             self._current_track_path = None
             async with self._lock:
                 self._state = replace(
-                    self._state, status="error", error="Track not found."
+                    self._state,
+                    status="error",
+                    error=_format_user_error(
+                        what_failed="Failed to start playback for selected track.",
+                        likely_cause="Track entry is missing, moved, or no longer readable.",
+                        next_step="Verify the file path and refresh/remove the playlist entry.",
+                    ),
                 )
             await self._emit_state()
             return
@@ -178,7 +193,16 @@ class PlayerService:
             )
         except Exception as exc:
             async with self._lock:
-                self._state = replace(self._state, status="error", error=str(exc))
+                self._state = replace(
+                    self._state,
+                    status="error",
+                    error=_format_user_error(
+                        what_failed="Failed to start playback.",
+                        likely_cause="Playback backend could not open or decode the media.",
+                        next_step="Verify backend/tooling setup and file accessibility, then retry.",
+                        detail=str(exc),
+                    ),
+                )
             await self._emit_state()
             return
         async with self._lock:
@@ -454,7 +478,16 @@ class PlayerService:
                 if event.status == "stopped" and self._stop_requested:
                     self._stop_requested = False
             elif isinstance(event, BackendError):
-                self._state = replace(self._state, status="error", error=event.message)
+                self._state = replace(
+                    self._state,
+                    status="error",
+                    error=_format_user_error(
+                        what_failed="Playback backend reported an error.",
+                        likely_cause="Backend runtime, codec, or media access failure.",
+                        next_step="Check backend setup and media path, then retry playback.",
+                        detail=event.message,
+                    ),
+                )
                 emit = True
         if emit:
             await self._emit_state()
