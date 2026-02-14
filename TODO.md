@@ -12,126 +12,83 @@ Execution tracker derived from `SPEC.md`.
 
 ## Active Backlog
 
-### T-018 Visualizer Local Plugin Discovery
-- Spec Ref: Section `6` (Plugin discovery and identity)
+### T-026 DB Startup Failure Classification and User Guidance
+- Spec Ref: Section `8` (Common failure classes), `WF-01`
 - Scope:
-  - Add optional local visualizer discovery from configured import path(s), in addition to built-ins.
-  - Keep duplicate `plugin_id` rejection semantics (first valid plugin wins, warning logged).
+  - Detect and classify SQLite init/access failures during startup (for example: file permission denied, path not writable, locked/corrupt DB).
+  - Surface tailored user-facing remediation copy instead of generic startup failure text.
 - Acceptance:
-  - App loads built-ins plus discoverable local plugins from configured path list.
-  - Invalid local plugin modules do not crash startup; errors are logged.
-  - Persisted `visualizer_id` compatibility behavior remains unchanged.
+  - DB init/access failures show actionable message with what failed, likely cause, and immediate next step.
+  - Recovery path remains non-blocking where possible; irrecoverable startup exits cleanly.
 - Tests:
-  - Unit tests for local plugin load success and duplicate ID handling.
-  - Integration test proving startup continues when a local plugin import fails.
-- Status: `done`
-- Commit: `971efee`
+  - Startup resilience tests for representative DB failures with expected user-facing copy.
+  - Regression test ensuring non-DB startup failures keep existing fallback behavior.
+- Status: `todo`
 
-### T-019 Configurable Visualizer FPS
-- Spec Ref: Section `6` (Performance and scheduling)
+### T-027 Fatal Startup Exit-Code Contract Hardening
+- Spec Ref: Section `8` (Fatal startup failure non-zero exit), Section `10`
 - Scope:
-  - Add runtime-configurable visualizer cadence (bounded 2-30 FPS) with default 10 FPS.
-  - Persist/recover configured cadence in app state.
+  - Ensure irrecoverable startup failures produce non-zero process exit codes from CLI entrypoints.
+  - Ensure CLI output includes concise remediation hints for fatal startup exits.
 - Acceptance:
-  - Effective cadence obeys configured value with clamp to `[2, 30]`.
-  - Invalid persisted values recover safely to default.
-  - Visualizer timer interval updates from configured cadence.
+  - Fatal startup path exits with non-zero code.
+  - Fatal startup path emits user-actionable terminal output (not only log-only diagnostics).
 - Tests:
-  - Unit tests for clamp/default/read-compat behavior.
-  - Integration test confirming host/timer use configured FPS.
-- Status: `done`
-- Commit: `c68a30a`
+  - CLI tests for fatal startup paths asserting exit code and stderr/stdout hints.
+  - Regression test for successful startup retaining exit code zero behavior.
+- Status: `todo`
 
-### T-020 Structured Logging Upgrade
-- Spec Ref: Section `9` (Observability)
+### T-028 Unified Non-Fatal Error Surfacing (Banner/Status Channel)
+- Spec Ref: Section `8` (UI errors surfaced with modal/error banner), Section `4`
 - Scope:
-  - Upgrade logging output to structured JSON-line format for file logging while preserving readable console output.
-  - Preserve existing log-level flag behavior (`--verbose`, `--quiet`, default `INFO`).
+  - Add a consistent non-fatal UI error surface for operational failures that do not require modal interruption.
+  - Route key runtime failures (playback action errors, visualizer fallbacks, cache/service warnings) through this surface.
 - Acceptance:
-  - File logs are machine-parseable structured records (timestamp, level, logger, message, context fields when present).
-  - Console logs remain human-readable for interactive troubleshooting.
-  - No sensitive data regression in emitted fields.
+  - Users can see clean, actionable runtime errors without relying on logs.
+  - Error surface does not trap focus or block keyboard-first workflows.
 - Tests:
-  - Logging config tests for file structure and console output behavior.
-  - Regression tests for CLI log-level precedence behavior.
-- Status: `done`
-- Commit: `cd786cc`
+  - UI tests asserting banner/status error visibility and dismissal behavior.
+  - Regression tests ensuring existing modal flows continue to work for blocking failures.
+- Status: `todo`
 
-### T-021 Spec/Docs Metadata Backend Parity (TinyTag)
-- Spec Ref: Section `5` (Architecture constraints)
+### T-029 Visualizer Observability Completion (Load/Activate/Fallback)
+- Spec Ref: Section `9` (Visualizer observability)
 - Scope:
-  - Update `SPEC.md` and related docs to reflect TinyTag usage instead of mutagen.
-  - Confirm acceptance/docs mapping references current metadata backend and licensing notes.
+  - Ensure explicit structured logs for registry load summary, plugin activation success/failure, and fallback transitions.
+  - Align log fields for these events with structured-file logging conventions.
 - Acceptance:
-  - `SPEC.md` architecture section names TinyTag accurately.
-  - Docs remain internally consistent (`README`, usage/licensing docs, acceptance mapping as needed).
+  - Logs clearly show plugin registry composition and active visualizer transitions.
+  - Fallback transitions are traceable with failed `plugin_id` and phase (`activate`/`render`).
 - Tests:
-  - N/A (docs/spec parity), validated by review checklist.
-- Status: `done`
-- Commit: `8e06f9f`
+  - Unit tests for expected log events and fields across load/activate/fallback paths.
+  - Regression test ensuring no per-frame logging spam is introduced.
+- Status: `todo`
 
-### T-022 Error Message Quality Consistency Pass
-- Spec Ref: Section `8` (Reliability and Error Handling), Error message quality contract
+### T-030 Configurable Local Plugin Path UX/CLI Wiring
+- Spec Ref: Section `6` (Plugin discovery sources), Section `WF-07`
 - Scope:
-  - Normalize user-facing error text across playback, playlist actions, and UI modals to consistently include:
-    - what failed,
-    - likely cause (when known),
-    - immediate next step.
-  - Replace terse messages (for example, generic/not-found errors) with actionable copy where user impact exists.
+  - Add first-class runtime configuration for local visualizer plugin paths (CLI and persisted state).
+  - Document configuration precedence and usage examples.
 - Acceptance:
-  - User-facing failure paths in core workflows use consistent actionable language.
-  - No raw/low-context error text remains in primary UI paths.
-  - Existing fallback behavior remains unchanged.
+  - Users can configure one or more local plugin import paths without manual state-file editing.
+  - Config precedence remains deterministic (CLI > persisted > default).
+  - Startup remains resilient when configured path entries are invalid.
 - Tests:
-  - Update/add UI/service tests asserting improved message text for key error paths.
-  - Regression tests ensuring failure handling still degrades safely.
-- Status: `done`
-- Commit: `7755b1a`
+  - Parser/runtime config tests for plugin path flags and precedence.
+  - Integration tests for successful path loading and invalid path degradation.
+- Status: `todo`
 
-### T-023 State File Corruption UX Surfacing
-- Spec Ref: Section `8` (Common failure classes), Section `WF-01`
+### T-031 Final Reliability/Observability Acceptance and Docs Parity
+- Spec Ref: Sections `8`, `9`, `10`, `11`
 - Scope:
-  - Surface explicit in-app user notification when persisted state file is unreadable/corrupt and defaults are used.
-  - Keep startup resilient (no crash, no lockup), while making recovery guidance visible without reading logs.
+  - Update acceptance mapping and user docs to cover T-026..T-030 behavior.
+  - Confirm workflow-to-test mapping includes new reliability and observability guarantees.
 - Acceptance:
-  - On corrupt/unreadable state file, startup continues with defaults and displays clear remediation guidance.
-  - Message includes likely cause and next step (for example: reset/remove state file path).
-  - Behavior remains non-blocking and does not regress startup fallback logic.
+  - `docs/workflow-acceptance.md` includes the new coverage links.
+  - `README.md`/`docs/usage.md` include updated troubleshooting guidance for startup and runtime errors.
 - Tests:
-  - Startup resilience test for invalid/corrupt state file path that asserts user-visible messaging.
-  - Regression test for normal startup path with no warning.
-- Status: `done`
-- Commit: `f19b69b`
-
-### T-024 Audio Level Source-Switch Observability
-- Spec Ref: Section `9` (Observability)
-- Scope:
-  - Add explicit log events when effective audio level source changes (`live` <-> `envelope` <-> `fallback`).
-  - Include enough context for diagnosis (track path/id when available, prior source, next source, trigger reason).
-- Acceptance:
-  - Source transitions are logged once per transition (not per frame/tick spam).
-  - Logs are emitted for startup source selection and runtime changes (seek/next/backend capability changes).
-  - No impact on render/event-loop responsiveness.
-- Tests:
-  - Unit/integration tests asserting transition logs are emitted exactly on source changes.
-  - Regression test ensuring no repeated spam when source is stable.
-- Status: `done`
-- Commit: `ad9eb5f`
-
-### T-025 Envelope Cache Miss/Populate Observability Completion
-- Spec Ref: Section `9` (Observability)
-- Scope:
-  - Complete cache observability by adding explicit per-track envelope cache miss logging and successful cache populate summary (without excessive duplication).
-  - Keep existing cache hit and failure logs aligned with this flow.
-- Acceptance:
-  - For each analyzed track, logs can distinguish hit vs miss -> analysis -> stored outcome.
-  - Duplicate/noisy logs are bounded (for example, one miss/populate chain per track analysis attempt).
-  - Existing ffmpeg-missing and analysis-failure diagnostics remain intact.
-- Tests:
-  - Integration test for miss path logging and populate logging.
-  - Regression test for hit path without miss noise.
-- Status: `done`
-- Commit: `21aca99`
+  - N/A (docs/mapping), validated by review checklist plus full test/lint/type gates.
+- Status: `todo`
 
 ## Archived Completed Work
 
@@ -334,3 +291,11 @@ All baseline and stabilization tasks are complete and archived here for traceabi
 - T-015 Docs parity and troubleshooting — `done` — `fbfffa4`
 - T-016 v1 pre-release sweep — `done` — `ca3bc89`
 - T-017 VLC first-track transition hardening (end-of-track advance stability + timing correctness) — `done` — `7a18103`, `6619d42`, `e16884c`, `2d8858a`, `22c5f27`, `daae237`, `56f6527`, `aca36c3`, `3e5b543`, `e0b4727`
+- T-018 Visualizer local plugin discovery — `done` — `971efee`, `75a902c`
+- T-019 Configurable visualizer FPS — `done` — `c68a30a`, `3fcbb11`
+- T-020 Structured logging upgrade — `done` — `cd786cc`, `b17c365`
+- T-021 Spec/docs metadata backend parity (TinyTag) — `done` — `8e06f9f`, `057f0c4`
+- T-022 Error message quality consistency pass — `done` — `7755b1a`, `df1f448`
+- T-023 State file corruption UX surfacing — `done` — `f19b69b`, `bb802c8`
+- T-024 Audio level source-switch observability — `done` — `ad9eb5f`, `6d6c11f`
+- T-025 Envelope cache miss/populate observability completion — `done` — `21aca99`, `e1ce0a8`
