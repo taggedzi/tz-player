@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 import wave
 from dataclasses import dataclass
+from importlib import import_module
 from pathlib import Path
 
 
@@ -33,7 +34,8 @@ def read_audio_tags(path: Path) -> AudioTags:
 
 def _read_with_tinytag(path: Path) -> AudioTags | None:
     try:
-        from tinytag import TinyTag  # type: ignore[import-not-found]
+        tinytag_module = import_module("tinytag")
+        TinyTag = tinytag_module.TinyTag
     except Exception:
         return None
     try:
