@@ -701,12 +701,21 @@ class PlayerService:
                         or right != self._state.level_right
                         or source != self._state.level_source
                     ):
+                        previous_source = self._state.level_source
                         self._state = replace(
                             self._state,
                             level_left=left,
                             level_right=right,
                             level_source=source,
                         )
+                        if source != previous_source and source is not None:
+                            logger.info(
+                                "Audio level source changed: %s -> %s (item_id=%s track_path=%s)",
+                                previous_source or "none",
+                                source,
+                                self._state.item_id,
+                                self._current_track_path,
+                            )
                         emit = True
                     if (
                         backend_state in {"stopped", "idle"}

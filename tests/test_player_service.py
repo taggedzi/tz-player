@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import random
 import time
 from dataclasses import replace
@@ -63,6 +64,83 @@ def test_play_progresses_and_pause_freezes() -> None:
         await service.shutdown()
 
     _run(run())
+
+
+def test_audio_level_source_change_logs_once_per_transition(caplog) -> None:
+    class FlapLevelBackend(FakePlaybackBackend):
+        def __init__(self) -> None:
+            super().__init__(tick_interval_ms=50)
+            self._sample_calls = 0
+
+        async def get_level_sample(self) -> LevelSample | None:
+            async with self._lock:  # noqa: SLF001
+                if self._state.status not in {"playing", "paused"}:  # noqa: SLF001
+                    return None
+            self._sample_calls += 1
+            if self._sample_calls <= 1:
+                return LevelSample(left=0.5, right=0.4)
+            return None
+
+    async def emit_event(_event: object) -> None:
+        return None
+
+    async def track_info(_playlist_id: int, _item_id: int) -> TrackInfo:
+        return TrackInfo(
+            title="Song",
+            artist="Artist",
+            album="Album",
+            year=2020,
+            path="/tmp/song.mp3",
+            duration_ms=5000,
+        )
+
+    async def run() -> None:
+        service = PlayerService(
+            emit_event=emit_event,
+            track_info_provider=track_info,
+            backend=FlapLevelBackend(),
+        )
+        await service.start()
+        await service.play_item(1, 1)
+        await asyncio.sleep(0.8)
+        await service.shutdown()
+
+    with caplog.at_level(logging.INFO, logger="tz_player.services.player_service"):
+        _run(run())
+    changes = [
+        record.message
+        for record in caplog.records
+        if "Audio level source changed:" in record.message
+    ]
+    assert len(changes) == 2
+    assert "none -> live" in changes[0]
+    assert "live -> fallback" in changes[1]
+
+
+def test_audio_level_source_stable_does_not_log_spam(caplog) -> None:
+    async def emit_event(_event: object) -> None:
+        return None
+
+    async def run() -> None:
+        service = PlayerService(
+            emit_event=emit_event,
+            track_info_provider=_track_info_provider,
+            backend=FakePlaybackBackend(tick_interval_ms=50),
+        )
+        await service.start()
+        await service.play_item(1, 1)
+        await asyncio.sleep(0.6)
+        await service.shutdown()
+
+    with caplog.at_level(logging.INFO, logger="tz_player.services.player_service"):
+        _run(run())
+    changes = [
+        record.message
+        for record in caplog.records
+        if "Audio level source changed:" in record.message
+    ]
+    assert len(changes) == 1
+    assert "none -> live" in changes[0]
 
 
 def test_fake_backend_level_sample_contract() -> None:
