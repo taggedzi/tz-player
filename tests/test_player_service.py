@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import random
+import time
 from dataclasses import replace
 
 from tz_player.services.fake_backend import FakePlaybackBackend
@@ -600,6 +601,48 @@ def test_stopped_event_after_progress_with_reset_position_advances() -> None:
         # Simulate normal progress, then a backend reset to 0 before stop.
         await service._handle_backend_event(PositionUpdated(1500, 5000))
         await service._handle_backend_event(PositionUpdated(0, 5000))
+        await service._handle_backend_event(StateChanged("stopped"))
+        assert service.state.item_id == 2
+        assert service.state.status == "playing"
+        await service.shutdown()
+
+    _run(run())
+
+
+def test_stopped_event_advances_after_elapsed_play_time_with_low_position() -> None:
+    async def emit_event(_event: object) -> None:
+        return None
+
+    async def track_info(_playlist_id: int, item_id: int) -> TrackInfo:
+        return TrackInfo(
+            title=f"Song {item_id}",
+            artist=None,
+            album=None,
+            year=None,
+            path=f"/tmp/{item_id}.mp3",
+            duration_ms=5000,
+        )
+
+    async def next_provider(_playlist_id: int, item_id: int, _wrap: bool) -> int | None:
+        return 2 if item_id == 1 else None
+
+    async def run() -> None:
+        service = PlayerService(
+            emit_event=emit_event,
+            track_info_provider=track_info,
+            backend=FakePlaybackBackend(tick_interval_ms=50),
+            next_track_provider=next_provider,
+            initial_state=PlayerState(
+                status="playing",
+                playlist_id=1,
+                item_id=1,
+                position_ms=0,
+                duration_ms=5000,
+                repeat_mode="ALL",
+            ),
+        )
+        # Simulate "playing for a while" even if backend position never advanced.
+        service._track_started_monotonic_s = time.monotonic() - 10.0
         await service._handle_backend_event(StateChanged("stopped"))
         assert service.state.item_id == 2
         assert service.state.status == "playing"

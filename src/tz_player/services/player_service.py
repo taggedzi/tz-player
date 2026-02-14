@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import random
+import time
 from collections.abc import Awaitable
 from contextlib import suppress
 from dataclasses import dataclass, replace
@@ -97,6 +98,7 @@ class PlayerService:
         self._poll_interval = 0.25
         self._end_handled_item_id: int | None = None
         self._max_position_seen_ms = self._state.position_ms
+        self._track_started_monotonic_s: float | None = None
         self._shuffle_order: list[int] = []
         self._shuffle_index: int | None = None
         self._shuffle_playlist_id: int | None = None
@@ -146,6 +148,7 @@ class PlayerService:
             self._stop_requested = False
             self._end_handled_item_id = None
             self._max_position_seen_ms = 0
+            self._track_started_monotonic_s = None
             shuffle_enabled = self._state.shuffle
         await self._emit_state()
         if shuffle_enabled:
@@ -184,6 +187,7 @@ class PlayerService:
                 duration_ms=duration_ms,
                 position_ms=0,
             )
+            self._track_started_monotonic_s = time.monotonic()
         await self._emit_event(TrackChanged(track_info))
         await self._emit_state()
 
@@ -211,6 +215,7 @@ class PlayerService:
             )
             self._end_handled_item_id = None
             self._max_position_seen_ms = 0
+            self._track_started_monotonic_s = None
         await self._backend.stop()
         await self._emit_state()
 
@@ -415,6 +420,9 @@ class PlayerService:
                     self._state = replace(self._state, duration_ms=event.duration_ms)
                     emit = True
             elif isinstance(event, StateChanged):
+                track_age_s: float | None = None
+                if self._track_started_monotonic_s is not None:
+                    track_age_s = time.monotonic() - self._track_started_monotonic_s
                 if event.status == "loading" and self._state.status in {
                     "playing",
                     "paused",
@@ -426,15 +434,17 @@ class PlayerService:
                     and previous_status in {"playing", "paused"}
                     and self._state.duration_ms > 0
                     and self._max_position_seen_ms <= STALE_STOP_START_WINDOW_MS
+                    and (track_age_s is None or track_age_s <= 2.0)
                 ):
                     # Guard only clearly stale stops shortly after a new track start.
                     logger.debug(
-                        "Ignoring stale stopped event: item_id=%s pos=%s max_pos=%s duration=%s prev_status=%s",
+                        "Ignoring stale stopped event: item_id=%s pos=%s max_pos=%s duration=%s prev_status=%s age_s=%s",
                         self._state.item_id,
                         self._state.position_ms,
                         self._max_position_seen_ms,
                         self._state.duration_ms,
                         previous_status,
+                        f"{track_age_s:.3f}" if track_age_s is not None else "n/a",
                     )
                     return
                 if event.status != self._state.status:
