@@ -612,6 +612,7 @@ class PlayerService:
                 try:
                     position = await self._backend.get_position_ms()
                     duration = await self._backend.get_duration_ms()
+                    backend_state = await self._backend.get_state()
                     reading = await self._audio_level_service.sample(
                         status=status,
                         position_ms=position,
@@ -623,7 +624,9 @@ class PlayerService:
                 except Exception:  # pragma: no cover - backend safety net
                     continue
                 emit = False
+                handle_end = False
                 async with self._lock:
+                    previous_status = self._state.status
                     if position >= 0:
                         self._max_position_seen_ms = max(
                             self._max_position_seen_ms, position
@@ -657,6 +660,21 @@ class PlayerService:
                             level_source=source,
                         )
                         emit = True
+                    if backend_state != self._state.status:
+                        self._state = replace(self._state, status=backend_state)
+                        emit = True
+                    if (
+                        backend_state == "stopped"
+                        and not self._stop_requested
+                        and previous_status in {"playing", "paused"}
+                        and self._state.item_id is not None
+                        and self._state.item_id != self._end_handled_item_id
+                        and self._max_position_seen_ms > STALE_STOP_START_WINDOW_MS
+                    ):
+                        self._end_handled_item_id = self._state.item_id
+                        handle_end = True
+                    if backend_state == "stopped" and self._stop_requested:
+                        self._stop_requested = False
                     item_id = self._state.item_id
                 if (
                     status == "playing"
@@ -666,6 +684,8 @@ class PlayerService:
                     and item_id != self._end_handled_item_id
                 ):
                     self._end_handled_item_id = item_id
+                    await self._handle_track_end()
+                if handle_end:
                     await self._handle_track_end()
                 if emit:
                     await self._emit_state()
