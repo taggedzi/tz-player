@@ -62,28 +62,49 @@ def _coerce_state(data: dict[str, Any]) -> AppState:
     )
 
 
-def load_state(path: Path) -> AppState:
-    """Load the application state from disk, falling back to defaults."""
+def load_state_with_notice(path: Path) -> tuple[AppState, str | None]:
+    """Load state and return an optional user-facing notice."""
     try:
         raw = path.read_text(encoding="utf-8")
     except FileNotFoundError:
         logger.warning("State file missing at %s; using defaults.", path)
-        return AppState()
+        return AppState(), None
     except OSError as exc:
         logger.warning("Failed to read state file %s: %s; using defaults.", path, exc)
-        return AppState()
+        return (
+            AppState(),
+            "State settings were reset to defaults.\n"
+            "Likely cause: state file is unreadable due to permissions or IO issues.\n"
+            f"Next step: verify access to '{path}' and restart.",
+        )
 
     try:
         data = json.loads(raw)
     except json.JSONDecodeError:
         logger.warning("State file at %s is invalid JSON; using defaults.", path)
-        return AppState()
+        return (
+            AppState(),
+            "State settings were reset to defaults.\n"
+            "Likely cause: state file is corrupt or partially written.\n"
+            f"Next step: remove or repair '{path}' and restart.",
+        )
 
     if not isinstance(data, dict):
         logger.warning("State file at %s is not a JSON object; using defaults.", path)
-        return AppState()
+        return (
+            AppState(),
+            "State settings were reset to defaults.\n"
+            "Likely cause: state file format is invalid for this app version.\n"
+            f"Next step: remove '{path}' and restart.",
+        )
 
-    return _coerce_state(data)
+    return _coerce_state(data), None
+
+
+def load_state(path: Path) -> AppState:
+    """Load the application state from disk, falling back to defaults."""
+    state, _notice = load_state_with_notice(path)
+    return state
 
 
 def save_state(path: Path, state: AppState) -> None:

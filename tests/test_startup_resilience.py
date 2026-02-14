@@ -172,6 +172,40 @@ def test_startup_shows_generic_error_when_state_load_fails(
     _run(run_app())
 
 
+def test_startup_surfaces_notice_when_state_file_is_corrupt(
+    tmp_path, monkeypatch
+) -> None:
+    _setup_dirs(tmp_path, monkeypatch)
+    pushed_screens: list[object] = []
+
+    async def capture_push_screen(self, screen):
+        pushed_screens.append(screen)
+        return None
+
+    state_file = paths.state_path()
+    state_file.parent.mkdir(parents=True, exist_ok=True)
+    state_file.write_text("{invalid-json", encoding="utf-8")
+
+    monkeypatch.setattr(TzPlayerApp, "push_screen", capture_push_screen)
+    app = TzPlayerApp(auto_init=False, backend_name="fake")
+
+    async def run_app() -> None:
+        async with app.run_test():
+            await asyncio.sleep(0)
+            await app._initialize_state()
+            assert app.player_service is not None
+            assert any(
+                isinstance(screen, ErrorModal)
+                and "State settings were reset to defaults." in screen._message
+                and "Likely cause:" in screen._message
+                and "Next step:" in screen._message
+                for screen in pushed_screens
+            )
+            app.exit()
+
+    _run(run_app())
+
+
 def test_startup_shows_generic_error_when_db_init_fails(tmp_path, monkeypatch) -> None:
     _setup_dirs(tmp_path, monkeypatch)
     pushed_screens: list[object] = []

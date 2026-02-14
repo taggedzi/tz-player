@@ -97,7 +97,7 @@ Execution tracker derived from `SPEC.md`.
 - Tests:
   - Startup resilience test for invalid/corrupt state file path that asserts user-visible messaging.
   - Regression test for normal startup path with no warning.
-- Status: `todo`
+- Status: `done`
 
 ### T-024 Audio Level Source-Switch Observability
 - Spec Ref: Section `9` (Observability)

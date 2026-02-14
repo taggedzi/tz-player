@@ -37,7 +37,7 @@ from .services.metadata_service import MetadataService
 from .services.player_service import PlayerService, PlayerState, TrackInfo
 from .services.playlist_store import PlaylistStore
 from .services.vlc_backend import VLCPlaybackBackend
-from .state_store import AppState, load_state, save_state
+from .state_store import AppState, load_state_with_notice, save_state
 from .ui.actions_menu import ActionsMenuDismissed, ActionsMenuPopup, ActionsMenuSelected
 from .ui.modals.error import ErrorModal
 from .ui.playlist_pane import PlaylistPane
@@ -251,7 +251,9 @@ class TzPlayerApp(App):
 
     async def _initialize_state(self) -> None:
         try:
-            self.state = await run_blocking(load_state, state_path())
+            self.state, state_notice = await run_blocking(
+                load_state_with_notice, state_path()
+            )
             backend_name = _resolve_backend_name(
                 self._backend_name, self.state.playback_backend
             )
@@ -323,6 +325,8 @@ class TzPlayerApp(App):
             await pane.update_transport_controls(self.player_state)
             self._update_current_track_pane()
             await self._start_visualizer()
+            if state_notice is not None:
+                await self.push_screen(ErrorModal(state_notice))
         except Exception as exc:
             logger.exception("Failed to initialize app: %s", exc)
             await self.push_screen(
