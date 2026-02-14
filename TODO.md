@@ -173,7 +173,7 @@ Execution tracker derived from `SPEC.md`.
   - Integration test verifying prewarm completion and envelope availability at transition.
   - Stress test confirming no event-loop blocking under rapid navigation.
 - Status: `done`
-- Commit:
+- Commit: `b8dc538`
 
 ## Archived Completed Work
 
