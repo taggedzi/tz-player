@@ -12,9 +12,14 @@ Execution tracker derived from `SPEC.md`.
 
 ## Active Backlog
 
-## V3 Visualization Expansion (Extra Scope)
+- No active tasks currently.
+- Add remaining/new tasks below this section as `todo`/`in_progress`.
 
-### VIZ-001 Matrix Rain Visualizer Plugin
+## Archived Completed Work
+
+### V3 Visualization Expansion (Extra Scope) — Completed
+
+#### VIZ-001 Matrix Rain Visualizer Plugin
 - Spec Ref: `WF-06`, Sections `5`, `6`
 - Scope: Add a clean matrix-style code rain visualizer that is non-audio-reactive.
 - Acceptance:
@@ -27,7 +32,7 @@ Execution tracker derived from `SPEC.md`.
 - Status: `done`
 - Commit: `e016fa0`
 
-### VIZ-002 Cyberpunk Terminal Ops Visualizer Plugin
+#### VIZ-002 Cyberpunk Terminal Ops Visualizer Plugin
 - Spec Ref: `WF-06`, Sections `4`, `6`, `8`
 - Scope: Add a fictional terminal-operations visualizer themed as staged song “target analysis”.
 - Acceptance:
@@ -41,7 +46,7 @@ Execution tracker derived from `SPEC.md`.
 - Status: `done`
 - Commit: `39ea7fe`
 
-### VIZ-003 Audio-Reactive VU Meter Visualizer Plugin
+#### VIZ-003 Audio-Reactive VU Meter Visualizer Plugin
 - Spec Ref: `WF-06`, Sections `5`, `6`, `9.1`
 - Scope: Deliver `vu.reactive` as a service-driven audio-reactive visualizer consuming `AudioLevelService`.
 - Acceptance:
@@ -55,7 +60,7 @@ Execution tracker derived from `SPEC.md`.
 - Status: `done`
 - Commit: `453e715`, `67c0e8f`
 
-### VIZ-004 Playback-Level Signal Provider Contract
+#### VIZ-004 Playback-Level Signal Provider Contract
 - Spec Ref: Sections `5`, `6`
 - Scope: Define and implement `AudioLevelService` provider contract (backend live + envelope cache + fallback).
 - Acceptance:
@@ -69,7 +74,7 @@ Execution tracker derived from `SPEC.md`.
 - Status: `done`
 - Commit: `453e715`, `22463a9`
 
-### VIZ-005 Visualizer Catalog and UX Docs
+#### VIZ-005 Visualizer Catalog and UX Docs
 - Spec Ref: Sections `6`, `9`, `11`
 - Scope: Document plugin IDs, behavior, limitations, and troubleshooting for new visualizers.
 - Acceptance:
@@ -80,7 +85,7 @@ Execution tracker derived from `SPEC.md`.
 - Status: `done`
 - Commit: `66d6195`
 
-### VIZ-006 Visualizer Acceptance Coverage Update
+#### VIZ-006 Visualizer Acceptance Coverage Update
 - Spec Ref: `WF-06`, Section `11`
 - Scope: Extend acceptance mapping and release gate notes for added visualizer plugins.
 - Acceptance:
@@ -91,7 +96,7 @@ Execution tracker derived from `SPEC.md`.
 - Status: `done`
 - Commit: `66d6195`
 
-### VIZ-007 PCM Envelope Precompute and Time-Synced VU Source
+#### VIZ-007 PCM Envelope Precompute and Time-Synced VU Source
 - Spec Ref: `WF-06`, Sections `5`, `6`, `9.1`
 - Scope: Add precomputed PCM level envelopes (timestamped bins) as a backend-agnostic VU signal source.
 - Acceptance:
@@ -106,7 +111,7 @@ Execution tracker derived from `SPEC.md`.
 - Status: `done`
 - Commit: `22463a9`, `67c0e8f`, `b8dc538`
 
-### VIZ-009 FFmpeg External-Only Policy and Runtime Gating
+#### VIZ-009 FFmpeg External-Only Policy and Runtime Gating
 - Spec Ref: Sections `6`, `7`, `9`, `11`
 - Scope: Enforce project policy that FFmpeg is never bundled/packaged and is only used when user-installed and discoverable.
 - Acceptance:
@@ -119,7 +124,7 @@ Execution tracker derived from `SPEC.md`.
 - Status: `done`
 - Commit: `507283b`, `1085e73`, `80b50c6`, `66d6195`
 
-### VIZ-010 `doctor` Command for Dependency Diagnostics
+#### VIZ-010 `doctor` Command for Dependency Diagnostics
 - Spec Ref: `WF-07`, Sections `9`, `10`, `11`
 - Scope: Add a CLI diagnostics command to report backend/tool readiness and remediation guidance.
 - Acceptance:
@@ -136,7 +141,7 @@ Execution tracker derived from `SPEC.md`.
 - Status: `done`
 - Commit: `1085e73`
 
-### VIZ-011 UX Wiring for Optional FFmpeg in VU/Envelope Flow
+#### VIZ-011 UX Wiring for Optional FFmpeg in VU/Envelope Flow
 - Spec Ref: Sections `6`, `9`, `10`
 - Scope: Surface actionable user messaging when ffmpeg-backed envelope analysis is unavailable.
 - Acceptance:
@@ -149,7 +154,7 @@ Execution tracker derived from `SPEC.md`.
 - Status: `done`
 - Commit: `80b50c6`
 
-### VIZ-012 Docs and Acceptance Mapping for Doctor + FFmpeg Policy
+#### VIZ-012 Docs and Acceptance Mapping for Doctor + FFmpeg Policy
 - Spec Ref: `WF-06`, `WF-07`, Section `11`
 - Scope: Finalize user/operator docs for external-only ffmpeg usage and diagnostics workflow.
 - Acceptance:
@@ -161,7 +166,7 @@ Execution tracker derived from `SPEC.md`.
 - Status: `done`
 - Commit: `66d6195`
 
-### VIZ-008 Next-Track Envelope Prewarm
+#### VIZ-008 Next-Track Envelope Prewarm
 - Spec Ref: `WF-06`, Sections `5`, `6`
 - Scope: Precompute envelope for the likely next track in the background so VU is ready at track handoff.
 - Acceptance:
@@ -175,7 +180,7 @@ Execution tracker derived from `SPEC.md`.
 - Status: `done`
 - Commit: `b8dc538`
 
-### VIZ-013 Release Guardrails for External Media Tooling
+#### VIZ-013 Release Guardrails for External Media Tooling
 - Spec Ref: Sections `7`, `9`, `11`
 - Scope: Add explicit release-time checks that external media binaries (VLC/FFmpeg) are never bundled by project packaging flows.
 - Acceptance:
@@ -190,8 +195,6 @@ Execution tracker derived from `SPEC.md`.
   - N/A (release/docs policy), validated by release checklist execution.
 - Status: `done`
 - Commit: `0c66d73`
-
-## Archived Completed Work
 
 All baseline and stabilization tasks are complete and archived here for traceability.
 
