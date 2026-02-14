@@ -159,7 +159,7 @@ Execution tracker derived from `SPEC.md`.
 - Tests:
   - N/A (docs), validated by review checklist.
 - Status: `done`
-- Commit:
+- Commit: `66d6195`
 
 ### VIZ-008 Next-Track Envelope Prewarm
 - Spec Ref: `WF-06`, Sections `5`, `6`
