@@ -209,3 +209,51 @@ def test_next_track_prewarm_cancels_when_not_playing(tmp_path, monkeypatch) -> N
     app.player_service = _PredictStub()  # type: ignore[assignment]
     app._schedule_next_track_prewarm()
     assert app._next_prewarm_task is None
+
+
+def test_next_track_prewarm_does_not_repeat_same_context(tmp_path, monkeypatch) -> None:
+    _setup_dirs(tmp_path, monkeypatch)
+    app = app_module.TzPlayerApp(auto_init=False)
+    app.audio_envelope_store = _StoreStub(has_hit=False)  # type: ignore[assignment]
+    app.player_state = PlayerState(
+        status="playing",
+        playlist_id=1,
+        item_id=1,
+        position_ms=1234,
+        repeat_mode="ALL",
+        shuffle=False,
+    )
+
+    class _PredictStub:
+        async def predict_next_item_id(self) -> int | None:
+            return 2
+
+    class _StoreWithRow:
+        async def get_item_row(self, _playlist_id: int, _item_id: int):  # type: ignore[no-untyped-def]
+            return SimpleNamespace(
+                title="Next Song",
+                artist=None,
+                album=None,
+                year=None,
+                path=Path("/tmp/next.mp3"),
+                duration_ms=1000,
+            )
+
+    warmed: list[str] = []
+
+    async def _capture(track: TrackInfo) -> None:
+        warmed.append(track.path)
+
+    app.player_service = _PredictStub()  # type: ignore[assignment]
+    app.store = _StoreWithRow()  # type: ignore[assignment]
+    monkeypatch.setattr(app, "_ensure_envelope_for_track", _capture)
+
+    async def run() -> None:
+        app._schedule_next_track_prewarm()
+        await asyncio.sleep(0.25)
+        # Same context should not schedule another prewarm.
+        app._schedule_next_track_prewarm()
+        await asyncio.sleep(0.25)
+
+    _run(run())
+    assert warmed == ["/tmp/next.mp3"]

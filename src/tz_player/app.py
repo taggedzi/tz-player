@@ -621,12 +621,10 @@ class TzPlayerApp(App):
             state.shuffle,
             state.position_ms // 5000,
         )
-        if (
-            not force
-            and self._next_prewarm_context == context
-            and self._next_prewarm_task is not None
-            and not self._next_prewarm_task.done()
-        ):
+        if not force and self._next_prewarm_context == context:
+            if self._next_prewarm_task is None or self._next_prewarm_task.done():
+                # Context already warmed; avoid repeated prewarm churn on frequent state emits.
+                return
             return
         self._cancel_next_track_prewarm()
         self._next_prewarm_context = context
@@ -672,7 +670,6 @@ class TzPlayerApp(App):
             return
         finally:
             if self._next_prewarm_context == context:
-                self._next_prewarm_context = None
                 self._next_prewarm_task = None
 
     def _make_envelope_task_cleanup(

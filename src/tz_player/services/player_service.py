@@ -705,7 +705,7 @@ class PlayerService:
                         )
                         emit = True
                     if (
-                        backend_state == "stopped"
+                        backend_state in {"stopped", "idle"}
                         and not self._stop_requested
                         and previous_status in {"playing", "paused"}
                         and self._state.item_id is not None
@@ -715,12 +715,13 @@ class PlayerService:
                         self._end_handled_item_id = self._state.item_id
                         handle_end = True
                         logger.debug(
-                            "Poll fallback track-end: item_id=%s max_pos=%s duration=%s",
+                            "Poll fallback track-end: backend_state=%s item_id=%s max_pos=%s duration=%s",
+                            backend_state,
                             self._state.item_id,
                             self._max_position_seen_ms,
                             self._state.duration_ms,
                         )
-                    if backend_state == "stopped" and self._stop_requested:
+                    if backend_state in {"stopped", "idle"} and self._stop_requested:
                         self._stop_requested = False
                     item_id = self._state.item_id
                 if (
