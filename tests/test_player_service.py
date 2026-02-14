@@ -489,7 +489,7 @@ def test_track_end_advance_not_blocked_by_stale_stop_latch() -> None:
         await service.stop()  # Leaves stale stop latch in this backend simulation.
         await service.play_item(1, 1)  # Must clear latch.
         # Simulate that playback has progressed before backend emits natural stop.
-        service._state = replace(service.state, position_ms=1200)
+        await service._handle_backend_event(PositionUpdated(1200, 5000))
         await service._handle_backend_event(StateChanged("stopped"))  # Natural end.
         assert service.state.item_id == 2
         await service.shutdown()
@@ -557,6 +557,49 @@ def test_stopped_event_mid_track_can_advance_when_not_manual_stop() -> None:
                 repeat_mode="ALL",
             ),
         )
+        await service._handle_backend_event(StateChanged("stopped"))
+        assert service.state.item_id == 2
+        assert service.state.status == "playing"
+        await service.shutdown()
+
+    _run(run())
+
+
+def test_stopped_event_after_progress_with_reset_position_advances() -> None:
+    async def emit_event(_event: object) -> None:
+        return None
+
+    async def track_info(_playlist_id: int, item_id: int) -> TrackInfo:
+        return TrackInfo(
+            title=f"Song {item_id}",
+            artist=None,
+            album=None,
+            year=None,
+            path=f"/tmp/{item_id}.mp3",
+            duration_ms=5000,
+        )
+
+    async def next_provider(_playlist_id: int, item_id: int, _wrap: bool) -> int | None:
+        return 2 if item_id == 1 else None
+
+    async def run() -> None:
+        service = PlayerService(
+            emit_event=emit_event,
+            track_info_provider=track_info,
+            backend=FakePlaybackBackend(tick_interval_ms=50),
+            next_track_provider=next_provider,
+            initial_state=PlayerState(
+                status="playing",
+                playlist_id=1,
+                item_id=1,
+                position_ms=0,
+                duration_ms=5000,
+                repeat_mode="ALL",
+            ),
+        )
+        # Simulate normal progress, then a backend reset to 0 before stop.
+        await service._handle_backend_event(PositionUpdated(1500, 5000))
+        await service._handle_backend_event(PositionUpdated(0, 5000))
         await service._handle_backend_event(StateChanged("stopped"))
         assert service.state.item_id == 2
         assert service.state.status == "playing"

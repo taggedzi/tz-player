@@ -96,6 +96,7 @@ class PlayerService:
         self._poll_task: asyncio.Task[None] | None = None
         self._poll_interval = 0.25
         self._end_handled_item_id: int | None = None
+        self._max_position_seen_ms = self._state.position_ms
         self._shuffle_order: list[int] = []
         self._shuffle_index: int | None = None
         self._shuffle_playlist_id: int | None = None
@@ -144,6 +145,7 @@ class PlayerService:
             # A stale manual-stop latch must never suppress natural track-end advance.
             self._stop_requested = False
             self._end_handled_item_id = None
+            self._max_position_seen_ms = 0
             shuffle_enabled = self._state.shuffle
         await self._emit_state()
         if shuffle_enabled:
@@ -208,6 +210,7 @@ class PlayerService:
                 level_source=None,
             )
             self._end_handled_item_id = None
+            self._max_position_seen_ms = 0
         await self._backend.stop()
         await self._emit_state()
 
@@ -216,6 +219,7 @@ class PlayerService:
             position = int(self._state.duration_ms * ratio)
             position = _clamp(position, 0, self._state.duration_ms)
             self._state = replace(self._state, position_ms=position)
+            self._max_position_seen_ms = max(self._max_position_seen_ms, position)
         await self._backend.seek_ms(position)
         await self._emit_state()
 
@@ -223,6 +227,7 @@ class PlayerService:
         async with self._lock:
             position = _clamp(position_ms, 0, self._state.duration_ms)
             self._state = replace(self._state, position_ms=position)
+            self._max_position_seen_ms = max(self._max_position_seen_ms, position)
         await self._backend.seek_ms(position)
         await self._emit_state()
 
@@ -231,6 +236,7 @@ class PlayerService:
             position = self._state.position_ms + delta_ms
             position = _clamp(position, 0, self._state.duration_ms)
             self._state = replace(self._state, position_ms=position)
+            self._max_position_seen_ms = max(self._max_position_seen_ms, position)
         await self._backend.seek_ms(position)
         await self._emit_state()
 
@@ -401,6 +407,7 @@ class PlayerService:
                 if pos != self._state.position_ms:
                     last_pos = self._state.position_ms
                     self._state = replace(self._state, position_ms=pos)
+                    self._max_position_seen_ms = max(self._max_position_seen_ms, pos)
                     if abs(pos - last_pos) >= 100:
                         emit = True
             elif isinstance(event, MediaChanged):
@@ -418,7 +425,7 @@ class PlayerService:
                     and not self._stop_requested
                     and previous_status in {"playing", "paused"}
                     and self._state.duration_ms > 0
-                    and self._state.position_ms <= STALE_STOP_START_WINDOW_MS
+                    and self._max_position_seen_ms <= STALE_STOP_START_WINDOW_MS
                 ):
                     # Guard only clearly stale stops shortly after a new track start.
                     return
@@ -617,11 +624,18 @@ class PlayerService:
                     continue
                 emit = False
                 async with self._lock:
+                    if position >= 0:
+                        self._max_position_seen_ms = max(
+                            self._max_position_seen_ms, position
+                        )
                     if duration >= 0 and duration != self._state.duration_ms:
                         self._state = replace(self._state, duration_ms=duration)
                         emit = True
                     if position >= 0 and abs(position - self._state.position_ms) >= 100:
                         self._state = replace(self._state, position_ms=position)
+                        self._max_position_seen_ms = max(
+                            self._max_position_seen_ms, position
+                        )
                         emit = True
                     if reading is not None:
                         left = _clamp_float(reading.left, 0.0, 1.0)
