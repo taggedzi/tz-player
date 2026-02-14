@@ -54,7 +54,7 @@ Execution tracker derived from `SPEC.md`.
 - Tests:
   - Logging config tests for file structure and console output behavior.
   - Regression tests for CLI log-level precedence behavior.
-- Status: `todo`
+- Status: `done`
 
 ### T-021 Spec/Docs Metadata Backend Parity (TinyTag)
 - Spec Ref: Section `5` (Architecture constraints)

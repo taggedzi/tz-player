@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from pathlib import Path
 from types import SimpleNamespace
@@ -30,7 +31,11 @@ def test_setup_logging_default_path_writes_log(tmp_path) -> None:
         _flush_root_handlers()
         log_path = tmp_path / "tz-player.log"
         assert log_path.exists()
-        assert "default-log-path" in log_path.read_text(encoding="utf-8")
+        line = log_path.read_text(encoding="utf-8").strip().splitlines()[-1]
+        payload = json.loads(line)
+        assert payload["message"] == "default-log-path"
+        assert payload["level"] == "INFO"
+        assert payload["logger"] == "tz_player.test"
     finally:
         root.handlers.clear()
         for handler in original_handlers:
@@ -49,7 +54,10 @@ def test_setup_logging_custom_log_file_writes_log(tmp_path) -> None:
         logger.debug("custom-log-path")
         _flush_root_handlers()
         assert custom_path.exists()
-        assert "custom-log-path" in custom_path.read_text(encoding="utf-8")
+        line = custom_path.read_text(encoding="utf-8").strip().splitlines()[-1]
+        payload = json.loads(line)
+        assert payload["message"] == "custom-log-path"
+        assert payload["level"] == "DEBUG"
     finally:
         root.handlers.clear()
         for handler in original_handlers:
