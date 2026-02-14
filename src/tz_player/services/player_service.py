@@ -428,6 +428,14 @@ class PlayerService:
                     and self._max_position_seen_ms <= STALE_STOP_START_WINDOW_MS
                 ):
                     # Guard only clearly stale stops shortly after a new track start.
+                    logger.debug(
+                        "Ignoring stale stopped event: item_id=%s pos=%s max_pos=%s duration=%s prev_status=%s",
+                        self._state.item_id,
+                        self._state.position_ms,
+                        self._max_position_seen_ms,
+                        self._state.duration_ms,
+                        previous_status,
+                    )
                     return
                 if event.status != self._state.status:
                     self._state = replace(self._state, status=event.status)
@@ -441,6 +449,14 @@ class PlayerService:
                 ):
                     self._end_handled_item_id = self._state.item_id
                     handle_end = True
+                    logger.debug(
+                        "StateChanged stop will handle track end: item_id=%s pos=%s max_pos=%s duration=%s prev_status=%s",
+                        self._state.item_id,
+                        self._state.position_ms,
+                        self._max_position_seen_ms,
+                        self._state.duration_ms,
+                        previous_status,
+                    )
                 if event.status == "stopped" and self._stop_requested:
                     self._stop_requested = False
             elif isinstance(event, BackendError):
@@ -457,9 +473,18 @@ class PlayerService:
             item_id = self._state.item_id
             repeat_mode = self._state.repeat_mode
             shuffle = self._state.shuffle
+        logger.debug(
+            "Handle track end: playlist_id=%s item_id=%s repeat=%s shuffle=%s",
+            playlist_id,
+            item_id,
+            repeat_mode,
+            shuffle,
+        )
         if playlist_id is None or item_id is None:
+            logger.debug("Track end ignored due to missing playlist/item context")
             return
         if repeat_mode == "ONE":
+            logger.debug("Repeat ONE: replaying item_id=%s", item_id)
             await self.play_item(playlist_id, item_id)
             return
         if shuffle:
@@ -467,17 +492,26 @@ class PlayerService:
                 playlist_id, item_id, direction=1, wrap=repeat_mode == "ALL"
             )
             if next_id is not None:
+                logger.debug("Shuffle next selected: %s -> %s", item_id, next_id)
                 await self.play_item(playlist_id, next_id)
                 return
         if self._next_track_provider is None:
+            logger.debug("No next_track_provider; stopping playback")
             await self.stop()
             return
         next_id = await self._next_track_provider(
             playlist_id, item_id, repeat_mode == "ALL"
         )
         if next_id is None:
+            logger.debug(
+                "No next track from provider: playlist_id=%s item_id=%s wrap=%s",
+                playlist_id,
+                item_id,
+                repeat_mode == "ALL",
+            )
             await self.stop()
             return
+        logger.debug("Sequential next selected: %s -> %s", item_id, next_id)
         await self.play_item(playlist_id, next_id)
 
     async def _ensure_shuffle_position(self, playlist_id: int, item_id: int) -> None:
