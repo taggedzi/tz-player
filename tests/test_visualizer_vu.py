@@ -65,6 +65,13 @@ def test_vu_render_falls_back_when_levels_unavailable() -> None:
     assert "VU REACTIVE [SIM-R]" in output
 
 
+def test_vu_fallback_without_levels_stays_nearly_flat() -> None:
+    plugin = VuReactiveVisualizer()
+    plugin.on_activate(VisualizerContext(ansi_enabled=False, unicode_enabled=True))
+    output = plugin.render(_frame(width=72, height=8, frame_index=3, status="playing"))
+    assert "  0%" in output or "  1%" in output or "  2%" in output
+
+
 def test_vu_render_is_deterministic_for_same_frame_after_reactivation() -> None:
     plugin = VuReactiveVisualizer()
     context = VisualizerContext(ansi_enabled=False, unicode_enabled=True)

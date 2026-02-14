@@ -393,6 +393,34 @@ def test_track_end_advance_not_blocked_by_stale_stop_latch() -> None:
     _run(run())
 
 
+def test_stale_stopped_event_is_ignored_when_position_not_near_end() -> None:
+    async def emit_event(_event: object) -> None:
+        return None
+
+    async def run() -> None:
+        service = PlayerService(
+            emit_event=emit_event,
+            track_info_provider=_track_info_provider,
+            backend=FakePlaybackBackend(tick_interval_ms=50),
+        )
+        # Simulate active playback mid-track.
+        service._state = replace(
+            service.state,
+            status="playing",
+            playlist_id=1,
+            item_id=2,
+            position_ms=1000,
+            duration_ms=5000,
+        )
+        await service._handle_backend_event(StateChanged("stopped"))
+        # Late/stale stop should not clobber current playback state.
+        assert service.state.status == "playing"
+        assert service.state.item_id == 2
+        await service.shutdown()
+
+    _run(run())
+
+
 def test_shuffle_builds_stable_order() -> None:
     async def emit_event(_event: object) -> None:
         return None

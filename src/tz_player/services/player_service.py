@@ -367,6 +367,15 @@ class PlayerService:
                     "paused",
                 }:
                     return
+                if (
+                    event.status == "stopped"
+                    and not self._stop_requested
+                    and previous_status in {"playing", "paused"}
+                    and self._state.duration_ms > 0
+                    and self._state.position_ms < max(0, self._state.duration_ms - 500)
+                ):
+                    # Guard against late/stale backend "stopped" events from a prior track.
+                    return
                 if event.status != self._state.status:
                     self._state = replace(self._state, status=event.status)
                     emit = True

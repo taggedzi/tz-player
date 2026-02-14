@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 import re
 from dataclasses import dataclass, field
 
@@ -70,13 +69,11 @@ def _extract_live_levels(frame: VisualizerFrameInput) -> tuple[float, float] | N
 def _fallback_levels(frame: VisualizerFrameInput) -> tuple[float, float]:
     if frame.status not in {"playing", "paused"}:
         return (0.0, 0.0)
-    t = frame.position_s + frame.frame_index / 10.0
+    # When no real levels are available, keep a stable baseline instead of synthetic motion.
     if frame.status == "paused":
-        pulse = 0.04 + 0.03 * (0.5 + 0.5 * math.sin(t * 0.6))
-        return (pulse, pulse)
-    left = 0.12 + 0.76 * (0.35 + 0.65 * (0.5 + 0.5 * math.sin((t * 6.4) + 0.2)))
-    right = 0.12 + 0.76 * (0.35 + 0.65 * (0.5 + 0.5 * math.sin((t * 7.1) + 1.1)))
-    return (_clamp(left), _clamp(right))
+        return (0.0, 0.0)
+    baseline = 0.02 if frame.volume > 0 else 0.0
+    return (baseline, baseline)
 
 
 def _smooth(current: float, target: float) -> float:
