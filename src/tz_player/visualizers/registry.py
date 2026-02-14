@@ -7,6 +7,7 @@ from collections.abc import Callable
 
 from .base import VisualizerPlugin
 from .basic import BasicVisualizer
+from .hackscope import HackScopeVisualizer
 from .matrix import MatrixBlueVisualizer, MatrixGreenVisualizer, MatrixRedVisualizer
 from .ops_cyberpunk import CyberpunkOpsVisualizer
 
@@ -47,6 +48,7 @@ class VisualizerRegistry:
                 MatrixBlueVisualizer,
                 MatrixRedVisualizer,
                 CyberpunkOpsVisualizer,
+                HackScopeVisualizer,
             ]
         )
         default_id = "basic"
