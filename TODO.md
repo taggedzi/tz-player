@@ -39,7 +39,7 @@ Execution tracker derived from `SPEC.md`.
 - Tests:
   - Unit tests for clamp/default/read-compat behavior.
   - Integration test confirming host/timer use configured FPS.
-- Status: `todo`
+- Status: `done`
 
 ### T-020 Structured Logging Upgrade
 - Spec Ref: Section `9` (Observability)

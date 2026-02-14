@@ -233,3 +233,43 @@ def test_startup_continues_when_local_visualizer_import_fails(
         in record.message
         for record in caplog.records
     )
+
+
+def test_invalid_persisted_visualizer_fps_recovers_to_default(
+    tmp_path, monkeypatch
+) -> None:
+    _setup_dirs(tmp_path, monkeypatch)
+    save_state(
+        paths.state_path(),
+        AppState(playback_backend="fake", visualizer_fps=99),
+    )
+    app = TzPlayerApp(auto_init=False, backend_name="fake")
+
+    async def run_app() -> None:
+        async with app.run_test():
+            await asyncio.sleep(0)
+            await app._initialize_state()
+            assert app.visualizer_host is not None
+            assert app.visualizer_host.target_fps == 10
+            assert app.state.visualizer_fps == 10
+            app.exit()
+
+    _run(run_app())
+    persisted = load_state(paths.state_path())
+    assert persisted.visualizer_fps == 10
+
+
+def test_cli_visualizer_fps_override_is_clamped(tmp_path, monkeypatch) -> None:
+    _setup_dirs(tmp_path, monkeypatch)
+    app = TzPlayerApp(auto_init=False, backend_name="fake", visualizer_fps_override=99)
+
+    async def run_app() -> None:
+        async with app.run_test():
+            await asyncio.sleep(0)
+            await app._initialize_state()
+            assert app.visualizer_host is not None
+            assert app.visualizer_host.target_fps == 30
+            assert app.state.visualizer_fps == 30
+            app.exit()
+
+    _run(run_app())

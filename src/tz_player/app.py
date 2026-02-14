@@ -200,7 +200,11 @@ class TzPlayerApp(App):
     ]
 
     def __init__(
-        self, *, auto_init: bool = True, backend_name: str | None = None
+        self,
+        *,
+        auto_init: bool = True,
+        backend_name: str | None = None,
+        visualizer_fps_override: int | None = None,
     ) -> None:
         super().__init__()
         self.register_theme(CYBERPUNK_THEME)
@@ -210,6 +214,7 @@ class TzPlayerApp(App):
         self.playlist_id: int | None = None
         self._auto_init = auto_init
         self._backend_name = backend_name
+        self._visualizer_fps_override = visualizer_fps_override
         self.player_service: PlayerService | None = None
         self.player_state = PlayerState()
         self.current_track: TrackInfo | None = None
@@ -257,7 +262,17 @@ class TzPlayerApp(App):
             backend_name = _resolve_backend_name(
                 self._backend_name, self.state.playback_backend
             )
-            self.state = replace(self.state, playback_backend=backend_name)
+            state_fps = _normalize_persisted_visualizer_fps(self.state.visualizer_fps)
+            effective_fps = (
+                _clamp_int(self._visualizer_fps_override, 2, 30)
+                if self._visualizer_fps_override is not None
+                else state_fps
+            )
+            self.state = replace(
+                self.state,
+                playback_backend=backend_name,
+                visualizer_fps=effective_fps,
+            )
             await run_blocking(save_state, state_path(), self.state)
             await self.store.initialize()
             self.audio_envelope_store = SqliteEnvelopeStore(db_path())
@@ -780,7 +795,9 @@ class TzPlayerApp(App):
             )
         else:
             self.visualizer_registry = VisualizerRegistry.built_in()
-        self.visualizer_host = VisualizerHost(self.visualizer_registry, target_fps=10)
+        self.visualizer_host = VisualizerHost(
+            self.visualizer_registry, target_fps=self.state.visualizer_fps
+        )
         context = VisualizerContext(
             ansi_enabled=self.state.ansi_enabled,
             unicode_enabled=True,
@@ -1054,6 +1071,16 @@ def _build_backend(name: str) -> FakePlaybackBackend | VLCPlaybackBackend:
     return FakePlaybackBackend()
 
 
+def _normalize_persisted_visualizer_fps(value: int) -> int:
+    if 2 <= value <= 30:
+        return value
+    return 10
+
+
+def _clamp_int(value: int, min_value: int, max_value: int) -> int:
+    return max(min_value, min(value, max_value))
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="tz-player", description="TaggedZ's command line music player."
@@ -1078,6 +1105,11 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("fake", "vlc"),
         help="Playback backend to use (fake or vlc).",
     )
+    parser.add_argument(
+        "--visualizer-fps",
+        type=int,
+        help="Visualizer render cadence (clamped to 2-30 FPS).",
+    )
     return parser
 
 
@@ -1096,7 +1128,14 @@ def main() -> int:
             print(render_report(report))
             return report.exit_code
         logging.getLogger(__name__).info("Starting tz-player TUI")
-        TzPlayerApp(backend_name=args.backend).run()
+        visualizer_fps = getattr(args, "visualizer_fps", None)
+        if visualizer_fps is not None:
+            TzPlayerApp(
+                backend_name=args.backend,
+                visualizer_fps_override=visualizer_fps,
+            ).run()
+        else:
+            TzPlayerApp(backend_name=args.backend).run()
         return 0
     except Exception as exc:  # pragma: no cover - top-level safety net
         logging.getLogger(__name__).exception("Fatal startup error: %s", exc)

@@ -31,6 +31,11 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("fake", "vlc"),
         help="Playback backend to use (fake or vlc).",
     )
+    parser.add_argument(
+        "--visualizer-fps",
+        type=int,
+        help="Visualizer render cadence (clamped to 2-30 FPS).",
+    )
     return parser
 
 
@@ -45,7 +50,14 @@ def main() -> int:
             log_file=Path(args.log_file) if args.log_file else None,
         )
         logging.getLogger(__name__).info("Starting tz-player GUI")
-        TzPlayerApp(backend_name=args.backend).run()
+        visualizer_fps = getattr(args, "visualizer_fps", None)
+        if visualizer_fps is not None:
+            TzPlayerApp(
+                backend_name=args.backend,
+                visualizer_fps_override=visualizer_fps,
+            ).run()
+        else:
+            TzPlayerApp(backend_name=args.backend).run()
         return 0
     except Exception as exc:  # pragma: no cover - top-level safety net
         logging.getLogger(__name__).exception("Fatal GUI startup error: %s", exc)

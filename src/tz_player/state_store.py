@@ -21,6 +21,7 @@ class AppState:
     shuffle: bool = False
     playback_backend: str = "fake"
     visualizer_id: str | None = None
+    visualizer_fps: int = 10
     visualizer_plugin_paths: tuple[str, ...] = ()
     ansi_enabled: bool = True
     log_level: str = "INFO"
@@ -45,6 +46,13 @@ def _coerce_state(data: dict[str, Any]) -> AppState:
             return value
         return default
 
+    def _int_or_default(value: Any, default: int) -> int:
+        if isinstance(value, bool):
+            return default
+        if isinstance(value, int):
+            return value
+        return default
+
     return AppState(
         playlist_id=_int_or_none(data.get("playlist_id")),
         current_item_id=_int_or_none(data.get("current_item_id"))
@@ -58,6 +66,7 @@ def _coerce_state(data: dict[str, Any]) -> AppState:
         visualizer_id=data.get("visualizer_id")
         if isinstance(data.get("visualizer_id"), str)
         else None,
+        visualizer_fps=_int_or_default(data.get("visualizer_fps"), 10),
         visualizer_plugin_paths=tuple(
             value
             for value in data.get("visualizer_plugin_paths", [])
