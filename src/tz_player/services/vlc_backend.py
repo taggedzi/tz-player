@@ -217,14 +217,28 @@ class VLCPlaybackBackend:
     ) -> None:
         if future is None or self._loop is None:
             return
-        self._loop.call_soon_threadsafe(future.set_result, value)
+        self._loop.call_soon_threadsafe(self._resolve_future_result, future, value)
 
     def _notify_future_exception(
         self, future: asyncio.Future[Any] | None, exc: Exception
     ) -> None:
         if future is None or self._loop is None:
             return
-        self._loop.call_soon_threadsafe(future.set_exception, exc)
+        self._loop.call_soon_threadsafe(self._resolve_future_exception, future, exc)
+
+    @staticmethod
+    def _resolve_future_result(future: asyncio.Future[Any], value: Any) -> None:
+        """Set result only when pending to avoid InvalidStateError races."""
+        if future.done() or future.cancelled():
+            return
+        future.set_result(value)
+
+    @staticmethod
+    def _resolve_future_exception(future: asyncio.Future[Any], exc: Exception) -> None:
+        """Set exception only when pending to avoid InvalidStateError races."""
+        if future.done() or future.cancelled():
+            return
+        future.set_exception(exc)
 
 
 def _map_state(player: Any) -> BackendStatus:

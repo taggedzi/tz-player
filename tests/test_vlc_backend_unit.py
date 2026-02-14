@@ -63,3 +63,25 @@ def test_get_level_sample_returns_none_when_not_supported() -> None:
     backend = VLCPlaybackBackend()
     sample = asyncio.run(backend.get_level_sample())
     assert sample is None
+
+
+def test_resolve_future_result_ignores_done_future() -> None:
+    async def run() -> None:
+        loop = asyncio.get_running_loop()
+        future: asyncio.Future[int] = loop.create_future()
+        future.set_result(1)
+        VLCPlaybackBackend._resolve_future_result(future, 2)
+        assert future.result() == 1
+
+    asyncio.run(run())
+
+
+def test_resolve_future_exception_ignores_done_future() -> None:
+    async def run() -> None:
+        loop = asyncio.get_running_loop()
+        future: asyncio.Future[int] = loop.create_future()
+        future.set_result(1)
+        VLCPlaybackBackend._resolve_future_exception(future, RuntimeError("x"))
+        assert future.result() == 1
+
+    asyncio.run(run())
