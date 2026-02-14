@@ -18,12 +18,14 @@ class VuReactiveVisualizer:
     _ansi_enabled: bool = True
     _left_smooth: float = 0.0
     _right_smooth: float = 0.0
+    _norm_peak: float = 0.35
     _history: list[float] = field(default_factory=list)
 
     def on_activate(self, context: VisualizerContext) -> None:
         self._ansi_enabled = context.ansi_enabled
         self._left_smooth = 0.0
         self._right_smooth = 0.0
+        self._norm_peak = 0.35
         self._history.clear()
 
     def on_deactivate(self) -> None:
@@ -40,6 +42,8 @@ class VuReactiveVisualizer:
         else:
             left_target, right_target = _fallback_levels(frame)
             source = "SIM-R"
+
+        left_target, right_target = self._normalize_levels(left_target, right_target)
 
         self._left_smooth = _smooth(self._left_smooth, left_target)
         self._right_smooth = _smooth(self._right_smooth, right_target)
@@ -60,6 +64,15 @@ class VuReactiveVisualizer:
         ]
         lines.extend(_history_block(self._history, width, self._ansi_enabled, rows=4))
         return _fit_lines(lines, width, height)
+
+    def _normalize_levels(self, left: float, right: float) -> tuple[float, float]:
+        left = _clamp(left)
+        right = _clamp(right)
+        peak_in = max(left, right)
+        decay = 0.97
+        self._norm_peak = max(peak_in, self._norm_peak * decay, 0.12)
+        gain = 1.0 / self._norm_peak
+        return (_boost_level(left, gain), _boost_level(right, gain))
 
 
 def _extract_live_levels(frame: VisualizerFrameInput) -> tuple[float, float] | None:
@@ -85,6 +98,16 @@ def _fallback_levels(frame: VisualizerFrameInput) -> tuple[float, float]:
 def _smooth(current: float, target: float) -> float:
     alpha = 0.45 if target > current else 0.22
     return _clamp(current + ((target - current) * alpha))
+
+
+def _boost_level(value: float, gain: float) -> float:
+    noise_floor = 0.01
+    raw = max(0.0, value - noise_floor)
+    boosted = _clamp(raw * gain * 1.15)
+    if boosted <= 0.0:
+        return 0.0
+    # Slight curve to make low-but-real signal levels more visible.
+    return _clamp(boosted**0.82)
 
 
 def _meter_line(label: str, value: float, width: int, ansi_enabled: bool) -> str:

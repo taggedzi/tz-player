@@ -191,3 +191,33 @@ def test_vu_render_shows_envelope_source_when_provided() -> None:
     )
     assert "VU REACTIVE [ENVELOPE]" in output
     assert "SRC ENVELOPE CACHE" in output
+
+
+def test_vu_low_levels_are_visibly_normalized() -> None:
+    plugin = VuReactiveVisualizer()
+    plugin.on_activate(VisualizerContext(ansi_enabled=False, unicode_enabled=True))
+    output = ""
+    for idx in range(10):
+        output = plugin.render(
+            _frame(
+                width=72,
+                height=8,
+                frame_index=idx,
+                level_left=0.08,
+                level_right=0.07,
+                level_source="envelope",
+            )
+        )
+    left_pct = _meter_pct(output, "L")
+    right_pct = _meter_pct(output, "R")
+    assert left_pct >= 20
+    assert right_pct >= 15
+
+
+def _meter_pct(output: str, label: str) -> int:
+    for line in output.splitlines():
+        if line.startswith(f"{label} ["):
+            match = re.search(r"(\d+)%", line)
+            if match:
+                return int(match.group(1))
+    return 0
