@@ -125,14 +125,15 @@ def _status_line(frame: VisualizerFrameInput) -> str:
 def _history_line(history: list[float], width: int) -> str:
     span = max(8, min(width - 14, 64))
     if not history:
-        return "H [................................]"
+        return "H [                                ]"
     recent = history[-span:]
-    glyphs = " .:-=+*#%@"
+    glyphs = " ▁▂▃▄▅▆▇█"
     chars: list[str] = []
     for level in recent:
-        idx = int(round(_clamp(level) * (len(glyphs) - 1)))
+        boosted = min(1.0, _clamp(level) ** 0.65)
+        idx = int(round(boosted * (len(glyphs) - 1)))
         chars.append(glyphs[idx])
-    history_text = "".join(chars).rjust(span, ".")
+    history_text = "".join(chars).rjust(span, " ")
     return f"H {history_text}"
 
 
