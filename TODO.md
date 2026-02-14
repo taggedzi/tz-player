@@ -189,7 +189,7 @@ Execution tracker derived from `SPEC.md`.
 - Tests:
   - N/A (release/docs policy), validated by release checklist execution.
 - Status: `done`
-- Commit:
+- Commit: `0c66d73`
 
 ## Archived Completed Work
 
