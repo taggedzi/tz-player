@@ -97,6 +97,34 @@ Execution tracker derived from `SPEC.md`.
   - Regression test for normal startup path with no warning.
 - Status: `todo`
 
+### T-024 Audio Level Source-Switch Observability
+- Spec Ref: Section `9` (Observability)
+- Scope:
+  - Add explicit log events when effective audio level source changes (`live` <-> `envelope` <-> `fallback`).
+  - Include enough context for diagnosis (track path/id when available, prior source, next source, trigger reason).
+- Acceptance:
+  - Source transitions are logged once per transition (not per frame/tick spam).
+  - Logs are emitted for startup source selection and runtime changes (seek/next/backend capability changes).
+  - No impact on render/event-loop responsiveness.
+- Tests:
+  - Unit/integration tests asserting transition logs are emitted exactly on source changes.
+  - Regression test ensuring no repeated spam when source is stable.
+- Status: `todo`
+
+### T-025 Envelope Cache Miss/Populate Observability Completion
+- Spec Ref: Section `9` (Observability)
+- Scope:
+  - Complete cache observability by adding explicit per-track envelope cache miss logging and successful cache populate summary (without excessive duplication).
+  - Keep existing cache hit and failure logs aligned with this flow.
+- Acceptance:
+  - For each analyzed track, logs can distinguish hit vs miss -> analysis -> stored outcome.
+  - Duplicate/noisy logs are bounded (for example, one miss/populate chain per track analysis attempt).
+  - Existing ffmpeg-missing and analysis-failure diagnostics remain intact.
+- Tests:
+  - Integration test for miss path logging and populate logging.
+  - Regression test for hit path without miss noise.
+- Status: `todo`
+
 ## Archived Completed Work
 
 ### V3 Visualization Expansion (Extra Scope) — Completed
