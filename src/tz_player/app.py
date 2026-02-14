@@ -1171,6 +1171,7 @@ def main() -> int:
             log_dir=log_dir(),
             level=level,
             log_file=Path(args.log_file) if args.log_file else None,
+            console=False,
         )
         if getattr(args, "command", "run") == "doctor":
             report = run_doctor(args.backend or "fake")

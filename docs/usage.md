@@ -42,7 +42,8 @@ Logging and diagnostics:
 - `--visualizer-plugin-path <path_or_module>` adds local visualizer plugin discovery entries for this run (repeatable; CLI overrides persisted list).
 - Without `--log-file`, logs are written to the app log directory as `tz-player.log`.
   - Typical default location pattern: `<user_data_dir>/logs/tz-player.log`.
-- Both console and rotating file logging are enabled by default.
+- TUI/GUI runs write logs to file by default (console log streaming is disabled to avoid drawing over the TUI).
+- The non-TUI `doctor` path still prints diagnostics to stdout.
 - `doctor` command behavior:
   - `tz-player doctor` checks `tinytag`, `vlc/libvlc`, and `ffmpeg`.
   - Exit code is `0` when required checks pass for the selected backend.

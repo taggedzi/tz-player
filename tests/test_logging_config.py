@@ -65,6 +65,21 @@ def test_setup_logging_custom_log_file_writes_log(tmp_path) -> None:
         root.setLevel(original_level)
 
 
+def test_setup_logging_can_disable_console_handler(tmp_path) -> None:
+    root = logging.getLogger()
+    original_handlers = list(root.handlers)
+    original_level = root.level
+    try:
+        setup_logging(log_dir=tmp_path, level="INFO", console=False)
+        assert len(root.handlers) == 1
+        assert root.handlers[0].__class__.__name__ == "RotatingFileHandler"
+    finally:
+        root.handlers.clear()
+        for handler in original_handlers:
+            root.addHandler(handler)
+        root.setLevel(original_level)
+
+
 def test_cli_main_passes_effective_level_and_log_file(monkeypatch, tmp_path) -> None:
     args = SimpleNamespace(
         verbose=True,
@@ -78,10 +93,17 @@ def test_cli_main_passes_effective_level_and_log_file(monkeypatch, tmp_path) -> 
         def parse_args(self):
             return args
 
-    def fake_setup_logging(*, log_dir: Path, level: str, log_file: Path | None):
+    def fake_setup_logging(
+        *,
+        log_dir: Path,
+        level: str,
+        log_file: Path | None,
+        console: bool = True,
+    ):
         captured["log_dir"] = log_dir
         captured["level"] = level
         captured["log_file"] = log_file
+        captured["console"] = console
 
     monkeypatch.setattr(cli_module, "build_parser", lambda: FakeParser())
     monkeypatch.setattr(cli_module, "setup_logging", fake_setup_logging)
@@ -114,10 +136,13 @@ def test_gui_main_passes_effective_level_and_log_file(monkeypatch, tmp_path) -> 
         def run(self) -> None:
             captured["ran"] = True
 
-    def fake_setup_logging(*, log_dir: Path, level: str, log_file: Path | None):
+    def fake_setup_logging(
+        *, log_dir: Path, level: str, log_file: Path | None, console: bool
+    ):
         captured["log_dir"] = log_dir
         captured["level"] = level
         captured["log_file"] = log_file
+        captured["console"] = console
 
     monkeypatch.setattr(gui_module, "build_parser", lambda: FakeParser())
     monkeypatch.setattr(gui_module, "setup_logging", fake_setup_logging)
@@ -129,6 +154,7 @@ def test_gui_main_passes_effective_level_and_log_file(monkeypatch, tmp_path) -> 
     assert rc == 0
     assert captured["level"] == "INFO"
     assert captured["log_file"] == tmp_path / "gui.log"
+    assert captured["console"] is False
     assert captured["backend"] == "vlc"
     assert captured["ran"] is True
 
@@ -153,10 +179,13 @@ def test_app_main_passes_effective_level_and_log_file(monkeypatch, tmp_path) -> 
         def run(self) -> None:
             captured["ran"] = True
 
-    def fake_setup_logging(*, log_dir: Path, level: str, log_file: Path | None):
+    def fake_setup_logging(
+        *, log_dir: Path, level: str, log_file: Path | None, console: bool
+    ):
         captured["log_dir"] = log_dir
         captured["level"] = level
         captured["log_file"] = log_file
+        captured["console"] = console
 
     monkeypatch.setattr(app_module, "build_parser", lambda: FakeParser())
     monkeypatch.setattr(app_module, "setup_logging", fake_setup_logging)
@@ -168,6 +197,7 @@ def test_app_main_passes_effective_level_and_log_file(monkeypatch, tmp_path) -> 
     assert rc == 0
     assert captured["level"] == "DEBUG"
     assert captured["log_file"] == tmp_path / "app.log"
+    assert captured["console"] is False
     assert captured["backend"] == "fake"
     assert captured["ran"] is True
 

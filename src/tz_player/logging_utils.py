@@ -73,6 +73,8 @@ def setup_logging(
     max_bytes: int = 1_000_000,
     backup_count: int = 3,
     log_file: Path | None = None,
+    *,
+    console: bool = True,
 ) -> None:
     """Configure rotating file and console logging."""
     if isinstance(level, str):
@@ -100,11 +102,11 @@ def setup_logging(
         encoding="utf-8",
     )
     file_handler.setFormatter(file_formatter)
-    stream_handler = logging.StreamHandler()
-    stream_handler.setFormatter(stream_formatter)
-
     root_logger = logging.getLogger()
     root_logger.setLevel(numeric)
     root_logger.handlers.clear()
     root_logger.addHandler(file_handler)
-    root_logger.addHandler(stream_handler)
+    if console:
+        stream_handler = logging.StreamHandler()
+        stream_handler.setFormatter(stream_formatter)
+        root_logger.addHandler(stream_handler)
