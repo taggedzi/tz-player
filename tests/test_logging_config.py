@@ -205,6 +205,37 @@ def test_app_main_returns_nonzero_on_startup_failure(
     assert "Startup failed." in captured.err
 
 
+def test_app_main_returns_nonzero_when_app_reports_startup_failed(
+    monkeypatch, tmp_path
+) -> None:
+    args = SimpleNamespace(
+        verbose=False,
+        quiet=False,
+        log_file=None,
+        backend="fake",
+    )
+
+    class FakeParser:
+        def parse_args(self):
+            return args
+
+    class StartupFailedApp:
+        def __init__(self, *, backend_name: str | None = None) -> None:
+            del backend_name
+            self.startup_failed = True
+
+        def run(self) -> None:
+            return None
+
+    monkeypatch.setattr(app_module, "build_parser", lambda: FakeParser())
+    monkeypatch.setattr(app_module, "setup_logging", lambda **kwargs: None)
+    monkeypatch.setattr(app_module, "log_dir", lambda: tmp_path / "logs")
+    monkeypatch.setattr(app_module, "TzPlayerApp", StartupFailedApp)
+
+    rc = app_module.main()
+    assert rc == 1
+
+
 def test_app_main_doctor_path_returns_report_exit_code(
     monkeypatch, tmp_path, capsys
 ) -> None:
@@ -272,6 +303,37 @@ def test_gui_main_returns_nonzero_on_startup_failure(
 
     assert rc == 1
     assert "GUI startup failed." in captured.err
+
+
+def test_gui_main_returns_nonzero_when_app_reports_startup_failed(
+    monkeypatch, tmp_path
+) -> None:
+    args = SimpleNamespace(
+        verbose=False,
+        quiet=False,
+        log_file=None,
+        backend="vlc",
+    )
+
+    class FakeParser:
+        def parse_args(self):
+            return args
+
+    class StartupFailedApp:
+        def __init__(self, *, backend_name: str | None = None) -> None:
+            del backend_name
+            self.startup_failed = True
+
+        def run(self) -> None:
+            return None
+
+    monkeypatch.setattr(gui_module, "build_parser", lambda: FakeParser())
+    monkeypatch.setattr(gui_module, "setup_logging", lambda **kwargs: None)
+    monkeypatch.setattr(gui_module, "log_dir", lambda: tmp_path / "logs")
+    monkeypatch.setattr(gui_module, "TzPlayerApp", StartupFailedApp)
+
+    rc = gui_module.main()
+    assert rc == 1
 
 
 def test_cli_main_returns_nonzero_when_logging_setup_fails(

@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import sqlite3
 import sys
 import time
 from dataclasses import replace
@@ -234,6 +235,7 @@ class TzPlayerApp(App):
         self.visualizer_registry: VisualizerRegistry | None = None
         self.visualizer_host: VisualizerHost | None = None
         self._visualizer_timer: Timer | None = None
+        self.startup_failed = False
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -274,10 +276,13 @@ class TzPlayerApp(App):
                 visualizer_fps=effective_fps,
             )
             await run_blocking(save_state, state_path(), self.state)
-            await self.store.initialize()
-            self.audio_envelope_store = SqliteEnvelopeStore(db_path())
-            await self.audio_envelope_store.initialize()
-            playlist_id = await self.store.ensure_playlist("Default")
+            try:
+                await self.store.initialize()
+                self.audio_envelope_store = SqliteEnvelopeStore(db_path())
+                await self.audio_envelope_store.initialize()
+                playlist_id = await self.store.ensure_playlist("Default")
+            except Exception as exc:
+                raise RuntimeError("Database startup failed") from exc
             if self.state.playlist_id != playlist_id:
                 self.state = replace(self.state, playlist_id=playlist_id)
                 await run_blocking(save_state, state_path(), self.state)
@@ -344,13 +349,8 @@ class TzPlayerApp(App):
                 await self.push_screen(ErrorModal(state_notice))
         except Exception as exc:
             logger.exception("Failed to initialize app: %s", exc)
-            await self.push_screen(
-                ErrorModal(
-                    "Failed to initialize app.\n"
-                    "Likely cause: state/database/backend startup failure.\n"
-                    "Next step: verify file permissions/paths and review the log file."
-                )
-            )
+            self.startup_failed = True
+            await self.push_screen(ErrorModal(_startup_failure_message(exc, db_path())))
 
     async def on_unmount(self) -> None:
         self._stop_visualizer()
@@ -1131,13 +1131,14 @@ def main() -> int:
         logging.getLogger(__name__).info("Starting tz-player TUI")
         visualizer_fps = getattr(args, "visualizer_fps", None)
         if visualizer_fps is not None:
-            TzPlayerApp(
+            app = TzPlayerApp(
                 backend_name=args.backend,
                 visualizer_fps_override=visualizer_fps,
-            ).run()
+            )
         else:
-            TzPlayerApp(backend_name=args.backend).run()
-        return 0
+            app = TzPlayerApp(backend_name=args.backend)
+        app.run()
+        return 1 if getattr(app, "startup_failed", False) else 0
     except Exception as exc:  # pragma: no cover - top-level safety net
         logging.getLogger(__name__).exception("Fatal startup error: %s", exc)
         print(
@@ -1145,6 +1146,62 @@ def main() -> int:
             file=sys.stderr,
         )
         return 1
+
+
+def _startup_failure_message(exc: Exception, db_file: Path) -> str:
+    db_failure_message = _classify_db_startup_failure(exc, db_file)
+    if db_failure_message is not None:
+        return db_failure_message
+    return (
+        "Failed to initialize app.\n"
+        "Likely cause: state/database/backend startup failure.\n"
+        "Next step: verify file permissions/paths and review the log file."
+    )
+
+
+def _classify_db_startup_failure(exc: Exception, db_file: Path) -> str | None:
+    chain: list[BaseException] = []
+    current: BaseException | None = exc
+    while current is not None and current not in chain:
+        chain.append(current)
+        current = current.__cause__
+    db_context = any(
+        isinstance(item, sqlite3.Error)
+        or "database startup failed" in str(item).lower()
+        for item in chain
+    )
+    if not db_context:
+        return None
+    root: BaseException = chain[-1]
+    for item in reversed(chain):
+        if isinstance(item, (sqlite3.Error, OSError, PermissionError)):
+            root = item
+            break
+    message = str(root).lower()
+    if isinstance(root, PermissionError) or "permission denied" in message:
+        cause = "no permission to read/write the database path."
+        step = "check folder permissions and run tz-player again."
+    elif "readonly" in message:
+        cause = "the database path is read-only."
+        step = "move the data directory to a writable location or fix file attributes."
+    elif "unable to open database file" in message:
+        cause = "the database path is missing or not writable."
+        step = "verify the parent directory exists and is writable."
+    elif "locked" in message:
+        cause = "the database is locked by another process."
+        step = "close other tz-player instances and retry."
+    elif "malformed" in message or "corrupt" in message:
+        cause = "the database file appears corrupt."
+        step = "back up then remove the DB file so tz-player can recreate it."
+    else:
+        cause = "database initialization failed."
+        step = "review the log details, then verify DB file access and integrity."
+    return (
+        "Failed to initialize playlist database.\n"
+        f"Likely cause: {cause}\n"
+        f"Next step: {step}\n"
+        f"DB path: {db_file}"
+    )
 
 
 if __name__ == "__main__":

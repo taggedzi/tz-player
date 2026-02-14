@@ -52,13 +52,14 @@ def main() -> int:
         logging.getLogger(__name__).info("Starting tz-player GUI")
         visualizer_fps = getattr(args, "visualizer_fps", None)
         if visualizer_fps is not None:
-            TzPlayerApp(
+            app = TzPlayerApp(
                 backend_name=args.backend,
                 visualizer_fps_override=visualizer_fps,
-            ).run()
+            )
         else:
-            TzPlayerApp(backend_name=args.backend).run()
-        return 0
+            app = TzPlayerApp(backend_name=args.backend)
+        app.run()
+        return 1 if getattr(app, "startup_failed", False) else 0
     except Exception as exc:  # pragma: no cover - top-level safety net
         logging.getLogger(__name__).exception("Fatal GUI startup error: %s", exc)
         print(

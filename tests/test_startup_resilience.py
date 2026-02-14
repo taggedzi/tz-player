@@ -7,7 +7,7 @@ from pathlib import Path
 
 import tz_player.app as app_module
 import tz_player.paths as paths
-from tz_player.app import TzPlayerApp
+from tz_player.app import TzPlayerApp, _classify_db_startup_failure
 from tz_player.services.fake_backend import FakePlaybackBackend
 from tz_player.state_store import load_state
 from tz_player.ui.modals.error import ErrorModal
@@ -147,7 +147,7 @@ def test_startup_shows_generic_error_when_state_load_fails(
         return None
 
     async def failing_run_blocking(func, /, *args, **kwargs):
-        if func is app_module.load_state:
+        if func is app_module.load_state_with_notice:
             raise OSError("read failed")
         return func(*args, **kwargs)
 
@@ -229,10 +229,22 @@ def test_startup_shows_generic_error_when_db_init_fails(tmp_path, monkeypatch) -
             assert status._player_service is None
             assert any(
                 isinstance(screen, ErrorModal)
-                and "Failed to initialize app." in screen._message
-                and "verify file permissions/paths" in screen._message
+                and "Failed to initialize playlist database." in screen._message
+                and "Likely cause:" in screen._message
+                and "Next step:" in screen._message
                 for screen in pushed_screens
             )
             app.exit()
 
     _run(run_app())
+
+
+def test_classify_db_startup_failure_permission_denied_message(tmp_path) -> None:
+    db_file = tmp_path / "db.sqlite3"
+    exc = RuntimeError("Database startup failed")
+    exc.__cause__ = PermissionError("permission denied")
+    message = _classify_db_startup_failure(exc, db_file)
+    assert message is not None
+    assert "Failed to initialize playlist database." in message
+    assert "Likely cause: no permission to read/write the database path." in message
+    assert "Next step: check folder permissions and run tz-player again." in message
