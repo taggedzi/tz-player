@@ -84,7 +84,13 @@ nox -s local
 python -m pip install --upgrade build twine
 python -m build
 python -m twine check dist/*
+python -m zipfile -l dist/*.whl | rg -i "ffmpeg|libvlc|vlc\\.dll|libvlc\\.so|libvlc\\.dylib|avcodec|avformat|avutil|swresample|swscale"
+tar -tf dist/*.tar.gz | rg -i "ffmpeg|libvlc|vlc\\.dll|libvlc\\.so|libvlc\\.dylib|avcodec|avformat|avutil|swresample|swscale"
 ```
+
+Release policy note:
+
+- Do not bundle VLC/libVLC or FFmpeg binaries in project artifacts. These tools are external/user-installed.
 
 ## Project Layout
 

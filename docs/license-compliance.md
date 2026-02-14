@@ -42,6 +42,7 @@ Current state:
 3. Keep VLC/FFmpeg external (user-installed), not bundled.
 4. If shipping binaries/installers, document exactly which third-party components are included.
 5. Re-check dependency license set before each release.
+6. Inspect built artifacts (`dist/*`) to confirm no bundled VLC/libVLC/FFmpeg runtime binaries.
 
 ## Primary Sources
 

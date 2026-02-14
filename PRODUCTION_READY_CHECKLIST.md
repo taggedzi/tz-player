@@ -27,11 +27,50 @@ Known remaining release tasks:
 - [x] Run VLC-specific smoke tests in an environment with `TZ_PLAYER_TEST_VLC=1` (see `docs/vlc-smoke-test.md`).
 - [ ] Run manual app startup check with VLC backend: `python -m tz_player.app --backend vlc`.
 - [ ] Re-run VLC backend smoke test in a VLC-enabled environment (`TZ_PLAYER_TEST_VLC=1`).
+- [ ] Verify release artifacts do not bundle external media binaries (`ffmpeg`/`vlc`/`libvlc`) using commands in **Release Artifact Guardrail** below.
 
 Deferred with rationale:
 
 - VLC-specific automated/manual checks are deferred until a host with VLC/libVLC installed is available.
 - Deferral does not block non-VLC release quality gates; fallback-to-fake behavior is covered by automated tests.
+
+## Release Artifact Guardrail (External Tooling Policy)
+
+Policy: VLC/libVLC and FFmpeg are user-installed external tools and must not be bundled inside project release artifacts.
+
+Run after building artifacts:
+
+```bash
+python -m pip install --upgrade build twine
+python -m build
+python -m twine check dist/*
+```
+
+Inspect wheel contents for suspicious bundled media/runtime binaries:
+
+```bash
+python -m zipfile -l dist/*.whl | rg -i "ffmpeg|libvlc|vlc\\.dll|libvlc\\.so|libvlc\\.dylib|avcodec|avformat|avutil|swresample|swscale"
+```
+
+Inspect sdist contents for suspicious bundled media/runtime binaries:
+
+```bash
+tar -tf dist/*.tar.gz | rg -i "ffmpeg|libvlc|vlc\\.dll|libvlc\\.so|libvlc\\.dylib|avcodec|avformat|avutil|swresample|swscale"
+```
+
+Expected result:
+
+- No matches from either command.
+
+If there are matches:
+
+- Treat as a release blocker until confirmed benign or removed.
+- Document resolution in release notes/checklist notes.
+
+False positive guidance:
+
+- Text/docs references such as `docs/media-setup.md` or `docs/license-compliance.md` mentioning `ffmpeg`/`vlc` are expected.
+- Only compiled binaries/shared libraries or vendor folders containing media runtime files violate policy.
 
 ## Libraries
 

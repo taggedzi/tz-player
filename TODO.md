@@ -188,7 +188,7 @@ Execution tracker derived from `SPEC.md`.
   - Add troubleshooting note for false positives on platform-specific filenames.
 - Tests:
   - N/A (release/docs policy), validated by release checklist execution.
-- Status: `todo`
+- Status: `done`
 - Commit:
 
 ## Archived Completed Work
