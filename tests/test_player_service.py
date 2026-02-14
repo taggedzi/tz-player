@@ -93,11 +93,13 @@ def test_play_emits_backend_level_samples_into_player_state() -> None:
         await asyncio.sleep(0.35)
         assert service.state.level_left is not None
         assert service.state.level_right is not None
+        assert service.state.level_source == "live"
         assert 0.0 <= service.state.level_left <= 1.0
         assert 0.0 <= service.state.level_right <= 1.0
         await service.stop()
         assert service.state.level_left is None
         assert service.state.level_right is None
+        assert service.state.level_source is None
         await service.shutdown()
 
     _run(run())

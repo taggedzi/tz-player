@@ -36,7 +36,7 @@ class VuReactiveVisualizer:
         live_levels = _extract_live_levels(frame)
         if live_levels is not None:
             left_target, right_target = live_levels
-            source = "LIVE"
+            source = _source_token(frame.level_source)
         else:
             left_target, right_target = _fallback_levels(frame)
             source = "SIM-R"
@@ -128,7 +128,17 @@ def _status_line(frame: VisualizerFrameInput) -> str:
 def _source_line(source: str) -> str:
     if source == "LIVE":
         return "SRC LIVE LEVELS"
+    if source == "ENVELOPE":
+        return "SRC ENVELOPE CACHE"
     return "SRC SIMULATED FALLBACK"
+
+
+def _source_token(level_source: str | None) -> str:
+    if level_source == "live":
+        return "LIVE"
+    if level_source == "envelope":
+        return "ENVELOPE"
+    return "SIM-R"
 
 
 def _history_block(

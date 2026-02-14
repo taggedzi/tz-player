@@ -11,10 +11,10 @@ from dataclasses import dataclass, replace
 from typing import Callable, Literal
 
 from tz_player.events import PlayerStateChanged, TrackChanged
+from tz_player.services.audio_level_service import AudioLevelService
 from tz_player.services.playback_backend import (
     BackendError,
     BackendEvent,
-    LevelSample,
     MediaChanged,
     PlaybackBackend,
     PositionUpdated,
@@ -55,6 +55,7 @@ class PlayerState:
     shuffle: bool = False
     level_left: float | None = None
     level_right: float | None = None
+    level_source: str | None = None
     error: str | None = None
 
 
@@ -93,6 +94,7 @@ class PlayerService:
         self._shuffle_order: list[int] = []
         self._shuffle_index: int | None = None
         self._shuffle_playlist_id: int | None = None
+        self._audio_level_service = AudioLevelService(live_provider=backend)
         self._backend.set_event_handler(self._handle_backend_event)
 
     @property
@@ -127,6 +129,7 @@ class PlayerService:
                 duration_ms=0,
                 level_left=None,
                 level_right=None,
+                level_source=None,
                 error=None,
             )
             # A stale manual-stop latch must never suppress natural track-end advance.
@@ -186,7 +189,12 @@ class PlayerService:
         async with self._lock:
             self._stop_requested = True
             self._state = replace(self._state, status="stopped", position_ms=0)
-            self._state = replace(self._state, level_left=None, level_right=None)
+            self._state = replace(
+                self._state,
+                level_left=None,
+                level_right=None,
+                level_source=None,
+            )
             self._end_handled_item_id = None
         await self._backend.stop()
         await self._emit_state()
@@ -524,7 +532,14 @@ class PlayerService:
                 try:
                     position = await self._backend.get_position_ms()
                     duration = await self._backend.get_duration_ms()
-                    levels = await self._get_level_sample()
+                    reading = await self._audio_level_service.sample(
+                        status=status,
+                        position_ms=position,
+                        duration_ms=duration,
+                        volume=self._state.volume,
+                        speed=self._state.speed,
+                        track_path=None,
+                    )
                 except Exception:  # pragma: no cover - backend safety net
                     continue
                 emit = False
@@ -535,20 +550,24 @@ class PlayerService:
                     if position >= 0 and abs(position - self._state.position_ms) >= 100:
                         self._state = replace(self._state, position_ms=position)
                         emit = True
-                    if levels is not None:
-                        left = _clamp_float(levels.left, 0.0, 1.0)
-                        right = _clamp_float(levels.right, 0.0, 1.0)
+                    if reading is not None:
+                        left = _clamp_float(reading.left, 0.0, 1.0)
+                        right = _clamp_float(reading.right, 0.0, 1.0)
+                        source = reading.source
                     else:
                         left = None
                         right = None
+                        source = None
                     if (
                         left != self._state.level_left
                         or right != self._state.level_right
+                        or source != self._state.level_source
                     ):
                         self._state = replace(
                             self._state,
                             level_left=left,
                             level_right=right,
+                            level_source=source,
                         )
                         emit = True
                     item_id = self._state.item_id
@@ -565,15 +584,6 @@ class PlayerService:
                     await self._emit_state()
         except asyncio.CancelledError:
             return
-
-    async def _get_level_sample(self) -> LevelSample | None:
-        method = getattr(self._backend, "get_level_sample", None)
-        if method is None or not callable(method):
-            return None
-        try:
-            return await method()
-        except Exception:
-            return None
 
 
 def _clamp(value: int, min_value: int, max_value: int) -> int:

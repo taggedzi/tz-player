@@ -52,7 +52,7 @@ Execution tracker derived from `SPEC.md`.
 - Tests:
   - Unit tests for level normalization, smoothing, clipping, and source label behavior.
   - Integration test with deterministic level provider stub and service source failover.
-- Status: `todo`
+- Status: `in_progress`
 - Commit:
 
 ### VIZ-004 Playback-Level Signal Provider Contract
@@ -66,7 +66,7 @@ Execution tracker derived from `SPEC.md`.
 - Tests:
   - Contract tests for source selection and provider shape/timing expectations.
   - Backend-specific tests for fake live provider and VLC unavailable behavior.
-- Status: `todo`
+- Status: `in_progress`
 - Commit:
 
 ### VIZ-005 Visualizer Catalog and UX Docs

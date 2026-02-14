@@ -32,6 +32,7 @@ class VisualizerFrameInput:
     album: str | None
     level_left: float | None = None
     level_right: float | None = None
+    level_source: str | None = None
 
 
 class VisualizerPlugin(Protocol):

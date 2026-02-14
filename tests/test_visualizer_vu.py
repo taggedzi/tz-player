@@ -19,6 +19,7 @@ def _frame(
     status: str = "playing",
     level_left: float | None = None,
     level_right: float | None = None,
+    level_source: str | None = None,
 ) -> VisualizerFrameInput:
     return VisualizerFrameInput(
         frame_index=frame_index,
@@ -39,6 +40,7 @@ def _frame(
         album="Gridline",
         level_left=level_left,
         level_right=level_right,
+        level_source=level_source,
     )
 
 
@@ -51,7 +53,14 @@ def test_vu_render_uses_live_levels_when_available() -> None:
     plugin = VuReactiveVisualizer()
     plugin.on_activate(VisualizerContext(ansi_enabled=False, unicode_enabled=True))
     output = plugin.render(
-        _frame(width=72, height=8, frame_index=3, level_left=1.2, level_right=0.8)
+        _frame(
+            width=72,
+            height=8,
+            frame_index=3,
+            level_left=1.2,
+            level_right=0.8,
+            level_source="live",
+        )
     )
     assert "VU REACTIVE [LIVE]" in output
     assert "SRC LIVE LEVELS" in output
@@ -165,3 +174,20 @@ def test_vu_ansi_output_has_color_bands_and_safe_width() -> None:
             end = cleaned.find("m", start + 2)
             assert end != -1
             cleaned = cleaned[:start] + cleaned[end + 1 :]
+
+
+def test_vu_render_shows_envelope_source_when_provided() -> None:
+    plugin = VuReactiveVisualizer()
+    plugin.on_activate(VisualizerContext(ansi_enabled=False, unicode_enabled=True))
+    output = plugin.render(
+        _frame(
+            width=72,
+            height=8,
+            frame_index=3,
+            level_left=0.5,
+            level_right=0.5,
+            level_source="envelope",
+        )
+    )
+    assert "VU REACTIVE [ENVELOPE]" in output
+    assert "SRC ENVELOPE CACHE" in output
