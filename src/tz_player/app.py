@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import os
 import sqlite3
 import sys
 import time
@@ -900,7 +901,9 @@ class TzPlayerApp(App):
         if self.current_track is None:
             self._audio_level_notice = None
             return
-        if self.current_track.path != track_path:
+        current_norm = os.path.normcase(os.path.normpath(self.current_track.path))
+        track_norm = os.path.normcase(os.path.normpath(track_path))
+        if current_norm != track_norm:
             return
         if self.player_state.level_source == "envelope":
             self._audio_level_notice = None

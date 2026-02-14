@@ -11,6 +11,11 @@ import tz_player.paths as paths
 from tz_player.services.audio_envelope_analysis import EnvelopeAnalysisResult
 from tz_player.services.player_service import PlayerState, TrackInfo
 
+TRACK_PATH = Path("/tmp/song.mp3")
+TRACK_PATH_STR = str(TRACK_PATH)
+NEXT_PATH = Path("/tmp/next.mp3")
+NEXT_PATH_STR = str(NEXT_PATH)
+
 
 def _run(coro):
     return asyncio.run(coro)
@@ -37,7 +42,7 @@ def _track() -> TrackInfo:
         artist="Artist",
         album="Album",
         year=2020,
-        path="/tmp/song.mp3",
+        path=TRACK_PATH_STR,
         duration_ms=12_345,
     )
 
@@ -99,7 +104,7 @@ def test_ensure_envelope_for_track_upserts_when_analysis_available(
     monkeypatch.setattr(app_module, "analyze_track_envelope", _analyze)
     _run(app._ensure_envelope_for_track(_track()))
 
-    assert store.upserts == [("/tmp/song.mp3", 2, 1200)]
+    assert store.upserts == [(TRACK_PATH_STR, 2, 1200)]
 
 
 def test_ensure_envelope_logs_miss_and_populate(tmp_path, monkeypatch, caplog) -> None:
@@ -122,10 +127,10 @@ def test_ensure_envelope_logs_miss_and_populate(tmp_path, monkeypatch, caplog) -
         _run(app._ensure_envelope_for_track(_track()))
 
     assert any(
-        "Envelope cache miss for /tmp/song.mp3" in r.message for r in caplog.records
+        f"Envelope cache miss for {TRACK_PATH_STR}" in r.message for r in caplog.records
     )
     assert any(
-        "Envelope analyzed for /tmp/song.mp3 (2 points)" in r.message
+        f"Envelope analyzed for {TRACK_PATH_STR} (2 points)" in r.message
         for r in caplog.records
     )
 
@@ -143,10 +148,10 @@ def test_ensure_envelope_cache_hit_does_not_log_miss(
         _run(app._ensure_envelope_for_track(_track()))
 
     assert any(
-        "Envelope cache hit for /tmp/song.mp3" in r.message for r in caplog.records
+        f"Envelope cache hit for {TRACK_PATH_STR}" in r.message for r in caplog.records
     )
     assert not any(
-        "Envelope cache miss for /tmp/song.mp3" in r.message for r in caplog.records
+        f"Envelope cache miss for {TRACK_PATH_STR}" in r.message for r in caplog.records
     )
 
 
@@ -223,7 +228,7 @@ def test_next_track_prewarm_schedules_and_warms_predicted_item(
                 artist=None,
                 album=None,
                 year=None,
-                path=Path("/tmp/next.mp3"),
+                path=NEXT_PATH,
                 duration_ms=1000,
             )
 
@@ -241,7 +246,7 @@ def test_next_track_prewarm_schedules_and_warms_predicted_item(
         await asyncio.sleep(0.25)
 
     _run(run())
-    assert warmed == ["/tmp/next.mp3"]
+    assert warmed == [NEXT_PATH_STR]
 
 
 def test_next_track_prewarm_cancels_when_not_playing(tmp_path, monkeypatch) -> None:
@@ -283,7 +288,7 @@ def test_next_track_prewarm_does_not_repeat_same_context(tmp_path, monkeypatch) 
                 artist=None,
                 album=None,
                 year=None,
-                path=Path("/tmp/next.mp3"),
+                path=NEXT_PATH,
                 duration_ms=1000,
             )
 
@@ -304,4 +309,4 @@ def test_next_track_prewarm_does_not_repeat_same_context(tmp_path, monkeypatch) 
         await asyncio.sleep(0.25)
 
     _run(run())
-    assert warmed == ["/tmp/next.mp3"]
+    assert warmed == [NEXT_PATH_STR]
