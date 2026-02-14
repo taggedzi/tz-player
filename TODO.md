@@ -51,7 +51,8 @@ Execution tracker derived from `SPEC.md`.
 - Tests:
   - UI tests asserting banner/status error visibility and dismissal behavior.
   - Regression tests ensuring existing modal flows continue to work for blocking failures.
-- Status: `todo`
+- Status: `done`
+- Commit: `e5fa8a2`
 
 ### T-029 Visualizer Observability Completion (Load/Activate/Fallback)
 - Spec Ref: Section `9` (Visualizer observability)
@@ -64,7 +65,8 @@ Execution tracker derived from `SPEC.md`.
 - Tests:
   - Unit tests for expected log events and fields across load/activate/fallback paths.
   - Regression test ensuring no per-frame logging spam is introduced.
-- Status: `todo`
+- Status: `done`
+- Commit: `e5fa8a2`
 
 ### T-030 Configurable Local Plugin Path UX/CLI Wiring
 - Spec Ref: Section `6` (Plugin discovery sources), Section `WF-07`
@@ -78,7 +80,8 @@ Execution tracker derived from `SPEC.md`.
 - Tests:
   - Parser/runtime config tests for plugin path flags and precedence.
   - Integration tests for successful path loading and invalid path degradation.
-- Status: `todo`
+- Status: `done`
+- Commit: `e5fa8a2`
 
 ### T-031 Final Reliability/Observability Acceptance and Docs Parity
 - Spec Ref: Sections `8`, `9`, `10`, `11`
@@ -90,7 +93,8 @@ Execution tracker derived from `SPEC.md`.
   - `README.md`/`docs/usage.md` include updated troubleshooting guidance for startup and runtime errors.
 - Tests:
   - N/A (docs/mapping), validated by review checklist plus full test/lint/type gates.
-- Status: `todo`
+- Status: `done`
+- Commit: `e5fa8a2`
 
 ## Archived Completed Work
 
