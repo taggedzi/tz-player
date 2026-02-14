@@ -19,15 +19,15 @@ _ANSI_MAGENTA = "\x1b[35m"
 _ANSI_BRIGHT_YELLOW = "\x1b[93m"
 
 _PHASES: tuple[tuple[str, int], ...] = (
-    ("BOOT", 16),
-    ("ICE", 40),
-    ("MAP", 30),
-    ("DEFRAG", 28),
-    ("SCAN", 24),
-    ("DECRYPT", 40),
-    ("EXTRACT", 26),
-    ("COVER", 22),
-    ("DOSSIER", 30),
+    ("BOOT", 24),
+    ("ICE", 60),
+    ("MAP", 45),
+    ("DEFRAG", 42),
+    ("SCAN", 36),
+    ("DECRYPT", 60),
+    ("EXTRACT", 39),
+    ("COVER", 33),
+    ("DOSSIER", 45),
 )
 _TOTAL_PHASE_FRAMES = sum(count for _name, count in _PHASES)
 
