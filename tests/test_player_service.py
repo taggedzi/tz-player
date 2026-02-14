@@ -912,6 +912,94 @@ def test_poll_fallback_does_not_advance_on_early_idle() -> None:
     _run(run())
 
 
+def test_poll_fallback_does_not_advance_on_idle_with_stale_high_position() -> None:
+    class StaleHighPosIdleBackend:
+        def __init__(self) -> None:
+            self._state = "idle"
+            self._position_ms = 0
+            self._duration_ms = 0
+            self._reads = 0
+
+        def set_event_handler(self, _handler) -> None:  # type: ignore[no-untyped-def]
+            return None
+
+        async def start(self) -> None:
+            return None
+
+        async def shutdown(self) -> None:
+            return None
+
+        async def play(  # type: ignore[no-untyped-def]
+            self, item_id, track_path, start_ms=0, *, duration_ms=None
+        ) -> None:
+            self._state = "playing"
+            self._position_ms = int(start_ms)
+            self._duration_ms = int(duration_ms or 1000)
+            self._reads = 0
+
+        async def toggle_pause(self) -> None:
+            return None
+
+        async def stop(self) -> None:
+            self._state = "idle"
+
+        async def seek_ms(self, position_ms: int) -> None:
+            self._position_ms = int(position_ms)
+
+        async def set_volume(self, volume: int) -> None:
+            return None
+
+        async def set_speed(self, speed: float) -> None:
+            return None
+
+        async def get_position_ms(self) -> int:
+            self._reads += 1
+            if self._state == "playing" and self._reads == 2:
+                # Simulate bogus near-end position with premature idle transition.
+                self._position_ms = max(0, self._duration_ms - 50)
+                self._state = "idle"
+            return self._position_ms
+
+        async def get_duration_ms(self) -> int:
+            return self._duration_ms
+
+        async def get_state(self) -> str:
+            return self._state
+
+    async def emit_event(_event: object) -> None:
+        return None
+
+    async def track_info(_playlist_id: int, item_id: int) -> TrackInfo:
+        duration = 60_000 if item_id == 1 else 1000
+        return TrackInfo(
+            title=f"Song {item_id}",
+            artist=None,
+            album=None,
+            year=None,
+            path=f"/tmp/{item_id}.mp3",
+            duration_ms=duration,
+        )
+
+    async def next_provider(_playlist_id: int, item_id: int, _wrap: bool) -> int | None:
+        return 2 if item_id == 1 else None
+
+    async def run() -> None:
+        service = PlayerService(
+            emit_event=emit_event,
+            track_info_provider=track_info,
+            backend=StaleHighPosIdleBackend(),  # type: ignore[arg-type]
+            next_track_provider=next_provider,
+            initial_state=PlayerState(playlist_id=1, item_id=1, repeat_mode="ALL"),
+        )
+        await service.start()
+        await service.play_item(1, 1)
+        await asyncio.sleep(1.2)
+        assert service.state.item_id == 1
+        await service.shutdown()
+
+    _run(run())
+
+
 def test_shuffle_builds_stable_order() -> None:
     async def emit_event(_event: object) -> None:
         return None

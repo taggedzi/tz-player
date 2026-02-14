@@ -33,7 +33,7 @@ SPEED_MIN = 0.5
 SPEED_MAX = 4.0
 SPEED_STEP = 0.25
 STALE_STOP_START_WINDOW_MS = 750
-TRACK_END_GRACE_MS = 1500
+TRACK_END_GRACE_MS = 300
 
 
 @dataclass(frozen=True)
@@ -716,23 +716,24 @@ class PlayerService:
                         and previous_status in {"playing", "paused"}
                         and self._state.item_id is not None
                         and self._state.item_id != self._end_handled_item_id
-                        and (
-                            (
-                                self._state.duration_ms > 0
-                                and track_age_ms is not None
-                                and track_age_ms
-                                >= max(0, self._state.duration_ms - TRACK_END_GRACE_MS)
-                            )
-                            or (
-                                self._state.duration_ms > 0
-                                and self._max_position_seen_ms
-                                >= max(
-                                    STALE_STOP_START_WINDOW_MS,
-                                    self._state.duration_ms - TRACK_END_GRACE_MS,
-                                )
-                            )
-                        )
+                        and self._state.duration_ms > 0
                     ):
+                        near_end_by_age = (
+                            track_age_ms is not None
+                            and track_age_ms
+                            >= max(0, self._state.duration_ms - TRACK_END_GRACE_MS)
+                        )
+                        near_end_by_pos = self._max_position_seen_ms >= max(
+                            STALE_STOP_START_WINDOW_MS,
+                            self._state.duration_ms - TRACK_END_GRACE_MS,
+                        )
+                        if backend_state == "idle":
+                            should_handle_end = near_end_by_age
+                        else:
+                            should_handle_end = near_end_by_age or near_end_by_pos
+                    else:
+                        should_handle_end = False
+                    if should_handle_end:
                         self._end_handled_item_id = self._state.item_id
                         handle_end = True
                         logger.debug(
