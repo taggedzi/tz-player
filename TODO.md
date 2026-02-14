@@ -23,7 +23,8 @@ Execution tracker derived from `SPEC.md`.
 - Tests:
   - Startup resilience tests for representative DB failures with expected user-facing copy.
   - Regression test ensuring non-DB startup failures keep existing fallback behavior.
-- Status: `todo`
+- Status: `done`
+- Commit: `cf77a9e`
 
 ### T-027 Fatal Startup Exit-Code Contract Hardening
 - Spec Ref: Section `8` (Fatal startup failure non-zero exit), Section `10`
@@ -36,7 +37,8 @@ Execution tracker derived from `SPEC.md`.
 - Tests:
   - CLI tests for fatal startup paths asserting exit code and stderr/stdout hints.
   - Regression test for successful startup retaining exit code zero behavior.
-- Status: `todo`
+- Status: `done`
+- Commit: `cf77a9e`
 
 ### T-028 Unified Non-Fatal Error Surfacing (Banner/Status Channel)
 - Spec Ref: Section `8` (UI errors surfaced with modal/error banner), Section `4`
