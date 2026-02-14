@@ -773,7 +773,13 @@ class TzPlayerApp(App):
         pane.update(_format_track_info_panel(self.current_track))
 
     async def _start_visualizer(self) -> None:
-        self.visualizer_registry = VisualizerRegistry.built_in()
+        local_plugin_paths = list(self.state.visualizer_plugin_paths)
+        if local_plugin_paths:
+            self.visualizer_registry = VisualizerRegistry.built_in(
+                local_plugin_paths=local_plugin_paths
+            )
+        else:
+            self.visualizer_registry = VisualizerRegistry.built_in()
         self.visualizer_host = VisualizerHost(self.visualizer_registry, target_fps=10)
         context = VisualizerContext(
             ansi_enabled=self.state.ansi_enabled,

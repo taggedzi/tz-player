@@ -21,6 +21,7 @@ class AppState:
     shuffle: bool = False
     playback_backend: str = "fake"
     visualizer_id: str | None = None
+    visualizer_plugin_paths: tuple[str, ...] = ()
     ansi_enabled: bool = True
     log_level: str = "INFO"
 
@@ -57,6 +58,13 @@ def _coerce_state(data: dict[str, Any]) -> AppState:
         visualizer_id=data.get("visualizer_id")
         if isinstance(data.get("visualizer_id"), str)
         else None,
+        visualizer_plugin_paths=tuple(
+            value
+            for value in data.get("visualizer_plugin_paths", [])
+            if isinstance(value, str) and value.strip()
+        )
+        if isinstance(data.get("visualizer_plugin_paths"), list)
+        else (),
         ansi_enabled=_bool_or_default(data.get("ansi_enabled"), True),
         log_level=_str_or_default(data.get("log_level"), "INFO"),
     )

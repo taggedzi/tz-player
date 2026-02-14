@@ -204,3 +204,32 @@ def test_ansi_visualizer_output_does_not_raise_markup_error(
             app.exit()
 
     _run(run_app())
+
+
+def test_startup_continues_when_local_visualizer_import_fails(
+    tmp_path, monkeypatch, caplog
+) -> None:
+    _setup_dirs(tmp_path, monkeypatch)
+    save_state(
+        paths.state_path(),
+        AppState(
+            playback_backend="fake",
+            visualizer_plugin_paths=("does.not.exist.visualizers",),
+        ),
+    )
+    app = TzPlayerApp(auto_init=False, backend_name="fake")
+
+    async def run_app() -> None:
+        async with app.run_test():
+            await asyncio.sleep(0)
+            await app._initialize_state()
+            assert app.visualizer_host is not None
+            assert app.visualizer_host.active_id == "basic"
+            app.exit()
+
+    _run(run_app())
+    assert any(
+        "Failed to import visualizer plugin module 'does.not.exist.visualizers'"
+        in record.message
+        for record in caplog.records
+    )
