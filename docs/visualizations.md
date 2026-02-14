@@ -190,13 +190,16 @@ This section documents planned extra-scope visualizers before implementation.
 - Implemented ID:
   - `vu.reactive`
 - Contract:
-  - consume normalized levels from backend/provider contract
+  - consume normalized levels from shared `AudioLevelService`
+  - service source priority: `live backend` -> `envelope cache` -> `fallback`
   - smoothing and clipping to avoid jitter/spikes
+  - explicit source labeling in UI output (`LIVE`, `ENVELOPE`, `FALLBACK`)
   - graceful fallback when signal stream unavailable
 
 ## Implementation Prerequisites
 
 - Add a level-signal provider contract for backend integrations.
+- Add `AudioLevelService` with SQLite-backed envelope cache and source failover.
 - Keep fake backend deterministic for tests.
 - Gate backend-specific signal features (for example VLC-only paths) behind capability checks.
 - Maintain plugin fallback rules and non-blocking guarantees.

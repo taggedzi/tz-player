@@ -43,27 +43,29 @@ Execution tracker derived from `SPEC.md`.
 
 ### VIZ-003 Audio-Reactive VU Meter Visualizer Plugin
 - Spec Ref: `WF-06`, Sections `5`, `6`, `9.1`
-- Scope: Add a true audio-reactive VU meter visualizer that responds to live playback signal/levels.
+- Scope: Deliver `vu.reactive` as a service-driven audio-reactive visualizer consuming `AudioLevelService`.
 - Acceptance:
-  - Meter reflects changing audio energy during playback.
-  - Behavior degrades gracefully when signal data is unavailable (falls back to simulated/position-driven idle mode).
+  - Meter reflects changing audio energy during playback from effective service source (`live` or `envelope`).
+  - UI indicates effective source (`live`/`envelope`/`fallback`) explicitly.
+  - Behavior degrades gracefully when no signal source is available (safe fallback mode with no playback interruption).
   - Update cadence remains within host bounds without UI starvation.
 - Tests:
-  - Unit tests for level normalization, smoothing, clipping, and fallback paths.
-  - Integration test with deterministic level provider stub and plugin persistence.
+  - Unit tests for level normalization, smoothing, clipping, and source label behavior.
+  - Integration test with deterministic level provider stub and service source failover.
 - Status: `todo`
 - Commit:
 
 ### VIZ-004 Playback-Level Signal Provider Contract
 - Spec Ref: Sections `5`, `6`
-- Scope: Define and implement backend-facing signal provider API for audio-reactive visualizers.
+- Scope: Define and implement `AudioLevelService` provider contract (backend live + envelope cache + fallback).
 - Acceptance:
-  - Stable interface for obtaining recent level samples (mono level or L/R pair).
+  - Stable interface for obtaining normalized recent level samples (mono or L/R) and effective source ID.
   - Fake backend provides deterministic synthetic levels for tests.
-  - VLC backend implementation is optional-gated and safely disabled when unsupported.
+  - VLC live provider remains capability-gated and can safely report unavailable.
+  - Service source priority is deterministic: `live` -> `envelope` -> `fallback`.
 - Tests:
-  - Contract tests for provider shape and timing expectations.
-  - Backend-specific tests for fake provider and VLC unavailable behavior.
+  - Contract tests for source selection and provider shape/timing expectations.
+  - Backend-specific tests for fake live provider and VLC unavailable behavior.
 - Status: `todo`
 - Commit:
 
@@ -86,6 +88,35 @@ Execution tracker derived from `SPEC.md`.
   - Release checklist reflects any environment-gated visualizer checks.
 - Tests:
   - N/A (docs), validated by review checklist.
+- Status: `todo`
+- Commit:
+
+### VIZ-007 PCM Envelope Precompute and Time-Synced VU Source
+- Spec Ref: `WF-06`, Sections `5`, `6`, `9.1`
+- Scope: Add precomputed PCM level envelopes (timestamped bins) as a backend-agnostic VU signal source.
+- Acceptance:
+  - Decode/analyze local track audio into normalized time-bucket levels (L/R or mono) and cache by stable track fingerprint.
+  - `AudioLevelService` consumes envelope levels synchronized to playback `position_ms` with interpolation and smoothing.
+  - Cache invalidates when file fingerprint changes (size/mtime/hash/version key).
+  - Fallback remains available when envelope data is missing or analysis fails.
+- Tests:
+  - Unit tests for envelope generation normalization, bucket alignment, and interpolation.
+  - Unit tests for cache hit/miss/invalidation behavior.
+  - Integration test proving VU uses envelope source during real playback path (without VLC callbacks).
+- Status: `todo`
+- Commit:
+
+### VIZ-008 Next-Track Envelope Prewarm
+- Spec Ref: `WF-06`, Sections `5`, `6`
+- Scope: Precompute envelope for the likely next track in the background so VU is ready at track handoff.
+- Acceptance:
+  - When current track is playing, schedule non-blocking prewarm of predicted next item (respect repeat/shuffle mode).
+  - Prewarm job is cancellable/reschedulable on queue changes, seeks, stop, or mode switches.
+  - Handoff to next track should use warmed envelope via `AudioLevelService` when available, without UI/event-loop stalls.
+- Tests:
+  - Unit tests for next-track prediction routing (repeat/shuffle aware).
+  - Integration test verifying prewarm completion and envelope availability at transition.
+  - Stress test confirming no event-loop blocking under rapid navigation.
 - Status: `todo`
 - Commit:
 

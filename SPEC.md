@@ -89,6 +89,7 @@ Acceptance criteria:
 - Visualization updates run without blocking keyboard interaction or transport controls.
 - If a visualizer fails, app falls back to a safe visualizer and surfaces an actionable error.
 - If persisted visualizer is missing, app selects default visualizer and continues startup.
+- Audio-reactive visualizers must use a shared level source service that can select live backend levels when available, otherwise use cached envelope data, otherwise degrade to safe fallback rendering.
 
 ### WF-07: Configure runtime behavior and diagnostics
 
@@ -145,6 +146,7 @@ Acceptance criteria:
 - Blocking IO must remain off the main loop (`asyncio.to_thread` or equivalent).
 - Visualizers are loaded via a plugin registry with stable plugin IDs.
 - Visualizer render path must not do blocking file/db/network IO on the event loop.
+- Audio-responsive data is provided via a shared non-blocking `AudioLevelService` (not by per-plugin direct decode paths).
 
 ### Runtime config precedence
 
@@ -154,6 +156,16 @@ Acceptance criteria:
   3. Built-in defaults.
 - Effective backend selection follows this precedence and degrades safely to `fake` when VLC initialization fails.
 - Conflicting logging flags must resolve deterministically (`--quiet` overrides `--verbose`).
+
+### Audio level service contract (v1 target extension)
+
+- `AudioLevelService` provides timestamp-aligned levels for visualizers:
+  - source priority: `live backend sample` -> `cached PCM envelope` -> `visualizer fallback`.
+  - levels normalized to `[0.0, 1.0]` for left/right or mono.
+- Service exposes source metadata (`live`, `envelope`, `fallback`) so UI/visualizers can show effective source.
+- Service operations are non-blocking from UI/render paths; decode/analyze work runs in background workers.
+- Service supports next-track prewarm of envelope data using the predicted next item from current repeat/shuffle policy.
+- Service must be safe under rapid seek/next/previous and playlist mutation (cancellable/reschedulable jobs).
 
 ## 6. Visualization plugin model (v1 target)
 
@@ -182,6 +194,7 @@ Host provides immutable render input containing:
 - Track context: current track ID/path and selected metadata subset when available.
 - Timing context: monotonic timestamp, frame index, terminal pane width/height.
 - Capability flags: ANSI enabled, Unicode fallback preference.
+- Optional level context from `AudioLevelService`: `level_left`, `level_right`, and effective level source identifier.
 
 ### Performance and scheduling
 
@@ -189,6 +202,7 @@ Host provides immutable render input containing:
 - Supported range for configurable cadence: 2-30 FPS.
 - If plugin render exceeds frame budget consistently, host throttles and logs warning.
 - Any plugin-required blocking computation must run off-loop and feed cached render state.
+- Audio envelope decode/analyze is explicitly background-only; plugin render methods must never trigger decode work synchronously.
 
 ### Safety and fallback policy
 
@@ -205,12 +219,14 @@ Host provides immutable render input containing:
 ## 7. Data and State Requirements
 
 - Canonical media/playlist data lives in SQLite.
+- Audio envelope cache for sound-reactive visualization also lives in SQLite and is versioned.
 - App UI/transport settings live in JSON state file.
 - State writes must be atomic or crash-safe.
 - Duplicate media entries in playlist are supported via playlist item identity.
 - Visualization selection persists via `visualizer_id` and must be forward-compatible.
 - Persisted state keys should be backward-compatible where feasible; renamed keys require migration/read-compat coverage.
 - Shutdown and crash recovery must preserve DB/state integrity (no partially-written JSON and no corrupt SQLite schema operations).
+- Envelope cache keys must include a stable track fingerprint and analysis version so stale analysis is not reused after file/tooling changes.
 
 ## 8. Reliability and Error Handling
 
@@ -219,6 +235,7 @@ Host provides immutable render input containing:
 - Startup errors must degrade gracefully where possible.
 - No operation should leave app in partially-updated UI without recovery path.
 - Visualization/plugin failures must degrade to fallback visualizer without breaking playback UI.
+- Audio-level pipeline failures (live provider unavailable, envelope decode error, cache read/write error) must degrade to fallback level source without interrupting playback.
 
 ### Error message quality contract
 
@@ -239,6 +256,7 @@ Host provides immutable render input containing:
 - Log path stored under platform data/config directories.
 - Sensitive data (credentials, secrets) must not be logged.
 - Visualizer registry load, activation, fallback, and render overrun events should be logged.
+- Audio level source switches (`live`/`envelope`/`fallback`), envelope cache hit/miss, and analysis failures should be logged.
 
 ### Logging and diagnostics UX
 
@@ -275,6 +293,7 @@ Quality expectations:
 - No test may hang indefinitely; long-running tests require explicit timeout strategy.
 - Workflow-to-test mapping is maintained in `docs/workflow-acceptance.md`.
 - Visualization tests cover registry loading, ID persistence, fallback behavior, and render cadence bounds.
+- Audio-level service tests cover source selection, cache invalidation, next-track prewarm behavior, and safe fallback under provider/cache failure.
 - Add opt-in performance/regression tests for startup and interaction latency before v1 release sign-off.
 
 ## 11. Definition of Done (v1 production-ready target)
