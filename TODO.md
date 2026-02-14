@@ -134,7 +134,7 @@ Execution tracker derived from `SPEC.md`.
   - CLI tests for success/failure exit codes and key output lines.
   - Unit tests for tool probing functions (mock PATH/process output).
 - Status: `done`
-- Commit:
+- Commit: `1085e73`
 
 ### VIZ-011 UX Wiring for Optional FFmpeg in VU/Envelope Flow
 - Spec Ref: Sections `6`, `9`, `10`
