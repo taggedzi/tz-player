@@ -141,7 +141,7 @@ Acceptance criteria:
 - Python package under `src/tz_player`.
 - TUI framework: `textual`.
 - Persistence: SQLite via `PlaylistStore`.
-- Metadata read via `mutagen`.
+- Metadata read via `tinytag`.
 - Playback through `PlaybackBackend` abstraction.
 - Blocking IO must remain off the main loop (`asyncio.to_thread` or equivalent).
 - Visualizers are loaded via a plugin registry with stable plugin IDs.
