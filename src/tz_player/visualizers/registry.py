@@ -9,7 +9,6 @@ from .base import VisualizerPlugin
 from .basic import BasicVisualizer
 from .hackscope import HackScopeVisualizer
 from .matrix import MatrixBlueVisualizer, MatrixGreenVisualizer, MatrixRedVisualizer
-from .ops_cyberpunk import CyberpunkOpsVisualizer
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +46,6 @@ class VisualizerRegistry:
                 MatrixGreenVisualizer,
                 MatrixBlueVisualizer,
                 MatrixRedVisualizer,
-                CyberpunkOpsVisualizer,
                 HackScopeVisualizer,
             ]
         )

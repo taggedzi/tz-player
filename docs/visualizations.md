@@ -165,14 +165,10 @@ This section documents planned extra-scope visualizers before implementation.
 
 - Goal: movie-style fictional “target analysis” sequence keyed to current track metadata.
 - Implemented ID:
-  - `ops.cyberpunk`
   - `ops.hackscope`
 - Runtime behavior:
-  - Runs a queue of stage-specific prompt commands one at a time.
-  - Each command has a fixed lifecycle: launch, active mini-game output, and result summary.
-  - Active output is a text-mode simulation (for example defrag map, entropy pool fill, hash arena, mesh sweep), then completion text before advancing.
-  - Output fills the available pane height and reflows safely on terminal resize.
   - `ops.hackscope` provides a staged HackScope screenplay flow (boot, ICE, map, defrag, scan, decrypt, extract, cover, dossier) with deterministic ambient overlay.
+  - Output fills the available pane height and reflows safely on terminal resize.
 - Planned stages:
   - surveillance
   - vulnerability scan
