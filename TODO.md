@@ -40,6 +40,7 @@ Execution tracker derived from `SPEC.md`.
   - Unit tests for clamp/default/read-compat behavior.
   - Integration test confirming host/timer use configured FPS.
 - Status: `done`
+- Commit: `c68a30a`
 
 ### T-020 Structured Logging Upgrade
 - Spec Ref: Section `9` (Observability)
