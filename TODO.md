@@ -66,6 +66,37 @@ Execution tracker derived from `SPEC.md`.
   - N/A (docs/spec parity), validated by review checklist.
 - Status: `todo`
 
+### T-022 Error Message Quality Consistency Pass
+- Spec Ref: Section `8` (Reliability and Error Handling), Error message quality contract
+- Scope:
+  - Normalize user-facing error text across playback, playlist actions, and UI modals to consistently include:
+    - what failed,
+    - likely cause (when known),
+    - immediate next step.
+  - Replace terse messages (for example, generic/not-found errors) with actionable copy where user impact exists.
+- Acceptance:
+  - User-facing failure paths in core workflows use consistent actionable language.
+  - No raw/low-context error text remains in primary UI paths.
+  - Existing fallback behavior remains unchanged.
+- Tests:
+  - Update/add UI/service tests asserting improved message text for key error paths.
+  - Regression tests ensuring failure handling still degrades safely.
+- Status: `todo`
+
+### T-023 State File Corruption UX Surfacing
+- Spec Ref: Section `8` (Common failure classes), Section `WF-01`
+- Scope:
+  - Surface explicit in-app user notification when persisted state file is unreadable/corrupt and defaults are used.
+  - Keep startup resilient (no crash, no lockup), while making recovery guidance visible without reading logs.
+- Acceptance:
+  - On corrupt/unreadable state file, startup continues with defaults and displays clear remediation guidance.
+  - Message includes likely cause and next step (for example: reset/remove state file path).
+  - Behavior remains non-blocking and does not regress startup fallback logic.
+- Tests:
+  - Startup resilience test for invalid/corrupt state file path that asserts user-visible messaging.
+  - Regression test for normal startup path with no warning.
+- Status: `todo`
+
 ## Archived Completed Work
 
 ### V3 Visualization Expansion (Extra Scope) — Completed
