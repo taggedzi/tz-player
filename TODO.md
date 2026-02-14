@@ -25,6 +25,7 @@ Execution tracker derived from `SPEC.md`.
   - Unit tests for local plugin load success and duplicate ID handling.
   - Integration test proving startup continues when a local plugin import fails.
 - Status: `done`
+- Commit: `971efee`
 
 ### T-019 Configurable Visualizer FPS
 - Spec Ref: Section `6` (Performance and scheduling)
