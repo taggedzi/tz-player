@@ -83,6 +83,7 @@ Execution tracker derived from `SPEC.md`.
   - Update/add UI/service tests asserting improved message text for key error paths.
   - Regression tests ensuring failure handling still degrades safely.
 - Status: `done`
+- Commit: `7755b1a`
 
 ### T-023 State File Corruption UX Surfacing
 - Spec Ref: Section `8` (Common failure classes), Section `WF-01`
