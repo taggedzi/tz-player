@@ -36,6 +36,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         help="Visualizer render cadence (clamped to 2-30 FPS).",
     )
+    parser.add_argument(
+        "--visualizer-plugin-path",
+        action="append",
+        dest="visualizer_plugin_paths",
+        help="Local visualizer module/package path (repeatable).",
+    )
     return parser
 
 
@@ -51,10 +57,22 @@ def main() -> int:
         )
         logging.getLogger(__name__).info("Starting tz-player GUI")
         visualizer_fps = getattr(args, "visualizer_fps", None)
-        if visualizer_fps is not None:
+        visualizer_plugin_paths = getattr(args, "visualizer_plugin_paths", None)
+        if visualizer_fps is not None and visualizer_plugin_paths is not None:
             app = TzPlayerApp(
                 backend_name=args.backend,
                 visualizer_fps_override=visualizer_fps,
+                visualizer_plugin_paths_override=visualizer_plugin_paths,
+            )
+        elif visualizer_fps is not None:
+            app = TzPlayerApp(
+                backend_name=args.backend,
+                visualizer_fps_override=visualizer_fps,
+            )
+        elif visualizer_plugin_paths is not None:
+            app = TzPlayerApp(
+                backend_name=args.backend,
+                visualizer_plugin_paths_override=visualizer_plugin_paths,
             )
         else:
             app = TzPlayerApp(backend_name=args.backend)

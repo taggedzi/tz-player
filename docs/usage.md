@@ -18,6 +18,12 @@ Select a playback backend:
 tz-player --backend vlc
 ```
 
+Add local visualizer plugin discovery paths (repeatable):
+
+```
+tz-player --visualizer-plugin-path ./my_visualizers --visualizer-plugin-path mypkg.visualizers
+```
+
 Notes:
 - Default backend is `fake`.
 - The VLC backend requires VLC/libVLC installed on your system.
@@ -33,6 +39,7 @@ Logging and diagnostics:
 - `--verbose` sets log level to `DEBUG`.
 - `--quiet` sets log level to `WARNING` (takes precedence over `--verbose`).
 - `--log-file /path/to/tz-player.log` writes logs to an explicit file path.
+- `--visualizer-plugin-path <path_or_module>` adds local visualizer plugin discovery entries for this run (repeatable; CLI overrides persisted list).
 - Without `--log-file`, logs are written to the app log directory as `tz-player.log`.
   - Typical default location pattern: `<user_data_dir>/logs/tz-player.log`.
 - Both console and rotating file logging are enabled by default.
@@ -96,6 +103,7 @@ Startup failure contract:
   - what failed,
   - likely cause,
   - next step.
+- Non-fatal runtime failures are surfaced in the status line as `Notice:` text (for example visualizer fallback or envelope fallback warnings).
 
 Common failure cases:
 
@@ -116,7 +124,7 @@ Common failure cases:
 
 3. Database access/init failure:
 - Symptom: startup fails during playlist store init.
-- Behavior: startup error modal appears and app exits/fails safely.
+- Behavior: startup error modal appears with DB-specific guidance (permissions/path/lock/corruption) and startup fails safely.
 - Next step: verify permissions/path for `<user_data_dir>/tz-player.sqlite`; re-run with `--verbose`.
 
 4. Missing media path:

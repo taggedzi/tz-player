@@ -126,12 +126,14 @@ Common runtime flags:
 - `--verbose`: enable debug logging.
 - `--quiet`: warnings/errors only (`--quiet` overrides `--verbose`).
 - `--log-file <path>`: write logs to an explicit path.
+- `--visualizer-plugin-path <path_or_module>`: add local visualizer plugin discovery path/module (repeatable; CLI overrides persisted list for that run).
 
 Behavior notes:
 
 - If `--backend vlc` is selected but VLC/libVLC is unavailable, the app falls back to `fake` and shows a clear in-app error.
 - Default log path when `--log-file` is not provided: `<user_data_dir>/logs/tz-player.log`.
 - Fatal startup errors return non-zero exit code and print a remediation hint.
+- Non-fatal runtime issues (for example visualizer fallback, missing ffmpeg envelope source) are surfaced in the status line as `Notice:` messages.
 
 See `docs/usage.md` for full keybindings and troubleshooting guidance.
 

@@ -273,3 +273,45 @@ def test_cli_visualizer_fps_override_is_clamped(tmp_path, monkeypatch) -> None:
             app.exit()
 
     _run(run_app())
+
+
+def test_cli_visualizer_plugin_paths_override_persisted_state(
+    tmp_path, monkeypatch
+) -> None:
+    _setup_dirs(tmp_path, monkeypatch)
+    save_state(
+        paths.state_path(),
+        AppState(
+            playback_backend="fake",
+            visualizer_plugin_paths=("persisted.plugins",),
+        ),
+    )
+    captured_paths: list[str] = []
+
+    def fake_built_in(cls, *, local_plugin_paths=None):
+        if local_plugin_paths:
+            captured_paths.extend(local_plugin_paths)
+        return VisualizerRegistry({"viz.default": VizDefault}, default_id="viz.default")
+
+    monkeypatch.setattr(
+        app_module.VisualizerRegistry,
+        "built_in",
+        classmethod(fake_built_in),
+    )
+    app = TzPlayerApp(
+        auto_init=False,
+        backend_name="fake",
+        visualizer_plugin_paths_override=["cli.plugins"],
+    )
+
+    async def run_app() -> None:
+        async with app.run_test():
+            await asyncio.sleep(0)
+            await app._initialize_state()
+            assert app.state.visualizer_plugin_paths == ("cli.plugins",)
+            app.exit()
+
+    _run(run_app())
+    persisted = load_state(paths.state_path())
+    assert persisted.visualizer_plugin_paths == ("cli.plugins",)
+    assert captured_paths == ["cli.plugins"]

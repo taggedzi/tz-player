@@ -65,6 +65,16 @@ class VisualizerRegistry:
         if default_id not in factories:
             msg = "Built-in visualizers missing required 'basic' plugin."
             raise RuntimeError(msg)
+        logger.info(
+            "Visualizer registry loaded",
+            extra={
+                "event": "visualizer_registry_loaded",
+                "plugin_count": len(factories),
+                "plugin_ids": sorted(factories),
+                "local_plugin_paths": local_plugin_paths or [],
+                "default_id": default_id,
+            },
+        )
         return cls(factories, default_id=default_id)
 
 

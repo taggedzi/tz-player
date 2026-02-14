@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -104,3 +105,17 @@ class DuplicateBasic:
     plugin = registry.create("basic")
     assert plugin is not None
     assert plugin.display_name != "Override Basic"
+
+
+def test_registry_logs_load_summary(caplog) -> None:
+    caplog.set_level(logging.INFO, logger="tz_player.visualizers.registry")
+    VisualizerRegistry.built_in()
+    events = [
+        record
+        for record in caplog.records
+        if record.msg == "Visualizer registry loaded"
+    ]
+    assert events
+    record = events[-1]
+    assert getattr(record, "event", None) == "visualizer_registry_loaded"
+    assert isinstance(getattr(record, "plugin_ids", None), list)

@@ -23,3 +23,16 @@ def test_app_parser_accepts_visualizer_fps() -> None:
     parser = build_parser()
     args = parser.parse_args(["--visualizer-fps", "24"])
     assert args.visualizer_fps == 24
+
+
+def test_app_parser_accepts_repeatable_visualizer_plugin_paths() -> None:
+    parser = build_parser()
+    args = parser.parse_args(
+        [
+            "--visualizer-plugin-path",
+            "plugins.alpha",
+            "--visualizer-plugin-path",
+            "plugins.beta",
+        ]
+    )
+    assert args.visualizer_plugin_paths == ["plugins.alpha", "plugins.beta"]

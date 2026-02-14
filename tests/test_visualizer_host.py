@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 
 from tz_player.visualizers.base import VisualizerContext, VisualizerFrameInput
@@ -86,3 +87,27 @@ def test_render_failure_falls_back_to_default() -> None:
     assert output == "ok"
     assert host.active_id == "good"
     assert host.consume_notice() is not None
+
+
+def test_render_failure_logs_fallback_transition(caplog) -> None:
+    caplog.set_level(logging.INFO, logger="tz_player.visualizers.host")
+    registry = VisualizerRegistry(
+        {"good": GoodPlugin, "bad": BadRenderPlugin},
+        default_id="good",
+    )
+    host = VisualizerHost(registry)
+    context = VisualizerContext(ansi_enabled=True, unicode_enabled=True)
+    host.activate("bad", context)
+
+    host.render_frame(_frame(), context)
+
+    fallback_events = [
+        record
+        for record in caplog.records
+        if getattr(record, "event", None) == "visualizer_fallback"
+    ]
+    assert fallback_events
+    event = fallback_events[-1]
+    assert getattr(event, "phase", None) == "render"
+    assert getattr(event, "requested_plugin_id", None) == "bad"
+    assert getattr(event, "active_plugin_id", None) == "good"

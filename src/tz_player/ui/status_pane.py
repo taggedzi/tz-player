@@ -67,6 +67,7 @@ class StatusPane(Widget):
         self._status_line = Static("", id="status-line")
         self._player_service: PlayerService | None = None
         self._state: PlayerState | None = None
+        self._runtime_notice: str | None = None
 
     def compose(self) -> ComposeResult:
         yield self._time_bar
@@ -80,17 +81,7 @@ class StatusPane(Widget):
 
     def update_state(self, state: PlayerState) -> None:
         self._state = state
-        shuffle = "on" if state.shuffle else "off"
-        status_text = Text()
-        status_text.append("Status: ", style="bold #F2C94C")
-        status_text.append(state.status)
-        status_text.append(" | ")
-        status_text.append("Repeat: ", style="bold #F2C94C")
-        status_text.append(state.repeat_mode)
-        status_text.append(" | ")
-        status_text.append("Shuffle: ", style="bold #F2C94C")
-        status_text.append(shuffle)
-        self._status_line.update(status_text)
+        self._update_status_text()
         pos_text, dur_text = format_time_pair_ms(state.position_ms, state.duration_ms)
         self._time_bar.set_value_text(f"{pos_text}/{dur_text}")
         if not self._time_bar.is_dragging:
@@ -102,6 +93,31 @@ class StatusPane(Widget):
         if not self._speed_bar.is_dragging:
             self._speed_bar.set_fraction(speed_fraction(state.speed))
             self._speed_bar.set_value_text(f"{state.speed:.2f}x")
+
+    def set_runtime_notice(self, notice: str | None) -> None:
+        self._runtime_notice = notice.strip() if notice else None
+        if self._state is not None:
+            self._update_status_text()
+
+    def _update_status_text(self) -> None:
+        if self._state is None:
+            return
+        state = self._state
+        shuffle = "on" if state.shuffle else "off"
+        status_text = Text()
+        if self._runtime_notice:
+            status_text.append("Notice: ", style="bold #FF5A36")
+            status_text.append(self._runtime_notice)
+            status_text.append(" | ")
+        status_text.append("Status: ", style="bold #F2C94C")
+        status_text.append(state.status)
+        status_text.append(" | ")
+        status_text.append("Repeat: ", style="bold #F2C94C")
+        status_text.append(state.repeat_mode)
+        status_text.append(" | ")
+        status_text.append("Shuffle: ", style="bold #F2C94C")
+        status_text.append(shuffle)
+        self._status_line.update(status_text)
 
     async def on_slider_changed(self, event: SliderChanged) -> None:
         if self._player_service is None or self._state is None:

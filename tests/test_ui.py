@@ -671,3 +671,30 @@ def test_status_pane_updates() -> None:
             app.exit()
 
     _run(run_app())
+
+
+def test_status_pane_runtime_notice_is_visible_and_clearable() -> None:
+    pane = StatusPane()
+
+    class PaneApp(App):
+        def compose(self) -> ComposeResult:
+            yield pane
+
+    app = PaneApp()
+
+    async def run_app() -> None:
+        async with app.run_test():
+            await asyncio.sleep(0)
+            pane.update_state(PlayerState(status="playing"))
+            pane.set_runtime_notice("Visualizer switched to fallback.")
+            rendered = str(pane._status_line.render())
+            assert "Notice:" in rendered
+            assert "Visualizer switched to fallback." in rendered
+
+            pane.set_runtime_notice(None)
+            rendered = str(pane._status_line.render())
+            assert "Notice:" not in rendered
+            assert "Status:" in rendered
+            app.exit()
+
+    _run(run_app())

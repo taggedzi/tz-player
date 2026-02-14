@@ -43,6 +43,16 @@ class VisualizerHost:
         if not self._registry.has_plugin(requested):
             self._notice = f"Visualizer '{requested}' unavailable; using '{self._registry.default_id}'."
             logger.warning(self._notice)
+            logger.info(
+                "Visualizer fallback selected for missing plugin",
+                extra={
+                    "event": "visualizer_fallback",
+                    "requested_plugin_id": requested,
+                    "active_plugin_id": self._registry.default_id,
+                    "phase": "activate",
+                    "reason": "missing_plugin",
+                },
+            )
             requested = self._registry.default_id
 
         plugin = self._registry.create(requested)
@@ -62,6 +72,16 @@ class VisualizerHost:
             self._notice = (
                 f"Visualizer '{requested}' failed during activate; using fallback."
             )
+            logger.info(
+                "Visualizer fallback selected after activation failure",
+                extra={
+                    "event": "visualizer_fallback",
+                    "requested_plugin_id": requested,
+                    "active_plugin_id": self._registry.default_id,
+                    "phase": "activate",
+                    "reason": "activation_error",
+                },
+            )
             fallback = self._registry.create(self._registry.default_id)
             if fallback is None:
                 raise RuntimeError("Fallback visualizer unavailable.") from exc
@@ -71,6 +91,13 @@ class VisualizerHost:
 
         self._active_plugin = plugin
         self._active_id = requested
+        logger.info(
+            "Visualizer activated",
+            extra={
+                "event": "visualizer_activated",
+                "active_plugin_id": self._active_id,
+            },
+        )
         return self._active_id
 
     def shutdown(self) -> None:
@@ -102,6 +129,16 @@ class VisualizerHost:
             logger.exception("Visualizer '%s' render failed: %s", failed_id, exc)
             self._notice = (
                 f"Visualizer '{failed_id}' failed during render; using fallback."
+            )
+            logger.info(
+                "Visualizer fallback selected after render failure",
+                extra={
+                    "event": "visualizer_fallback",
+                    "requested_plugin_id": failed_id,
+                    "active_plugin_id": self._registry.default_id,
+                    "phase": "render",
+                    "reason": "render_error",
+                },
             )
             self.activate(self._registry.default_id, context)
             assert self._active_plugin is not None

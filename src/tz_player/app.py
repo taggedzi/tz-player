@@ -206,6 +206,7 @@ class TzPlayerApp(App):
         auto_init: bool = True,
         backend_name: str | None = None,
         visualizer_fps_override: int | None = None,
+        visualizer_plugin_paths_override: list[str] | None = None,
     ) -> None:
         super().__init__()
         self.register_theme(CYBERPUNK_THEME)
@@ -216,6 +217,7 @@ class TzPlayerApp(App):
         self._auto_init = auto_init
         self._backend_name = backend_name
         self._visualizer_fps_override = visualizer_fps_override
+        self._visualizer_plugin_paths_override = visualizer_plugin_paths_override
         self.player_service: PlayerService | None = None
         self.player_state = PlayerState()
         self.current_track: TrackInfo | None = None
@@ -228,6 +230,8 @@ class TzPlayerApp(App):
         self._next_prewarm_context: tuple[int, int, str, bool, int] | None = None
         self._envelope_missing_ffmpeg_warned: set[str] = set()
         self._audio_level_notice: str | None = None
+        self._runtime_notice: str | None = None
+        self._runtime_notice_expiry_s: float | None = None
         self._state_save_task: asyncio.Task[None] | None = None
         self._last_persisted: (
             tuple[int | None, int | None, int, float, str, bool] | None
@@ -274,6 +278,9 @@ class TzPlayerApp(App):
                 self.state,
                 playback_backend=backend_name,
                 visualizer_fps=effective_fps,
+                visualizer_plugin_paths=tuple(self._visualizer_plugin_paths_override)
+                if self._visualizer_plugin_paths_override is not None
+                else self.state.visualizer_plugin_paths,
             )
             await run_blocking(save_state, state_path(), self.state)
             try:
@@ -578,6 +585,8 @@ class TzPlayerApp(App):
     async def _handle_player_event(self, event: object) -> None:
         if isinstance(event, PlayerStateChanged):
             self.player_state = event.state
+            if event.state.error:
+                self._set_runtime_notice(event.state.error, ttl_s=8.0)
             self._schedule_next_track_prewarm()
             playing_id = (
                 event.state.item_id
@@ -723,6 +732,10 @@ class TzPlayerApp(App):
                             "Envelope analysis unavailable for %s: ffmpeg not found on PATH; using fallback levels.",
                             path,
                         )
+                        self._set_runtime_notice(
+                            "ffmpeg not found; using fallback audio levels.",
+                            ttl_s=10.0,
+                        )
                     self._update_audio_level_notice(path_key)
                 else:
                     logger.debug("Envelope analysis unavailable for %s", path)
@@ -738,6 +751,10 @@ class TzPlayerApp(App):
             self._update_audio_level_notice(str(path))
         except Exception as exc:
             logger.warning("Envelope analysis failed for %s: %s", path, exc)
+            self._set_runtime_notice(
+                "Envelope analysis failed; using fallback audio levels.",
+                ttl_s=10.0,
+            )
 
     async def _track_info_provider(
         self, playlist_id: int, item_id: int
@@ -782,7 +799,9 @@ class TzPlayerApp(App):
         return await self.store.list_item_ids(playlist_id)
 
     def _update_status_pane(self) -> None:
-        self.query_one(StatusPane).update_state(self.player_state)
+        pane = self.query_one(StatusPane)
+        pane.set_runtime_notice(self._effective_runtime_notice())
+        pane.update_state(self.player_state)
 
     def _update_current_track_pane(self) -> None:
         pane = self.query_one("#current-track-pane", Static)
@@ -864,6 +883,8 @@ class TzPlayerApp(App):
             pane.update("Visualizer unavailable")
             return
         notice = self.visualizer_host.consume_notice()
+        if notice:
+            self._set_runtime_notice(notice, ttl_s=8.0)
         audio_notice = self._audio_level_notice
         if notice and audio_notice:
             render_text = f"{notice}\n{audio_notice}\n{output}"
@@ -886,8 +907,29 @@ class TzPlayerApp(App):
             return
         if requires_ffmpeg_for_envelope(track_path) and not ffmpeg_available():
             self._audio_level_notice = "DIAG: ffmpeg missing; envelope cache unavailable for this track (using fallback levels)."
+            self._set_runtime_notice(
+                "ffmpeg missing for envelope analysis; using fallback levels.",
+                ttl_s=10.0,
+            )
             return
         self._audio_level_notice = None
+
+    def _set_runtime_notice(self, message: str, *, ttl_s: float = 8.0) -> None:
+        text = message.strip()
+        if not text:
+            return
+        self._runtime_notice = text
+        self._runtime_notice_expiry_s = time.monotonic() + max(1.0, ttl_s)
+
+    def _effective_runtime_notice(self) -> str | None:
+        if self._runtime_notice is None:
+            return None
+        expires = self._runtime_notice_expiry_s
+        if expires is not None and time.monotonic() >= expires:
+            self._runtime_notice = None
+            self._runtime_notice_expiry_s = None
+            return None
+        return self._runtime_notice
 
     async def _handle_metadata_updated(self, track_ids: list[int]) -> None:
         pane = self.query_one(PlaylistPane)
@@ -1111,6 +1153,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         help="Visualizer render cadence (clamped to 2-30 FPS).",
     )
+    parser.add_argument(
+        "--visualizer-plugin-path",
+        action="append",
+        dest="visualizer_plugin_paths",
+        help="Local visualizer module/package path (repeatable).",
+    )
     return parser
 
 
@@ -1130,10 +1178,22 @@ def main() -> int:
             return report.exit_code
         logging.getLogger(__name__).info("Starting tz-player TUI")
         visualizer_fps = getattr(args, "visualizer_fps", None)
-        if visualizer_fps is not None:
+        visualizer_plugin_paths = getattr(args, "visualizer_plugin_paths", None)
+        if visualizer_fps is not None and visualizer_plugin_paths is not None:
             app = TzPlayerApp(
                 backend_name=args.backend,
                 visualizer_fps_override=visualizer_fps,
+                visualizer_plugin_paths_override=visualizer_plugin_paths,
+            )
+        elif visualizer_fps is not None:
+            app = TzPlayerApp(
+                backend_name=args.backend,
+                visualizer_fps_override=visualizer_fps,
+            )
+        elif visualizer_plugin_paths is not None:
+            app = TzPlayerApp(
+                backend_name=args.backend,
+                visualizer_plugin_paths_override=visualizer_plugin_paths,
             )
         else:
             app = TzPlayerApp(backend_name=args.backend)
