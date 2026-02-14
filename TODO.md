@@ -12,8 +12,59 @@ Execution tracker derived from `SPEC.md`.
 
 ## Active Backlog
 
-- No active tasks currently.
-- Add remaining/new tasks below this section as `todo`/`in_progress`.
+### T-018 Visualizer Local Plugin Discovery
+- Spec Ref: Section `6` (Plugin discovery and identity)
+- Scope:
+  - Add optional local visualizer discovery from configured import path(s), in addition to built-ins.
+  - Keep duplicate `plugin_id` rejection semantics (first valid plugin wins, warning logged).
+- Acceptance:
+  - App loads built-ins plus discoverable local plugins from configured path list.
+  - Invalid local plugin modules do not crash startup; errors are logged.
+  - Persisted `visualizer_id` compatibility behavior remains unchanged.
+- Tests:
+  - Unit tests for local plugin load success and duplicate ID handling.
+  - Integration test proving startup continues when a local plugin import fails.
+- Status: `todo`
+
+### T-019 Configurable Visualizer FPS
+- Spec Ref: Section `6` (Performance and scheduling)
+- Scope:
+  - Add runtime-configurable visualizer cadence (bounded 2-30 FPS) with default 10 FPS.
+  - Persist/recover configured cadence in app state.
+- Acceptance:
+  - Effective cadence obeys configured value with clamp to `[2, 30]`.
+  - Invalid persisted values recover safely to default.
+  - Visualizer timer interval updates from configured cadence.
+- Tests:
+  - Unit tests for clamp/default/read-compat behavior.
+  - Integration test confirming host/timer use configured FPS.
+- Status: `todo`
+
+### T-020 Structured Logging Upgrade
+- Spec Ref: Section `9` (Observability)
+- Scope:
+  - Upgrade logging output to structured JSON-line format for file logging while preserving readable console output.
+  - Preserve existing log-level flag behavior (`--verbose`, `--quiet`, default `INFO`).
+- Acceptance:
+  - File logs are machine-parseable structured records (timestamp, level, logger, message, context fields when present).
+  - Console logs remain human-readable for interactive troubleshooting.
+  - No sensitive data regression in emitted fields.
+- Tests:
+  - Logging config tests for file structure and console output behavior.
+  - Regression tests for CLI log-level precedence behavior.
+- Status: `todo`
+
+### T-021 Spec/Docs Metadata Backend Parity (TinyTag)
+- Spec Ref: Section `5` (Architecture constraints)
+- Scope:
+  - Update `SPEC.md` and related docs to reflect TinyTag usage instead of mutagen.
+  - Confirm acceptance/docs mapping references current metadata backend and licensing notes.
+- Acceptance:
+  - `SPEC.md` architecture section names TinyTag accurately.
+  - Docs remain internally consistent (`README`, usage/licensing docs, acceptance mapping as needed).
+- Tests:
+  - N/A (docs/spec parity), validated by review checklist.
+- Status: `todo`
 
 ## Archived Completed Work
 
