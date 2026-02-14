@@ -56,8 +56,8 @@ class VuReactiveVisualizer:
             _meter_line("R", self._right_smooth, meter_width, self._ansi_enabled),
             _meter_line("M", mono, meter_width, self._ansi_enabled),
             _status_line(frame),
-            _history_line(self._history, width),
         ]
+        lines.extend(_history_block(self._history, width, self._ansi_enabled, rows=4))
         return _fit_lines(lines, width, height)
 
 
@@ -122,19 +122,37 @@ def _status_line(frame: VisualizerFrameInput) -> str:
     )
 
 
-def _history_line(history: list[float], width: int) -> str:
-    span = max(8, min(width - 14, 64))
-    if not history:
-        return "H [                                ]"
-    recent = history[-span:]
-    glyphs = " ▁▂▃▄▅▆▇█"
-    chars: list[str] = []
-    for level in recent:
-        boosted = min(1.0, _clamp(level) ** 0.65)
-        idx = int(round(boosted * (len(glyphs) - 1)))
-        chars.append(glyphs[idx])
-    history_text = "".join(chars).rjust(span, " ")
-    return f"H {history_text}"
+def _history_block(
+    history: list[float], width: int, ansi_enabled: bool, *, rows: int = 4
+) -> list[str]:
+    rows = max(1, rows)
+    span = max(8, min(width - 3, 64))
+    recent = history[-span:] if history else []
+    levels = [min(1.0, _clamp(level) ** 0.65) for level in recent]
+    lines: list[str] = []
+    for row_idx in range(rows):
+        threshold = (rows - row_idx) / rows
+        row_chars: list[str] = []
+        for level in levels:
+            if level >= threshold:
+                if ansi_enabled:
+                    row_chars.append(_level_glyph(level))
+                else:
+                    row_chars.append("█")
+            else:
+                row_chars.append("·")
+        body = "".join(row_chars).rjust(span, "·")
+        prefix = "H " if row_idx == 0 else "  "
+        lines.append(f"{prefix}{body}")
+    return lines
+
+
+def _level_glyph(level: float) -> str:
+    if level < 0.7:
+        return "\x1b[38;2;53;230;138m█\x1b[0m"
+    if level < 0.9:
+        return "\x1b[38;2;242;201;76m█\x1b[0m"
+    return "\x1b[38;2;255;90;54m█\x1b[0m"
 
 
 def _fit_lines(lines: list[str], width: int, height: int) -> str:

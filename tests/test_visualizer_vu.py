@@ -85,6 +85,21 @@ def test_vu_render_respects_resize_bounds() -> None:
     assert all(len(line) <= 20 for line in lines)
 
 
+def test_vu_render_history_block_is_multiline() -> None:
+    plugin = VuReactiveVisualizer()
+    plugin.on_activate(VisualizerContext(ansi_enabled=False, unicode_enabled=True))
+    output = ""
+    for idx in range(6):
+        output = plugin.render(
+            _frame(
+                width=50, height=10, frame_index=idx, level_left=0.8, level_right=0.7
+            )
+        )
+    lines = output.splitlines()
+    assert any(line.startswith("H ") for line in lines)
+    assert sum(1 for line in lines if line.startswith("  ")) >= 3
+
+
 def test_vu_ansi_output_has_color_bands_and_safe_width() -> None:
     plugin = VuReactiveVisualizer()
     plugin.on_activate(VisualizerContext(ansi_enabled=True, unicode_enabled=True))
