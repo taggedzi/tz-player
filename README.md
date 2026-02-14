@@ -27,6 +27,26 @@ tz-player
 pip install tz-player
 ```
 
+## Media Backend Setup
+
+`tz-player` can run with a fake backend out of the box. Real audio playback and advanced visual analysis need external media tools.
+
+- VLC/libVLC: required for real playback with `--backend vlc`.
+- FFmpeg: optional, used only for non-WAV precomputed VU envelope analysis.
+
+Install guidance:
+
+- `docs/usage.md` (runtime usage)
+- `docs/media-setup.md` (platform install commands)
+
+## Licensing and Compliance
+
+- Project license: MIT (`LICENSE`)
+- Third-party notices: `THIRD_PARTY_LICENSES.md`
+- Compliance notes and distribution guidance: `docs/license-compliance.md`
+
+Important: this project currently depends on `mutagen` (GPL-2.0-or-later). Review `docs/license-compliance.md` before distributing binaries/packages.
+
 
 ## Generate From Template
 
