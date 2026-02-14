@@ -33,6 +33,7 @@ SPEED_MIN = 0.5
 SPEED_MAX = 4.0
 SPEED_STEP = 0.25
 STALE_STOP_START_WINDOW_MS = 750
+TRACK_END_GRACE_MS = 1500
 
 
 @dataclass(frozen=True)
@@ -671,6 +672,11 @@ class PlayerService:
                 handle_end = False
                 async with self._lock:
                     previous_status = self._state.status
+                    track_age_ms: int | None = None
+                    if self._track_started_monotonic_s is not None:
+                        track_age_ms = int(
+                            (time.monotonic() - self._track_started_monotonic_s) * 1000
+                        )
                     if position >= 0:
                         self._max_position_seen_ms = max(
                             self._max_position_seen_ms, position
@@ -710,16 +716,32 @@ class PlayerService:
                         and previous_status in {"playing", "paused"}
                         and self._state.item_id is not None
                         and self._state.item_id != self._end_handled_item_id
-                        and self._max_position_seen_ms > STALE_STOP_START_WINDOW_MS
+                        and (
+                            (
+                                self._state.duration_ms > 0
+                                and track_age_ms is not None
+                                and track_age_ms
+                                >= max(0, self._state.duration_ms - TRACK_END_GRACE_MS)
+                            )
+                            or (
+                                self._state.duration_ms > 0
+                                and self._max_position_seen_ms
+                                >= max(
+                                    STALE_STOP_START_WINDOW_MS,
+                                    self._state.duration_ms - TRACK_END_GRACE_MS,
+                                )
+                            )
+                        )
                     ):
                         self._end_handled_item_id = self._state.item_id
                         handle_end = True
                         logger.debug(
-                            "Poll fallback track-end: backend_state=%s item_id=%s max_pos=%s duration=%s",
+                            "Poll fallback track-end: backend_state=%s item_id=%s max_pos=%s duration=%s age_ms=%s",
                             backend_state,
                             self._state.item_id,
                             self._max_position_seen_ms,
                             self._state.duration_ms,
+                            track_age_ms,
                         )
                     if backend_state in {"stopped", "idle"} and self._stop_requested:
                         self._stop_requested = False
