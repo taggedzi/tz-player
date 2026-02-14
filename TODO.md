@@ -98,6 +98,7 @@ Execution tracker derived from `SPEC.md`.
   - Startup resilience test for invalid/corrupt state file path that asserts user-visible messaging.
   - Regression test for normal startup path with no warning.
 - Status: `done`
+- Commit: `f19b69b`
 
 ### T-024 Audio Level Source-Switch Observability
 - Spec Ref: Section `9` (Observability)
