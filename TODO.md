@@ -32,7 +32,7 @@ Execution tracker derived from `SPEC.md`.
 - Status: `in_progress`
 
 ### CR-001 Review Queue (Python + Supported Config/Setup Files)
-- [ ] `pyproject.toml`
+- [x] `pyproject.toml`
 - [ ] `repo_mcp.toml`
 - [ ] `.pre-commit-config.yaml`
 - [ ] `Makefile`

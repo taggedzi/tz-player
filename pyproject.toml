@@ -15,7 +15,7 @@ authors = [
   { name = "Matthew Craig", email = "15974146+taggedzi@users.noreply.github.com" },
 ]
 
-urls = { "Homepage" = "https://github.com/OWNER/tz-player", "Issues" = "https://github.com/OWNER/tz-player/issues" }
+urls = { "Homepage" = "https://github.com/taggedzi/tz-player", "Issues" = "https://github.com/taggedzi/tz-player/issues" }
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Developers",
