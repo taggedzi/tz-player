@@ -80,7 +80,7 @@ Execution tracker derived from `SPEC.md`.
 - [x] `src/tz_player/visualizers/__init__.py`
 - [x] `src/tz_player/visualizers/base.py`
 - [x] `src/tz_player/visualizers/basic.py`
-- [ ] `src/tz_player/visualizers/cover_ascii.py`
+- [x] `src/tz_player/visualizers/cover_ascii.py`
 - [ ] `src/tz_player/visualizers/hackscope.py`
 - [ ] `src/tz_player/visualizers/host.py`
 - [ ] `src/tz_player/visualizers/matrix.py`

@@ -6,6 +6,8 @@ from concurrent.futures import Future
 from dataclasses import dataclass
 from pathlib import Path
 
+import pytest
+
 from tz_player.visualizers.base import VisualizerContext, VisualizerFrameInput
 from tz_player.visualizers.cover_ascii import (
     ArtworkAsciiPipeline,
@@ -172,6 +174,11 @@ def test_pipeline_returns_loading_without_blocking() -> None:
     assert executor.calls == 1
     assert payload.art is None
     assert "Loading artwork..." in payload.message
+
+
+def test_pipeline_rejects_non_positive_max_entries() -> None:
+    with pytest.raises(ValueError, match="max_entries must be >= 1"):
+        ArtworkAsciiPipeline(max_entries=0)
 
 
 def test_pipeline_caches_completed_result(monkeypatch, tmp_path: Path) -> None:

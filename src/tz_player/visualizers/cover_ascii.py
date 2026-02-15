@@ -81,6 +81,8 @@ class ArtworkAsciiPipeline:
         max_entries: int = 48,
         executor: Executor | None = None,
     ) -> None:
+        if max_entries < 1:
+            raise ValueError("max_entries must be >= 1")
         self._max_entries = max_entries
         self._executor = executor or _ARTWORK_EXECUTOR
         self._inflight: dict[_RenderRequest, Future[_BuildResult]] = {}
