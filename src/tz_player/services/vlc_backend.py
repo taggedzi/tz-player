@@ -63,7 +63,10 @@ class VLCPlaybackBackend:
             return
         self._stop_event.set()
         self._queue.put(_Command("wake", (), None))
-        self._thread.join(timeout=2.0)
+        thread = self._thread
+        thread.join(timeout=2.0)
+        if thread.is_alive():
+            raise RuntimeError("VLC backend thread did not stop within 2.0 seconds.")
         self._thread = None
 
     async def play(
@@ -105,7 +108,7 @@ class VLCPlaybackBackend:
         return None
 
     async def _submit(self, name: str, *args: Any) -> Any:
-        if self._loop is None:
+        if self._loop is None or self._thread is None or not self._thread.is_alive():
             raise RuntimeError("VLC backend not started.")
         future: asyncio.Future[Any] = self._loop.create_future()
         self._queue.put(_Command(name, args, future))

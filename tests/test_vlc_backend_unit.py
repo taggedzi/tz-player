@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import threading
+
+import pytest
 
 from tz_player.services.playback_backend import StateChanged
 from tz_player.services.vlc_backend import VLCPlaybackBackend, _Command
@@ -83,5 +86,33 @@ def test_resolve_future_exception_ignores_done_future() -> None:
         future.set_result(1)
         VLCPlaybackBackend._resolve_future_exception(future, RuntimeError("x"))
         assert future.result() == 1
+
+    asyncio.run(run())
+
+
+def test_submit_rejects_when_backend_thread_not_running() -> None:
+    async def run() -> None:
+        backend = VLCPlaybackBackend()
+        backend._loop = asyncio.get_running_loop()  # noqa: SLF001
+        backend._thread = threading.Thread()  # noqa: SLF001
+        with pytest.raises(RuntimeError, match="VLC backend not started"):
+            await backend._submit("get_state")  # noqa: SLF001
+
+    asyncio.run(run())
+
+
+def test_shutdown_raises_when_thread_does_not_stop() -> None:
+    class _StuckThread:
+        def join(self, timeout: float | None = None) -> None:
+            return None
+
+        def is_alive(self) -> bool:
+            return True
+
+    async def run() -> None:
+        backend = VLCPlaybackBackend()
+        backend._thread = _StuckThread()  # type: ignore[assignment]  # noqa: SLF001
+        with pytest.raises(RuntimeError, match="did not stop within 2\\.0 seconds"):
+            await backend.shutdown()
 
     asyncio.run(run())
