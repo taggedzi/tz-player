@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from tz_player.ui.status_pane import (
+    clamp_float,
     quantize_speed,
     speed_from_fraction,
     time_fraction,
@@ -28,3 +29,8 @@ def test_time_fraction_guard() -> None:
     assert time_fraction(1000, 0) == 0.0
     assert time_fraction(500, 1000) == 0.5
     assert time_fraction(1500, 1000) == 1.0
+
+
+def test_clamp_float_handles_non_finite_values() -> None:
+    assert clamp_float(float("nan"), 0.0, 1.0) == 0.0
+    assert clamp_float(float("inf"), 0.0, 1.0) == 0.0

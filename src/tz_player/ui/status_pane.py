@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 from rich.text import Text
 from textual.app import ComposeResult
 from textual.containers import Horizontal
@@ -175,4 +177,7 @@ def clamp_int(value: int, min_value: int, max_value: int) -> int:
 
 
 def clamp_float(value: float, min_value: float, max_value: float) -> float:
-    return max(min_value, min(value, max_value))
+    normalized = float(value)
+    if not math.isfinite(normalized):
+        return min_value
+    return max(min_value, min(normalized, max_value))
