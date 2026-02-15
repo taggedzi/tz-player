@@ -52,6 +52,22 @@ def test_probe_ffmpeg_missing(monkeypatch) -> None:
     assert check.required is False
 
 
+def test_probe_ffmpeg_nonzero_version_exit_is_error(monkeypatch) -> None:
+    monkeypatch.setattr(doctor_module.shutil, "which", lambda _name: "/usr/bin/ffmpeg")
+    monkeypatch.setattr(
+        doctor_module.subprocess,
+        "run",
+        lambda *args, **kwargs: types.SimpleNamespace(
+            returncode=1,
+            stdout="",
+            stderr="ffmpeg: broken install",
+        ),
+    )
+    check = doctor_module.probe_ffmpeg(required=False)
+    assert check.status == "error"
+    assert "exit=1" in check.detail
+
+
 def test_probe_tinytag_ok(monkeypatch) -> None:
     fake = types.SimpleNamespace(__version__="9.9.9")
     monkeypatch.setattr(doctor_module.importlib, "import_module", lambda name: fake)

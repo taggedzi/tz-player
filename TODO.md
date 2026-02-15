@@ -43,7 +43,7 @@ Execution tracker derived from `SPEC.md`.
 - [x] `src/tz_player/cli.py`
 - [x] `src/tz_player/db/__init__.py`
 - [x] `src/tz_player/db/schema.py`
-- [ ] `src/tz_player/doctor.py`
+- [x] `src/tz_player/doctor.py`
 - [ ] `src/tz_player/events.py`
 - [ ] `src/tz_player/gui.py`
 - [ ] `src/tz_player/logging_utils.py`

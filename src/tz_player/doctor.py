@@ -135,6 +135,20 @@ def probe_ffmpeg(*, required: bool) -> DoctorCheck:
             detail=f"launch failed ({exc.__class__.__name__})",
             hint="Reinstall ffmpeg and verify PATH.",
         )
+    if proc.returncode != 0:
+        stderr_first = ""
+        if proc.stderr:
+            stderr_first = proc.stderr.strip().splitlines()[0]
+        detail = f"ffmpeg -version failed (exit={proc.returncode})" + (
+            f": {stderr_first}" if stderr_first else ""
+        )
+        return DoctorCheck(
+            name="ffmpeg",
+            status="error",
+            required=required,
+            detail=detail,
+            hint="Reinstall ffmpeg and verify PATH.",
+        )
     first_line = ""
     if proc.stdout:
         first_line = proc.stdout.strip().splitlines()[0]
