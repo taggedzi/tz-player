@@ -133,6 +133,12 @@ def prepare_release(
         raise ValueError(
             f"Invalid version '{version}'. Expected SemVer-like or PEP 440 (for example 1.2.3 or 1.2.3rc1)."
         )
+    try:
+        release_date = dt.date.fromisoformat(release_date.strip()).isoformat()
+    except ValueError as exc:
+        raise ValueError(
+            f"Invalid release date '{release_date}'. Expected YYYY-MM-DD."
+        ) from exc
 
     version_file = repo_root / "src" / "tz_player" / "version.py"
     changelog_file = repo_root / "CHANGELOG.md"

@@ -4,6 +4,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 
 def _run(cmd: list[str], cwd: Path) -> None:
     subprocess.run(cmd, cwd=cwd, check=True)
@@ -115,3 +117,44 @@ def test_release_prepare_accepts_v_prefixed_version(tmp_path: Path) -> None:
 
     version_text = (src / "version.py").read_text(encoding="utf-8")
     assert '__version__ = "0.2.0"' in version_text
+
+
+def test_release_prepare_rejects_invalid_date(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    src = repo / "src" / "tz_player"
+    src.mkdir(parents=True)
+
+    (src / "version.py").write_text('__version__ = "0.1.0"\n', encoding="utf-8")
+    (repo / "CHANGELOG.md").write_text(
+        "# Changelog\n\n"
+        "## [Unreleased]\n\n"
+        "### Added\n\n"
+        "- None.\n\n"
+        "### Changed\n\n"
+        "- None.\n\n"
+        "### Fixed\n\n"
+        "- None.\n\n",
+        encoding="utf-8",
+    )
+
+    _run(["git", "init"], cwd=repo)
+    _run(["git", "config", "user.name", "Test"], cwd=repo)
+    _run(["git", "config", "user.email", "test@example.com"], cwd=repo)
+    _run(["git", "add", "."], cwd=repo)
+    _run(["git", "commit", "-m", "chore: baseline"], cwd=repo)
+
+    script = Path(__file__).resolve().parents[1] / "tools" / "release_prepare.py"
+    with pytest.raises(subprocess.CalledProcessError):
+        _run(
+            [
+                sys.executable,
+                str(script),
+                "--version",
+                "0.2.0",
+                "--date",
+                "2026-02-30",
+                "--repo-root",
+                str(repo),
+            ],
+            cwd=repo,
+        )

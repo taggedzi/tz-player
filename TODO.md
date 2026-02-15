@@ -132,7 +132,7 @@ Execution tracker derived from `SPEC.md`.
 - [x] `tools/extract_changelog_release.py`
 - [x] `tools/py_tree.py`
 - [x] `tools/release.py`
-- [ ] `tools/release_prepare.py`
+- [x] `tools/release_prepare.py`
 - [ ] `tools/tree_maker.py`
 - [ ] `tools/vlc_smoke.py`
 
