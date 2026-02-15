@@ -20,6 +20,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - None.
 
 
+## [0.5.3] - 2026-02-14
+
+### Added
+
+- None.
+
+### Changed
+
+- Release: support auto-merge branch policies in release script
+- Release: v0.5.2
+- Release: process update.
+- Release: add one-command local release orchestrator
+- Release: make workflow tag-driven for protected branches
+- Release: fixed bug.
+
+### Fixed
+
+- None.
 ## [0.5.2] - 2026-02-14
 
 ### Added
