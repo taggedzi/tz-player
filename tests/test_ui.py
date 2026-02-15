@@ -7,6 +7,7 @@ from pathlib import Path
 
 from textual.app import App, ComposeResult
 from textual.geometry import Region
+from textual.widgets import Input
 
 import tz_player.paths as paths
 from tz_player.app import TzPlayerApp
@@ -19,6 +20,7 @@ from tz_player.ui.actions_menu import (
 )
 from tz_player.ui.modals.confirm import ConfirmModal
 from tz_player.ui.modals.error import ErrorModal
+from tz_player.ui.modals.path_input import PathInputModal
 from tz_player.ui.playlist_pane import PlaylistPane
 from tz_player.ui.playlist_viewport import PlaylistViewport
 from tz_player.ui.status_pane import StatusPane
@@ -319,6 +321,63 @@ def test_error_modal_enter_dismisses() -> None:
                 await asyncio.sleep(0.01)
             app.exit()
         assert app.dismissed is True
+
+    _run(run_app())
+
+
+def test_path_input_modal_escape_dismisses_none() -> None:
+    class PathInputApp(App):
+        result: str | None = "unset"
+
+        def _on_result(self, result: str | None) -> None:
+            self.result = result
+
+        async def on_mount(self) -> None:
+            self.push_screen(
+                PathInputModal("Add files", placeholder="C:\\music\\a.mp3"),
+                callback=self._on_result,
+            )
+
+    app = PathInputApp()
+
+    async def run_app() -> None:
+        async with app.run_test() as pilot:
+            await asyncio.sleep(0)
+            await pilot.press("escape")
+            for _ in range(20):
+                if app.result != "unset":
+                    break
+                await asyncio.sleep(0.01)
+            app.exit()
+        assert app.result is None
+
+    _run(run_app())
+
+
+def test_path_input_modal_enter_submits_trimmed_value() -> None:
+    class PathInputApp(App):
+        result: str | None = None
+
+        def _on_result(self, result: str | None) -> None:
+            self.result = result
+
+        async def on_mount(self) -> None:
+            self.push_screen(PathInputModal("Add files"), callback=self._on_result)
+
+    app = PathInputApp()
+
+    async def run_app() -> None:
+        async with app.run_test() as pilot:
+            await asyncio.sleep(0)
+            field = app.screen.query_one("#path-input", Input)
+            field.value = "  a.mp3  "
+            await pilot.press("enter")
+            for _ in range(20):
+                if app.result is not None:
+                    break
+                await asyncio.sleep(0.01)
+            app.exit()
+        assert app.result == "a.mp3"
 
     _run(run_app())
 

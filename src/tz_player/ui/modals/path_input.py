@@ -41,8 +41,12 @@ class PathInputModal(ModalScreen):
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "ok":
             self.action_submit()
-        else:
+        elif event.button.id == "cancel":
             self.action_cancel()
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        del event
+        self.action_submit()
 
     def action_submit(self) -> None:
         value = self._input.value if self._input is not None else ""
