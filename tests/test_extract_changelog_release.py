@@ -1,8 +1,26 @@
 from __future__ import annotations
 
+import importlib.util
+from pathlib import Path
+
 import pytest
 
-from tools.extract_changelog_release import extract_release_section
+
+def _load_extract_release_section():
+    module_path = (
+        Path(__file__).resolve().parents[1] / "tools" / "extract_changelog_release.py"
+    )
+    spec = importlib.util.spec_from_file_location(
+        "extract_changelog_release", module_path
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Unable to load module spec from {module_path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.extract_release_section
+
+
+extract_release_section = _load_extract_release_section()
 
 
 def test_extract_release_section_accepts_prefixed_version() -> None:
