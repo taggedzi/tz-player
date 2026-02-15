@@ -61,7 +61,7 @@ Execution tracker derived from `SPEC.md`.
 - [x] `src/tz_player/services/playlist_store.py`
 - [x] `src/tz_player/services/vlc_backend.py`
 - [x] `src/tz_player/state_store.py`
-- [ ] `src/tz_player/ui/__init__.py`
+- [x] `src/tz_player/ui/__init__.py`
 - [ ] `src/tz_player/ui/actions_menu.py`
 - [ ] `src/tz_player/ui/modals/__init__.py`
 - [ ] `src/tz_player/ui/modals/confirm.py`
