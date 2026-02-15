@@ -37,6 +37,8 @@ class MetadataService:
         concurrency: int = 4,
         on_metadata_updated: Callable[[list[int]], Awaitable[None]] | None = None,
     ) -> None:
+        if concurrency < 1:
+            raise ValueError("MetadataService concurrency must be >= 1.")
         self._store = store
         self._concurrency = concurrency
         self._semaphore: asyncio.Semaphore | None = None

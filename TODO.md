@@ -55,7 +55,7 @@ Execution tracker derived from `SPEC.md`.
 - [x] `src/tz_player/services/audio_level_service.py`
 - [x] `src/tz_player/services/audio_tags.py`
 - [x] `src/tz_player/services/fake_backend.py`
-- [ ] `src/tz_player/services/metadata_service.py`
+- [x] `src/tz_player/services/metadata_service.py`
 - [ ] `src/tz_player/services/playback_backend.py`
 - [ ] `src/tz_player/services/player_service.py`
 - [ ] `src/tz_player/services/playlist_store.py`

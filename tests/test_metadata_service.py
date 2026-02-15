@@ -6,6 +6,8 @@ import asyncio
 import wave
 from pathlib import Path
 
+import pytest
+
 from tz_player.services.metadata_service import MetadataService
 from tz_player.services.playlist_store import PlaylistStore
 
@@ -99,3 +101,12 @@ def test_metadata_service_marks_missing_file_invalid(tmp_path) -> None:
     updated = _run(store.fetch_window(playlist_id, 0, 1))[0]
     assert updated.meta_valid is False
     assert updated.meta_error == "File missing"
+
+
+def test_metadata_service_rejects_non_positive_concurrency(tmp_path) -> None:
+    db_path = tmp_path / "library.sqlite"
+    store = PlaylistStore(db_path)
+    _run(store.initialize())
+
+    with pytest.raises(ValueError, match="concurrency"):
+        MetadataService(store, concurrency=0)
