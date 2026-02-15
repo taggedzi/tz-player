@@ -28,6 +28,12 @@ class VisualizerRegistry:
     """Registry for discovering and creating visualizer plugins by stable ID."""
 
     def __init__(self, factories: dict[str, PluginFactory], default_id: str) -> None:
+        if not factories:
+            raise ValueError("VisualizerRegistry requires at least one plugin factory.")
+        if default_id not in factories:
+            raise ValueError(
+                f"VisualizerRegistry default_id '{default_id}' is not registered."
+            )
         self._factories = factories
         self._default_id = default_id
 

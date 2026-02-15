@@ -6,6 +6,8 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 
+import pytest
+
 from tz_player.visualizers.base import VisualizerContext, VisualizerFrameInput
 from tz_player.visualizers.registry import VisualizerRegistry, _build_factory_map
 
@@ -119,3 +121,8 @@ def test_registry_logs_load_summary(caplog) -> None:
     record = events[-1]
     assert getattr(record, "event", None) == "visualizer_registry_loaded"
     assert isinstance(getattr(record, "plugin_ids", None), list)
+
+
+def test_registry_requires_registered_default_id() -> None:
+    with pytest.raises(ValueError, match="default_id 'missing' is not registered"):
+        VisualizerRegistry({"dup": FirstPlugin}, default_id="missing")
