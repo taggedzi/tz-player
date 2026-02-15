@@ -732,6 +732,13 @@ class PlaylistPane(Static):
         if not result:
             return
         folder = Path(result).expanduser()
+        if not folder.exists() or not folder.is_dir():
+            await self._show_error(
+                "Folder path is invalid or not a directory.\n"
+                "Likely cause: path does not exist or points to a file.\n"
+                "Next step: provide an existing folder path and try again."
+            )
+            return
         paths = await run_blocking(_scan_media_files, folder)
         if not paths:
             await self._show_error("No media files found in folder.")
