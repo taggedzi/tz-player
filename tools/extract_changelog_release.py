@@ -24,7 +24,10 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--version", required=True, help="Version to extract.")
     parser.add_argument(
-        "--changelog", type=Path, default=Path("CHANGELOG.md"), help="Path to changelog."
+        "--changelog",
+        type=Path,
+        default=Path("CHANGELOG.md"),
+        help="Path to changelog.",
     )
     parser.add_argument(
         "--output", type=Path, required=True, help="Output file for release notes."

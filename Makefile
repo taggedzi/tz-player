@@ -1,4 +1,4 @@
-.PHONY: fmt lint test typecheck all
+.PHONY: fmt lint test typecheck all release
 
 fmt:
 	ruff format .
@@ -15,3 +15,7 @@ test:
 	pytest
 
 all: lint typecheck test
+
+release:
+	@if [ -z "$(VERSION)" ]; then echo "Usage: make release VERSION=0.5.2"; exit 1; fi
+	./tools/release.sh $(VERSION)
