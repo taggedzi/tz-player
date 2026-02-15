@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import logging
 import os
 import sqlite3
@@ -362,6 +363,12 @@ class TzPlayerApp(App):
 
     async def on_unmount(self) -> None:
         self._stop_visualizer()
+        if self._state_save_task is not None:
+            self._state_save_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._state_save_task
+            self._state_save_task = None
+        await self._persist_state_now()
         for task in self._envelope_analysis_tasks.values():
             task.cancel()
         if self._envelope_analysis_tasks:
@@ -995,20 +1002,28 @@ class TzPlayerApp(App):
     async def _save_state_debounced(self) -> None:
         try:
             await asyncio.sleep(1.0)
-            self.state = replace(
-                self.state,
-                playlist_id=self.player_state.playlist_id,
-                current_item_id=self.player_state.item_id,
-                volume=float(self.player_state.volume),
-                speed=self.player_state.speed,
-                repeat_mode=self.player_state.repeat_mode.lower(),
-                shuffle=self.player_state.shuffle,
-                playback_backend=self.state.playback_backend,
-            )
-            self._last_persisted = self._state_tuple(self.player_state)
-            await run_blocking(save_state, state_path(), self.state)
+            await self._persist_state_now()
         except asyncio.CancelledError:
             return
+        finally:
+            self._state_save_task = None
+
+    async def _persist_state_now(self) -> None:
+        self.state = replace(
+            self.state,
+            playlist_id=self.player_state.playlist_id,
+            current_item_id=self.player_state.item_id,
+            volume=float(self.player_state.volume),
+            speed=self.player_state.speed,
+            repeat_mode=self.player_state.repeat_mode.lower(),
+            shuffle=self.player_state.shuffle,
+            playback_backend=self.state.playback_backend,
+        )
+        self._last_persisted = self._state_tuple(self.player_state)
+        try:
+            await run_blocking(save_state, state_path(), self.state)
+        except Exception as exc:
+            logger.warning("Failed to persist state during shutdown: %s", exc)
 
     def _state_tuple(
         self, state: PlayerState

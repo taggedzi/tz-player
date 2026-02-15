@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 from pathlib import Path
 
 import tz_player.app as app_module
 import tz_player.paths as paths
 from tz_player.app import TzPlayerApp, _classify_db_startup_failure
 from tz_player.services.fake_backend import FakePlaybackBackend
+from tz_player.services.player_service import PlayerState
 from tz_player.state_store import load_state
 from tz_player.ui.modals.error import ErrorModal
 from tz_player.ui.playlist_pane import PlaylistPane
@@ -248,3 +250,41 @@ def test_classify_db_startup_failure_permission_denied_message(tmp_path) -> None
     assert "Failed to initialize playlist database." in message
     assert "Likely cause: no permission to read/write the database path." in message
     assert "Next step: check folder permissions and run tz-player again." in message
+
+
+def test_on_unmount_flushes_pending_state_save(tmp_path, monkeypatch) -> None:
+    _setup_dirs(tmp_path, monkeypatch)
+    saved_states = []
+
+    async def capture_run_blocking(func, /, *args, **kwargs):
+        if func is app_module.save_state:
+            saved_states.append(args[1])
+            return None
+        return func(*args, **kwargs)
+
+    monkeypatch.setattr(app_module, "run_blocking", capture_run_blocking)
+    app = TzPlayerApp(auto_init=False, backend_name="fake")
+    app.player_state = replace(
+        PlayerState(),
+        playlist_id=7,
+        item_id=3,
+        volume=42,
+        speed=1.25,
+        repeat_mode="ALL",
+        shuffle=True,
+    )
+
+    async def run_test() -> None:
+        app._state_save_task = asyncio.create_task(asyncio.sleep(60))
+        await app.on_unmount()
+
+    _run(run_test())
+    assert app._state_save_task is None
+    assert saved_states
+    persisted = saved_states[-1]
+    assert persisted.playlist_id == 7
+    assert persisted.current_item_id == 3
+    assert persisted.volume == 42.0
+    assert persisted.speed == 1.25
+    assert persisted.repeat_mode == "all"
+    assert persisted.shuffle is True
