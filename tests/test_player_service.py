@@ -308,6 +308,97 @@ def test_stop_resets_position() -> None:
     _run(run())
 
 
+def test_constructor_rejects_non_positive_default_duration() -> None:
+    async def emit_event(_event: object) -> None:
+        return None
+
+    try:
+        PlayerService(
+            emit_event=emit_event,
+            track_info_provider=_track_info_provider,
+            backend=FakePlaybackBackend(tick_interval_ms=50),
+            default_duration_ms=0,
+        )
+    except ValueError as exc:
+        assert str(exc) == "default_duration_ms must be >= 1"
+    else:  # pragma: no cover - defensive
+        raise AssertionError("Expected ValueError for non-positive default_duration_ms")
+
+
+def test_play_item_non_positive_track_duration_falls_back_to_default() -> None:
+    class RecordingBackend:
+        def __init__(self) -> None:
+            self.handler = None
+            self.play_duration_ms: int | None = None
+
+        def set_event_handler(self, handler) -> None:  # type: ignore[no-untyped-def]
+            self.handler = handler
+
+        async def start(self) -> None:
+            return None
+
+        async def shutdown(self) -> None:
+            return None
+
+        async def play(  # type: ignore[no-untyped-def]
+            self, item_id, track_path, start_ms=0, *, duration_ms=None
+        ) -> None:
+            self.play_duration_ms = duration_ms
+
+        async def toggle_pause(self) -> None:
+            return None
+
+        async def stop(self) -> None:
+            return None
+
+        async def seek_ms(self, position_ms: int) -> None:
+            return None
+
+        async def set_volume(self, volume: int) -> None:
+            return None
+
+        async def set_speed(self, speed: float) -> None:
+            return None
+
+        async def get_position_ms(self) -> int:
+            return 0
+
+        async def get_duration_ms(self) -> int:
+            return 0
+
+        async def get_state(self) -> str:
+            return "idle"
+
+    async def emit_event(_event: object) -> None:
+        return None
+
+    async def track_info(_playlist_id: int, _item_id: int) -> TrackInfo:
+        return TrackInfo(
+            title="Song",
+            artist=None,
+            album=None,
+            year=None,
+            path="/tmp/song.mp3",
+            duration_ms=0,
+        )
+
+    async def run() -> None:
+        backend = RecordingBackend()
+        service = PlayerService(
+            emit_event=emit_event,
+            track_info_provider=track_info,
+            backend=backend,  # type: ignore[arg-type]
+            default_duration_ms=1234,
+        )
+        await service.start()
+        await service.play_item(1, 1)
+        assert backend.play_duration_ms == 1234
+        assert service.state.duration_ms == 1234
+        await service.shutdown()
+
+    _run(run())
+
+
 def test_seek_and_clamps() -> None:
     async def emit_event(_event: object) -> None:
         return None

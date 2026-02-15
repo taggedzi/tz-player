@@ -100,6 +100,8 @@ class PlayerService:
         self._prev_track_provider = prev_track_provider
         self._playlist_item_ids_provider = playlist_item_ids_provider
         self._shuffle_random = shuffle_random or random.Random()
+        if default_duration_ms < 1:
+            raise ValueError("default_duration_ms must be >= 1")
         self._default_duration_ms = default_duration_ms
         self._state = initial_state or PlayerState()
         self._lock = asyncio.Lock()
@@ -164,9 +166,14 @@ class PlayerService:
         if shuffle_enabled:
             await self._ensure_shuffle_position(playlist_id, item_id)
         track_info = await self._track_info_provider(playlist_id, item_id)
-        duration_ms = (
+        track_duration_ms = (
             track_info.duration_ms
             if track_info and track_info.duration_ms is not None
+            else None
+        )
+        duration_ms = (
+            track_duration_ms
+            if track_duration_ms is not None and track_duration_ms > 0
             else self._default_duration_ms
         )
         if track_info is None:
