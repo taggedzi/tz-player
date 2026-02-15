@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import json
 import shutil
 import subprocess
 import sys
+import time
 
 
 def _log(message: str) -> None:
@@ -68,6 +70,38 @@ def _parse_version(raw: str) -> str:
     if not version:
         raise RuntimeError("Version cannot be empty.")
     return version
+
+
+def _wait_for_merge(
+    pr_url: str, *, timeout_seconds: int = 1800, poll_seconds: int = 5
+) -> str:
+    """Wait until PR is merged and return merge commit SHA."""
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        raw = _run(
+            [
+                "gh",
+                "pr",
+                "view",
+                pr_url,
+                "--json",
+                "state,mergedAt,mergeCommit",
+            ],
+            capture=True,
+        )
+        payload = json.loads(raw)
+        state = payload.get("state")
+        merged_at = payload.get("mergedAt")
+        merge_commit = payload.get("mergeCommit") or {}
+        merge_sha = merge_commit.get("oid")
+
+        if merged_at and merge_sha:
+            return str(merge_sha)
+        if state == "CLOSED" and not merged_at:
+            raise RuntimeError(f"PR {pr_url} was closed without being merged.")
+        time.sleep(poll_seconds)
+
+    raise RuntimeError(f"Timed out waiting for PR merge: {pr_url}")
 
 
 def run_release(raw_version: str) -> None:
@@ -140,25 +174,11 @@ def run_release(raw_version: str) -> None:
     _log("Waiting for PR checks to finish")
     _run(["gh", "pr", "checks", pr_url, "--watch", "--fail-fast"])
 
-    _log("Merging PR")
-    _run(["gh", "pr", "merge", pr_url, "--squash", "--delete-branch"])
+    _log("Enabling auto-merge for PR")
+    _run(["gh", "pr", "merge", pr_url, "--auto", "--squash", "--delete-branch"])
 
-    _log("Retrieving merge commit")
-    merge_sha = _run(
-        [
-            "gh",
-            "pr",
-            "view",
-            pr_url,
-            "--json",
-            "mergeCommit",
-            "--jq",
-            ".mergeCommit.oid",
-        ],
-        capture=True,
-    )
-    if not merge_sha or merge_sha == "null":
-        raise RuntimeError(f"Unable to determine merge commit SHA from PR {pr_url}.")
+    _log("Waiting for PR merge")
+    merge_sha = _wait_for_merge(pr_url)
 
     _log(f"Refreshing main and creating tag {tag}")
     _run(["git", "fetch", "origin", "main", "--prune"])
