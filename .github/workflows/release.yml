@@ -50,17 +50,29 @@ jobs:
           python -m pip install -e ".[dev]"
           python -m pip install build twine
 
+      - name: Normalize release version
+        run: |
+          norm="${RELEASE_VERSION}"
+          case "${norm}" in
+            v*|V*) norm="${norm#?}" ;;
+          esac
+          if [ -z "${norm}" ]; then
+            echo "Version input cannot be empty."
+            exit 1
+          fi
+          echo "RELEASE_VERSION_NORM=${norm}" >> "${GITHUB_ENV}"
+
       - name: Validate release tag does not already exist
         run: |
-          if git rev-parse "v${RELEASE_VERSION}" >/dev/null 2>&1; then
-            echo "Tag v${RELEASE_VERSION} already exists."
+          if git rev-parse "v${RELEASE_VERSION_NORM}" >/dev/null 2>&1; then
+            echo "Tag v${RELEASE_VERSION_NORM} already exists."
             exit 1
           fi
 
       - name: Prepare version and changelog
         run: |
           python tools/release_prepare.py \
-            --version "${RELEASE_VERSION}" \
+            --version "${RELEASE_VERSION_NORM}" \
             --notes-file RELEASE_NOTES.md
 
       - name: Lint
@@ -126,10 +138,10 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/tz_player/version.py CHANGELOG.md
-          git commit -m "release: v${RELEASE_VERSION}"
-          git tag "v${RELEASE_VERSION}"
+          git commit -m "release: v${RELEASE_VERSION_NORM}"
+          git tag "v${RELEASE_VERSION_NORM}"
           git push origin HEAD:main
-          git push origin "v${RELEASE_VERSION}"
+          git push origin "v${RELEASE_VERSION_NORM}"
 
       - name: Publish GitHub release
         run: |
@@ -137,8 +149,8 @@ jobs:
           if [ "${RELEASE_PRERELEASE}" = "true" ]; then
             prerelease_flag="--prerelease"
           fi
-          gh release create "v${RELEASE_VERSION}" \
-            --title "v${RELEASE_VERSION}" \
+          gh release create "v${RELEASE_VERSION_NORM}" \
+            --title "v${RELEASE_VERSION_NORM}" \
             --notes-file RELEASE_NOTES.md \
             ${prerelease_flag} \
             dist/*

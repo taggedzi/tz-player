@@ -36,7 +36,7 @@ Use forms like `0.3.0`, `0.3.1`, or `0.4.0rc1`. Tag format is always `v<version>
 
 3. Open GitHub Actions and run workflow:
 Go to `Actions` -> `Manual Release`, click `Run workflow`, then set:
-- `version`: your chosen version.
+- `version`: your chosen version (`0.5.1` and `v0.5.1` are both accepted).
 - `prerelease`: `true` for release candidates, `false` for stable releases.
 - `sign_artifacts`: `false` unless you have configured GPG secrets and want signatures.
 

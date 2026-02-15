@@ -126,9 +126,12 @@ def _render_unreleased_template() -> str:
 def prepare_release(
     *, repo_root: Path, version: str, release_date: str, notes_file: Path | None
 ) -> None:
+    version = version.strip()
+    if version.startswith(("v", "V")):
+        version = version[1:]
     if VERSION_RE.fullmatch(version) is None:
         raise ValueError(
-            f"Invalid version '{version}'. Expected SemVer-like or PEP 440."
+            f"Invalid version '{version}'. Expected SemVer-like or PEP 440 (for example 1.2.3 or 1.2.3rc1)."
         )
 
     version_file = repo_root / "src" / "tz_player" / "version.py"
