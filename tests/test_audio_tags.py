@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import wave
 from pathlib import Path
+from types import SimpleNamespace
 
+import tz_player.services.audio_tags as audio_tags_module
 from tz_player.services.audio_tags import read_audio_tags
 
 
@@ -32,3 +34,28 @@ def test_read_audio_tags_missing_file_reports_error(tmp_path) -> None:
     path = tmp_path / "missing.mp3"
     tags = read_audio_tags(path)
     assert tags.error is not None
+
+
+def test_read_audio_tags_wave_fallback_when_tinytag_read_fails(
+    tmp_path, monkeypatch
+) -> None:
+    path = tmp_path / "tone.wav"
+    _write_wave(path, duration_sec=0.25, framerate=8000)
+
+    class _FailingTinyTag:
+        @staticmethod
+        def get(_path: str):  # type: ignore[no-untyped-def]
+            raise RuntimeError("tinytag decode error")
+
+    monkeypatch.setattr(
+        audio_tags_module,
+        "import_module",
+        lambda _name: SimpleNamespace(TinyTag=_FailingTinyTag),
+    )
+
+    tags = read_audio_tags(path)
+    assert tags.error is None
+    assert tags.duration_ms is not None
+    assert tags.duration_ms > 0
+    assert tags.bitrate_kbps is not None
+    assert tags.bitrate_kbps > 0

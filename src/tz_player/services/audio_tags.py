@@ -24,11 +24,13 @@ class AudioTags:
 def read_audio_tags(path: Path) -> AudioTags:
     """Read metadata for a track path using TinyTag with safe fallbacks."""
     tinytag_data = _read_with_tinytag(path)
-    if tinytag_data is not None:
+    if tinytag_data is not None and tinytag_data.error is None:
         return tinytag_data
     wave_data = _read_wave_fallback(path)
     if wave_data is not None:
         return wave_data
+    if tinytag_data is not None:
+        return tinytag_data
     return AudioTags(error="Unsupported or unreadable file")
 
 
