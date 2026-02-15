@@ -85,7 +85,12 @@ class VisualizerHost:
             fallback = self._registry.create(self._registry.default_id)
             if fallback is None:
                 raise RuntimeError("Fallback visualizer unavailable.") from exc
-            fallback.on_activate(context)
+            try:
+                fallback.on_activate(context)
+            except Exception as fallback_exc:
+                raise RuntimeError(
+                    "Fallback visualizer activation failed."
+                ) from fallback_exc
             plugin = fallback
             requested = self._registry.default_id
 

@@ -5,6 +5,8 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
+import pytest
+
 from tz_player.visualizers.base import VisualizerContext, VisualizerFrameInput
 from tz_player.visualizers.host import VisualizerHost
 from tz_player.visualizers.registry import VisualizerRegistry
@@ -38,6 +40,21 @@ class BadRenderPlugin:
 
     def render(self, frame: VisualizerFrameInput) -> str:
         raise RuntimeError("boom")
+
+
+@dataclass
+class BadActivatePlugin:
+    plugin_id: str = "bad-activate"
+    display_name: str = "bad-activate"
+
+    def on_activate(self, context: VisualizerContext) -> None:
+        raise RuntimeError("activate boom")
+
+    def on_deactivate(self) -> None:
+        return None
+
+    def render(self, frame: VisualizerFrameInput) -> str:
+        return "ok"
 
 
 def _frame() -> VisualizerFrameInput:
@@ -111,3 +128,15 @@ def test_render_failure_logs_fallback_transition(caplog) -> None:
     assert getattr(event, "phase", None) == "render"
     assert getattr(event, "requested_plugin_id", None) == "bad"
     assert getattr(event, "active_plugin_id", None) == "good"
+
+
+def test_activate_raises_clear_error_when_fallback_activation_fails() -> None:
+    registry = VisualizerRegistry(
+        {"bad-activate": BadActivatePlugin},
+        default_id="bad-activate",
+    )
+    host = VisualizerHost(registry)
+    context = VisualizerContext(ansi_enabled=True, unicode_enabled=True)
+
+    with pytest.raises(RuntimeError, match="Fallback visualizer activation failed"):
+        host.activate("bad-activate", context)
