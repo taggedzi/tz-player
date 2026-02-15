@@ -17,7 +17,8 @@ include_extensions = [
   ".rs",
   ".c", ".h", ".cc", ".hh", ".cpp", ".hpp", ".cxx",
   ".cs",
-  ".md", ".rst", ".toml", ".yaml", ".yml", ".json", ".ini", ".cfg"
+  ".md", ".rst", ".toml", ".yaml", ".yml", ".json", ".ini", ".cfg",
+  ".sh"
 ]
 
 exclude_globs = [
