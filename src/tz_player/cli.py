@@ -43,6 +43,7 @@ def main() -> int:
             log_dir=log_dir(),
             level=level,
             log_file=Path(args.log_file) if args.log_file else None,
+            console=False,
         )
         logger.info("Starting tz-player CLI")
         print("tz-player CLI is ready.")

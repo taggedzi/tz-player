@@ -114,6 +114,7 @@ def test_cli_main_passes_effective_level_and_log_file(monkeypatch, tmp_path) -> 
     assert rc == 0
     assert captured["level"] == "WARNING"
     assert captured["log_file"] == tmp_path / "cli.log"
+    assert captured["console"] is False
 
 
 def test_gui_main_passes_effective_level_and_log_file(monkeypatch, tmp_path) -> None:
