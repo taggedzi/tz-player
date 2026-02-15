@@ -39,6 +39,10 @@ def analyze_track_envelope(
     wave_result = _analyze_wave(path, bucket_ms=bucket_ms)
     if wave_result is not None:
         return _limit_points(wave_result, max_points=max_points)
+    # Wave files are decoded via Python's wave module only; if decode fails,
+    # fail closed rather than falling back to ffmpeg with different behavior.
+    if path.suffix.lower() in _WAVE_SUFFIXES:
+        return None
 
     ffmpeg_result = _analyze_ffmpeg(path, bucket_ms=bucket_ms)
     if ffmpeg_result is None:
