@@ -47,6 +47,18 @@ def test_analyze_track_envelope_limits_points(tmp_path) -> None:
     assert len(result.points) == 5
 
 
+def test_analyze_track_envelope_limits_points_keeps_final_timestamp(tmp_path) -> None:
+    track = tmp_path / "tone.wav"
+    _write_wave(track, seconds=1.0)
+
+    full = analyze_track_envelope(track, bucket_ms=10, max_points=10_000)
+    limited = analyze_track_envelope(track, bucket_ms=10, max_points=5)
+
+    assert full is not None
+    assert limited is not None
+    assert limited.points[-1][0] == full.points[-1][0]
+
+
 def test_analyze_track_envelope_returns_none_for_missing_file(tmp_path) -> None:
     missing = tmp_path / "missing.wav"
     assert analyze_track_envelope(missing) is None

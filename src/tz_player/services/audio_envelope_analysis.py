@@ -234,11 +234,19 @@ def _limit_points(
     if max_points <= 0 or len(result.points) <= max_points:
         return result
     stride = max(1, len(result.points) // max_points)
-    points = result.points[::stride]
-    if points[-1][0] != result.points[-1][0]:
-        points.append(result.points[-1])
+    points = list(result.points[::stride])
+    last = result.points[-1]
+    if points[-1][0] != last[0]:
+        points.append(last)
     if len(points) > max_points:
-        points = points[:max_points]
+        if max_points == 1:
+            points = [last]
+        else:
+            trimmed = points[: max_points - 1]
+            if trimmed and trimmed[-1][0] == last[0]:
+                points = trimmed
+            else:
+                points = [*trimmed, last]
     return EnvelopeAnalysisResult(duration_ms=result.duration_ms, points=points)
 
 
