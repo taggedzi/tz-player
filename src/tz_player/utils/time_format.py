@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 
 def format_time_ms(ms: int) -> str:
     """Format milliseconds as MM:SS or H:MM:SS when needed."""
@@ -20,11 +22,11 @@ def format_time_pair_ms(position_ms: int, duration_ms: int) -> tuple[str, str]:
 
 
 def _needs_hours(ms: int) -> bool:
-    return max(ms, 0) >= 3_600_000
+    return _coerce_ms(ms) >= 3_600_000
 
 
 def _format_time_ms(ms: int, *, force_hours: bool) -> str:
-    total_seconds = max(ms, 0) // 1000
+    total_seconds = _coerce_ms(ms) // 1000
     hours = total_seconds // 3600
     if hours > 0 or force_hours:
         minutes = (total_seconds // 60) % 60
@@ -33,3 +35,13 @@ def _format_time_ms(ms: int, *, force_hours: bool) -> str:
     minutes = total_seconds // 60
     seconds = total_seconds % 60
     return f"{minutes:02d}:{seconds:02d}"
+
+
+def _coerce_ms(value: int) -> int:
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return 0
+    if not math.isfinite(numeric):
+        return 0
+    return max(0, int(numeric))

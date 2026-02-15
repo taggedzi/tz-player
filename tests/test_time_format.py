@@ -41,3 +41,8 @@ def test_format_time_pair_unknown_duration() -> None:
     pos, dur = format_time_pair_ms(3_600_000, -1)
     assert pos == "1:00:00"
     assert dur == "--:--:--"
+
+
+def test_format_time_non_finite_values_fall_back_to_zero() -> None:
+    assert format_time_ms(float("nan")) == "00:00"  # type: ignore[arg-type]
+    assert format_time_ms(float("inf")) == "00:00"  # type: ignore[arg-type]

@@ -116,7 +116,7 @@ Execution tracker derived from `SPEC.md`.
 - [x] `tests/test_startup_resilience.py`
 - [x] `tests/test_state_store.py`
 - [x] `tests/test_status_pane.py`
-- [ ] `tests/test_time_format.py`
+- [x] `tests/test_time_format.py`
 - [ ] `tests/test_track_info_panel.py`
 - [ ] `tests/test_transport_controls.py`
 - [ ] `tests/test_ui.py`
