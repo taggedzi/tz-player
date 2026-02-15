@@ -134,7 +134,7 @@ Execution tracker derived from `SPEC.md`.
 - [x] `tools/release.py`
 - [x] `tools/release_prepare.py`
 - [x] `tools/tree_maker.py`
-- [ ] `tools/vlc_smoke.py`
+- [x] `tools/vlc_smoke.py`
 
 ## Archived Completed Work
 
