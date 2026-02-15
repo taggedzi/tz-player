@@ -6,6 +6,7 @@ import math
 import wave
 from pathlib import Path
 
+import tz_player.services.audio_envelope_analysis as envelope_module
 from tz_player.services.audio_envelope_analysis import (
     analyze_track_envelope,
     requires_ffmpeg_for_envelope,
@@ -62,6 +63,19 @@ def test_analyze_track_envelope_limits_points_keeps_final_timestamp(tmp_path) ->
 def test_analyze_track_envelope_returns_none_for_missing_file(tmp_path) -> None:
     missing = tmp_path / "missing.wav"
     assert analyze_track_envelope(missing) is None
+
+
+def test_analyze_track_envelope_returns_none_on_wave_decode_value_error(
+    tmp_path, monkeypatch
+) -> None:
+    track = tmp_path / "tone.wav"
+    _write_wave(track, seconds=0.2)
+
+    def _raise(*_args, **_kwargs):  # type: ignore[no-untyped-def]
+        raise ValueError("unsupported sample shape")
+
+    monkeypatch.setattr(envelope_module, "_levels_from_pcm", _raise)
+    assert analyze_track_envelope(track) is None
 
 
 def test_requires_ffmpeg_for_envelope_by_extension() -> None:

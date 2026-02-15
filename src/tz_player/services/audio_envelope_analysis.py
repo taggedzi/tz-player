@@ -85,7 +85,7 @@ def _analyze_wave(path: Path, *, bucket_ms: int) -> EnvelopeAnalysisResult | Non
             return EnvelopeAnalysisResult(
                 duration_ms=max(1, duration_ms), points=points
             )
-    except (wave.Error, EOFError, OSError):
+    except (wave.Error, EOFError, OSError, ValueError):
         return None
 
 
