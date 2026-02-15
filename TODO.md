@@ -119,7 +119,7 @@ Execution tracker derived from `SPEC.md`.
 - [x] `tests/test_time_format.py`
 - [x] `tests/test_track_info_panel.py`
 - [x] `tests/test_transport_controls.py`
-- [ ] `tests/test_ui.py`
+- [x] `tests/test_ui.py`
 - [ ] `tests/test_visualizer_cover_ascii.py`
 - [ ] `tests/test_visualizer_hackscope.py`
 - [ ] `tests/test_visualizer_host.py`
