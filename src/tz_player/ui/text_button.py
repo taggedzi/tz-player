@@ -37,6 +37,8 @@ class TextButton(Static):
         classes: str | None = "text-button",
         **kwargs,
     ) -> None:
+        if not action.strip():
+            raise ValueError("action must be non-empty")
         super().__init__(label, classes=classes, **kwargs)
         self.action = action
         self.can_focus = True

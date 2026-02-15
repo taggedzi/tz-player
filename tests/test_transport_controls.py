@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import pytest
 from textual.message import Message
 
 from tz_player.services.player_service import PlayerState
-from tz_player.ui.text_button import TextButtonPressed
+from tz_player.ui.text_button import TextButton, TextButtonPressed
 from tz_player.ui.transport_controls import (
     ToggleRepeat,
     ToggleShuffle,
@@ -91,3 +92,8 @@ def test_transport_controls_play_button_mouse_click() -> None:
     assert len(emitted) == 1
     assert isinstance(emitted[0], TransportAction)
     assert emitted[0].action == "toggle_play"
+
+
+def test_text_button_rejects_empty_action() -> None:
+    with pytest.raises(ValueError, match="action must be non-empty"):
+        TextButton("Play", action=" ")
