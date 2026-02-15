@@ -231,6 +231,46 @@ def test_vu_non_finite_live_levels_degrade_to_fallback() -> None:
     assert "SRC SIMULATED FALLBACK" in output
 
 
+def test_vu_non_finite_time_values_render_safely() -> None:
+    plugin = VuReactiveVisualizer()
+    plugin.on_activate(VisualizerContext(ansi_enabled=False, unicode_enabled=True))
+    output = plugin.render(
+        _frame(
+            width=72,
+            height=8,
+            frame_index=3,
+            level_left=0.5,
+            level_right=0.5,
+            level_source="live",
+        )
+    )
+    finite_output = plugin.render(
+        VisualizerFrameInput(
+            frame_index=3,
+            monotonic_s=0.0,
+            width=72,
+            height=8,
+            status="playing",
+            position_s=float("nan"),
+            duration_s=float("inf"),
+            volume=73.0,
+            speed=1.0,
+            repeat_mode="OFF",
+            shuffle=False,
+            track_id=1,
+            track_path="/tmp/track.mp3",
+            title="Neon Shadow",
+            artist="Proxy Unit",
+            album="Gridline",
+            level_left=0.5,
+            level_right=0.5,
+            level_source="live",
+        )
+    )
+    assert output
+    assert "TIME --:--/--:--" in finite_output
+
+
 def _meter_pct(output: str, label: str) -> int:
     for line in output.splitlines():
         if line.startswith(f"{label} ["):

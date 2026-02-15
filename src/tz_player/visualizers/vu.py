@@ -139,7 +139,12 @@ def _color_meter(fill: int, empty: int, width: int, ansi_enabled: bool) -> str:
 
 
 def _status_line(frame: VisualizerFrameInput) -> str:
-    if frame.duration_s is not None and frame.duration_s > 0:
+    if (
+        frame.duration_s is not None
+        and math.isfinite(frame.duration_s)
+        and frame.duration_s > 0
+        and math.isfinite(frame.position_s)
+    ):
         pct = min(max(frame.position_s / frame.duration_s, 0.0), 1.0)
     else:
         pct = 0.0
@@ -207,7 +212,7 @@ def _fit_lines(lines: list[str], width: int, height: int) -> str:
 
 
 def _fmt_clock(value: float | None) -> str:
-    if value is None or value < 0:
+    if value is None or not math.isfinite(value) or value < 0:
         return "--:--"
     total = int(value)
     mins, secs = divmod(total, 60)

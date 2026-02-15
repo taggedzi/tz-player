@@ -126,7 +126,7 @@ Execution tracker derived from `SPEC.md`.
 - [x] `tests/test_visualizer_matrix.py`
 - [x] `tests/test_visualizer_registry.py`
 - [x] `tests/test_visualizer_selection_integration.py`
-- [ ] `tests/test_visualizer_vu.py`
+- [x] `tests/test_visualizer_vu.py`
 - [ ] `tests/test_vlc_backend.py`
 - [ ] `tests/test_vlc_backend_unit.py`
 - [ ] `tools/extract_changelog_release.py`
