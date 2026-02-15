@@ -131,7 +131,7 @@ Execution tracker derived from `SPEC.md`.
 - [x] `tests/test_vlc_backend_unit.py`
 - [x] `tools/extract_changelog_release.py`
 - [x] `tools/py_tree.py`
-- [ ] `tools/release.py`
+- [x] `tools/release.py`
 - [ ] `tools/release_prepare.py`
 - [ ] `tools/tree_maker.py`
 - [ ] `tools/vlc_smoke.py`
