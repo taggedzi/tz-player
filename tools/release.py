@@ -1,0 +1,189 @@
+"""One-command release orchestrator."""
+
+from __future__ import annotations
+
+import argparse
+import shutil
+import subprocess
+import sys
+
+
+def _log(message: str) -> None:
+    print(f"[release] {message}")
+
+
+def _run(cmd: list[str], *, capture: bool = False) -> str:
+    result = subprocess.run(
+        cmd,
+        check=True,
+        text=True,
+        capture_output=capture,
+    )
+    return result.stdout.strip() if capture else ""
+
+
+def _require_command(cmd: str) -> None:
+    if shutil.which(cmd) is None:
+        raise RuntimeError(f"Missing required command: {cmd}")
+
+
+def _python_cmd() -> list[str]:
+    return [sys.executable]
+
+
+def _release_prepare(version: str) -> None:
+    _run([*_python_cmd(), "tools/release_prepare.py", "--version", version])
+
+
+def _quality_gates() -> None:
+    _run([*_python_cmd(), "-m", "ruff", "check", "."])
+    _run([*_python_cmd(), "-m", "ruff", "format", "--check", "."])
+    _run([*_python_cmd(), "-m", "mypy", "src"])
+    _run([*_python_cmd(), "-m", "pytest"])
+
+
+def _ensure_clean_tree() -> None:
+    status = _run(["git", "status", "--porcelain"], capture=True)
+    if status:
+        raise RuntimeError("Working tree is not clean. Commit or stash changes first.")
+
+
+def _ref_exists_locally(ref: str) -> bool:
+    try:
+        _run(["git", "rev-parse", ref], capture=True)
+    except subprocess.CalledProcessError:
+        return False
+    return True
+
+
+def _ref_exists_remote(*, kind: str, name: str) -> bool:
+    out = _run(["git", "ls-remote", f"--{kind}", "origin", name], capture=True)
+    return bool(out.strip())
+
+
+def _parse_version(raw: str) -> str:
+    version = raw.strip()
+    if version.startswith(("v", "V")):
+        version = version[1:]
+    if not version:
+        raise RuntimeError("Version cannot be empty.")
+    return version
+
+
+def run_release(raw_version: str) -> None:
+    version = _parse_version(raw_version)
+    tag = f"v{version}"
+    branch = f"release/{tag}"
+
+    _require_command("git")
+    _require_command("gh")
+
+    try:
+        _run(["gh", "auth", "status"])
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(
+            "GitHub CLI is not authenticated. Run: gh auth login"
+        ) from exc
+
+    _ensure_clean_tree()
+
+    _log("Fetching latest main")
+    _run(["git", "fetch", "origin", "main", "--prune"])
+    _run(["git", "switch", "main"])
+    _run(["git", "pull", "--ff-only", "origin", "main"])
+
+    if _ref_exists_locally(tag) or _ref_exists_remote(kind="tags", name=tag):
+        raise RuntimeError(f"Tag {tag} already exists locally or on origin.")
+    if _ref_exists_locally(f"refs/heads/{branch}"):
+        raise RuntimeError(f"Local branch {branch} already exists.")
+    if _ref_exists_remote(kind="heads", name=branch):
+        raise RuntimeError(f"Remote branch {branch} already exists.")
+
+    _log(f"Creating release branch {branch}")
+    _run(["git", "switch", "-c", branch])
+
+    _log("Preparing version/changelog")
+    _release_prepare(version)
+
+    _log("Running quality gates")
+    _quality_gates()
+
+    _run(["git", "add", "src/tz_player/version.py", "CHANGELOG.md"])
+    if not _run(["git", "diff", "--cached", "--name-only"], capture=True):
+        raise RuntimeError("No release changes detected after preparation.")
+
+    _log("Committing release metadata")
+    _run(["git", "commit", "-m", f"release: {tag}"])
+
+    _log("Pushing release branch")
+    _run(["git", "push", "-u", "origin", branch])
+
+    _log("Opening pull request")
+    pr_url = _run(
+        [
+            "gh",
+            "pr",
+            "create",
+            "--base",
+            "main",
+            "--head",
+            branch,
+            "--title",
+            f"release: {tag}",
+            "--body",
+            f"Automated release prep for {tag}.",
+        ],
+        capture=True,
+    )
+    _log(f"PR: {pr_url}")
+
+    _log("Waiting for PR checks to finish")
+    _run(["gh", "pr", "checks", pr_url, "--watch", "--fail-fast"])
+
+    _log("Merging PR")
+    _run(["gh", "pr", "merge", pr_url, "--squash", "--delete-branch"])
+
+    _log("Retrieving merge commit")
+    merge_sha = _run(
+        [
+            "gh",
+            "pr",
+            "view",
+            pr_url,
+            "--json",
+            "mergeCommit",
+            "--jq",
+            ".mergeCommit.oid",
+        ],
+        capture=True,
+    )
+    if not merge_sha or merge_sha == "null":
+        raise RuntimeError(f"Unable to determine merge commit SHA from PR {pr_url}.")
+
+    _log(f"Refreshing main and creating tag {tag}")
+    _run(["git", "fetch", "origin", "main", "--prune"])
+    _run(["git", "switch", "main"])
+    _run(["git", "pull", "--ff-only", "origin", "main"])
+    _run(["git", "tag", "-a", tag, merge_sha, "-m", f"Release {tag}"])
+
+    _log(f"Pushing tag {tag}")
+    _run(["git", "push", "origin", tag])
+
+    _log(f"Done. Tag {tag} pushed and GitHub Release workflow should start.")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("version", help="Release version, e.g. 0.5.2 or v0.5.2")
+    args = parser.parse_args()
+
+    try:
+        run_release(args.version)
+    except (RuntimeError, subprocess.CalledProcessError) as exc:
+        print(f"[release] ERROR: {exc}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

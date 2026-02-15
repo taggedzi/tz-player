@@ -18,4 +18,4 @@ all: lint typecheck test
 
 release:
 	@if [ -z "$(VERSION)" ]; then echo "Usage: make release VERSION=0.5.2"; exit 1; fi
-	./tools/release.sh $(VERSION)
+	python tools/release.py $(VERSION)

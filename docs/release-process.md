@@ -28,16 +28,17 @@ Use forms like `0.3.0`, `0.3.1`, or `0.4.0rc1`. Tag format is always `v<version>
 2. Run the one-command release entrypoint:
 
 ```bash
-./tools/release.sh 0.5.1
+python tools/release.py 0.5.1
 ```
 
-Alternative wrapper:
+Alternative options:
 
 ```bash
 make release VERSION=0.5.1
+./tools/release.sh 0.5.1
 ```
 
-What `tools/release.sh` does:
+What `tools/release.py` does:
 1. Validates clean git state and required tooling (`git`, `gh`, `.ubuntu-venv/bin/python`).
 2. Runs `tools/release_prepare.py` to update `src/tz_player/version.py` and `CHANGELOG.md`.
 3. Runs required quality gates: `ruff check`, `ruff format --check`, `mypy src`, `pytest`.
@@ -58,7 +59,7 @@ If you publish to package indexes, do it only after the GitHub release is verifi
 ## Failure Handling
 
 1. Script fails before PR creation:
-Fix local/tooling issue and re-run `./tools/release.sh <version>`.
+Fix local/tooling issue and re-run `python tools/release.py <version>`.
 
 2. Script fails waiting on PR checks:
 Open the PR URL printed by the script, fix CI issues, and re-run the command with a new version.
@@ -79,4 +80,4 @@ If PR merge is blocked, resolve required approvals/checks and rerun with a new v
 
 - Automated versioning is intentionally not used.
 - You manually choose the version at release time.
-- `tools/release.sh` automates the release flow end to end.
+- `tools/release.py` automates the release flow end to end.
