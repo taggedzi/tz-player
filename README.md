@@ -80,17 +80,10 @@ nox -s local
 
 ## Release
 
-```bash
-python -m pip install --upgrade build twine
-python -m build
-python -m twine check dist/*
-python -m zipfile -l dist/*.whl | rg -i "ffmpeg|libvlc|vlc\\.dll|libvlc\\.so|libvlc\\.dylib|avcodec|avformat|avutil|swresample|swscale"
-tar -tf dist/*.tar.gz | rg -i "ffmpeg|libvlc|vlc\\.dll|libvlc\\.so|libvlc\\.dylib|avcodec|avformat|avutil|swresample|swscale"
-```
-
-Release policy note:
-
-- Do not bundle VLC/libVLC or FFmpeg binaries in project artifacts. These tools are external/user-installed.
+- Manual release automation is in GitHub Actions: `.github/workflows/release.yml`.
+- Version source of truth is `src/tz_player/version.py`.
+- Full instructions (including optional signing setup): `docs/release-process.md`.
+- Release checklist and quality notes: `PRODUCTION_READY_CHECKLIST.md`.
 
 ## Project Layout
 
@@ -136,7 +129,3 @@ Behavior notes:
 - Non-fatal runtime issues (for example visualizer fallback, missing ffmpeg envelope source) are surfaced in the status line as `Notice:` messages.
 
 See `docs/usage.md` for full keybindings and troubleshooting guidance.
-
-## Release
-
-See `PRODUCTION_READY_CHECKLIST.md` for a release checklist and recommendations.

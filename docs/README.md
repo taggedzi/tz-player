@@ -5,6 +5,7 @@ This folder contains lightweight project documentation.
 - `usage.md` for end-user notes
 - `media-setup.md` for VLC/FFmpeg installation guidance
 - `license-compliance.md` for third-party licensing and distribution notes
+- `release-process.md` for manual-version automated release workflow
 - `architecture.md` for design notes
 - `visualizations.md` for visualization subsystem and plugin authoring contract
 - `gap-analysis.md` for workflow-to-spec gap mapping and prioritized backlog

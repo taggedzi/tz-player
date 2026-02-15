@@ -1,6 +1,7 @@
 # Production Ready Checklist
 
 Use this checklist before a release. Pick the section that matches your project type.
+For the exact release procedure, use `docs/release-process.md`.
 
 ## tz-player Status (2026-02-13)
 
@@ -24,6 +25,7 @@ Known remaining release tasks:
 
 - [x] Update version/changelog for the release candidate.
 - [x] Verify CI runs the same gate commands on PR (`.github/workflows/ci.yml`).
+- [x] Add manual-release GitHub workflow with automated release notes and optional artifact signing (`.github/workflows/release.yml`, `docs/release-process.md`).
 - [x] Run VLC-specific smoke tests in an environment with `TZ_PLAYER_TEST_VLC=1` (see `docs/vlc-smoke-test.md`).
 - [ ] Run manual app startup check with VLC backend: `python -m tz_player.app --backend vlc`.
 - [ ] Re-run VLC backend smoke test in a VLC-enabled environment (`TZ_PLAYER_TEST_VLC=1`).

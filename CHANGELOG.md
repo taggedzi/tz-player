@@ -10,10 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Pre-release sweep results recorded in `PRODUCTION_READY_CHECKLIST.md`, including full validation gate and opt-in performance checks.
+- Manual GitHub release automation (`.github/workflows/release.yml`) with version/changelog preparation, quality gates, artifact guardrail scan, optional signing, and release publishing.
 
 ### Changed
 
 - Release-readiness tracking now explicitly documents deferred VLC-only checks when `libVLC` is unavailable in the current environment.
+- Project version now has a single source of truth in `src/tz_player/version.py`, consumed by runtime and packaging metadata.
 
 ## [0.2.0rc1] - 2026-02-13
 
