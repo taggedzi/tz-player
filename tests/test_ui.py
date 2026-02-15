@@ -17,6 +17,7 @@ from tz_player.ui.actions_menu import (
     ActionsMenuPopup,
     ActionsMenuSelected,
 )
+from tz_player.ui.modals.confirm import ConfirmModal
 from tz_player.ui.playlist_pane import PlaylistPane
 from tz_player.ui.playlist_viewport import PlaylistViewport
 from tz_player.ui.status_pane import StatusPane
@@ -213,6 +214,58 @@ def test_actions_menu_keyboard_open_and_select(tmp_path, monkeypatch) -> None:
             assert len(app.query(ActionsMenuPopup)) == 0
             assert app.focused is pane
             app.exit()
+
+    _run(run_app())
+
+
+def test_confirm_modal_escape_dismisses_false() -> None:
+    class ConfirmApp(App):
+        result: bool | None = None
+
+        def _set_result(self, result: bool) -> None:
+            self.result = result
+
+        async def on_mount(self) -> None:
+            self.push_screen(ConfirmModal("Proceed?"), callback=self._set_result)
+
+    app = ConfirmApp()
+
+    async def run_app() -> None:
+        async with app.run_test() as pilot:
+            await asyncio.sleep(0)
+            await pilot.press("escape")
+            for _ in range(20):
+                if app.result is not None:
+                    break
+                await asyncio.sleep(0.01)
+            app.exit()
+        assert app.result is False
+
+    _run(run_app())
+
+
+def test_confirm_modal_enter_dismisses_true() -> None:
+    class ConfirmApp(App):
+        result: bool | None = None
+
+        def _set_result(self, result: bool) -> None:
+            self.result = result
+
+        async def on_mount(self) -> None:
+            self.push_screen(ConfirmModal("Proceed?"), callback=self._set_result)
+
+    app = ConfirmApp()
+
+    async def run_app() -> None:
+        async with app.run_test() as pilot:
+            await asyncio.sleep(0)
+            await pilot.press("enter")
+            for _ in range(20):
+                if app.result is not None:
+                    break
+                await asyncio.sleep(0.01)
+            app.exit()
+        assert app.result is True
 
     _run(run_app())
 
