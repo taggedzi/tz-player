@@ -136,7 +136,10 @@ class PlaylistViewport(Widget):
         if not self._dragging_scrollbar:
             return
         offset = event.get_content_offset_capture(self)
-        self._emit_scroll_jump(offset.y)
+        y = getattr(offset, "y", None)
+        if not isinstance(y, int):
+            return
+        self._emit_scroll_jump(y)
         event.stop()
 
     def _handle_scrollbar_click(self, offset: Offset) -> bool:

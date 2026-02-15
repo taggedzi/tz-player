@@ -61,6 +61,17 @@ class _FakeMouseMoveEvent:
         self.stopped = True
 
 
+class _FakeMouseMoveNoneEvent:
+    def __init__(self) -> None:
+        self.stopped = False
+
+    def get_content_offset_capture(self, _widget):  # type: ignore[no-untyped-def]
+        return None
+
+    def stop(self) -> None:
+        self.stopped = True
+
+
 class _SizedViewport(PlaylistViewport):
     @property
     def size(self) -> Size:  # type: ignore[override]
@@ -208,3 +219,18 @@ def test_viewport_scrollbar_drag_posts_jump_request() -> None:
     assert emitted[0].offset == 8
     assert isinstance(emitted[1], PlaylistJumpRequested)
     assert emitted[1].offset == 15
+
+
+def test_viewport_mouse_move_with_lost_capture_is_ignored() -> None:
+    viewport = _SizedViewport()
+    emitted: list[Message] = []
+    viewport.post_message = emitted.append  # type: ignore[assignment]
+    viewport._dragging_scrollbar = True  # noqa: SLF001
+    event = _FakeMouseMoveNoneEvent()
+
+    async def run() -> None:
+        await viewport.on_mouse_move(event)  # type: ignore[arg-type]
+
+    asyncio.run(run())
+    assert emitted == []
+    assert event.stopped is False
