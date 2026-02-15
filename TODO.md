@@ -96,6 +96,53 @@ Execution tracker derived from `SPEC.md`.
 - Status: `done`
 - Commit: `e5fa8a2`
 
+### T-032 Embedded Cover Art ASCII Visualizer Pack (Static + Motion)
+- Spec Ref: `WF-06`, Sections `4`, `6`, `8`, `11`
+- Scope:
+  - Add a new visualizer pack that renders embedded track artwork as terminal-safe color ASCII.
+  - Deliver two plugin IDs:
+    - `cover.ascii.static` for deterministic static art rendering.
+    - `cover.ascii.motion` for deterministic animation effects (phase 1: wipe/slide; optional rotation only if frame budget is maintained).
+  - Keep plugin behavior non-blocking by moving metadata/art extraction and image decode work off the Textual event loop.
+  - Use embedded art when available; degrade gracefully to explicit fallback text when art is missing/invalid.
+- Implementation Plan:
+  - Phase 0: Contract and dependency decision
+    - Decide image decode backend for embedded bytes (recommended: `Pillow`; fallback: plugin remains disabled without decoder).
+    - Confirm TinyTag usage path for artwork (`TinyTag.get(..., image=True)` + `images.any`) and compatibility with existing metadata reads.
+    - Define plugin-local cache contract keyed by track fingerprint (`track_path`, file mtime/size, pane size, ANSI mode).
+  - Phase 1: Shared artwork pipeline (non-blocking)
+    - Add an artwork extraction/transform helper used by both plugins.
+    - Run extraction/decode/resize/quantization via a background thread executor and cache results.
+    - Add bounded memory behavior (LRU or capped map) and explicit placeholder states: `Loading`, `No embedded artwork`, `Artwork decode failed`.
+  - Phase 2: `cover.ascii.static` plugin
+    - Render color ASCII frame from cached transformed art only (no blocking work in `render`).
+    - Support ANSI on/off modes deterministically.
+    - Preserve deterministic output for same `VisualizerFrameInput` and cached source.
+  - Phase 3: `cover.ascii.motion` plugin
+    - Reuse static plugin source frame(s) and apply frame-index-driven deterministic transforms.
+    - Implement low-cost effects first (wipe/slide) and gate optional rotation behind render budget checks.
+    - Ensure host throttling is not triggered under normal pane sizes/FPS defaults.
+  - Phase 4: Registry/docs/runtime notes
+    - Register both plugin IDs in built-in registry.
+    - Update `docs/visualizations.md` and `docs/usage.md` with behavior, limitations, and fallback semantics.
+    - Update dependency/license docs if a new package is adopted.
+- Acceptance:
+  - Both plugins can be selected/cycled and persist via existing visualizer persistence flow.
+  - With embedded art available, plugins render bounded output without blocking keyboard transport workflows.
+  - Without embedded art, plugins show deterministic fallback text and do not raise.
+  - Any plugin failure degrades to `basic` via existing host fallback behavior.
+- Tests:
+  - Unit tests for artwork extraction helper (image present, no image, invalid image bytes).
+  - Unit tests for static render determinism (ANSI on/off, pane resize handling, placeholder states).
+  - Unit tests for motion frame progression determinism and effect bounds.
+  - Integration tests for plugin registration, visualizer selection persistence, and fallback safety on extraction/render failure.
+  - Non-blocking regression tests asserting artwork extraction path is background-threaded.
+- Risks / Decisions Needed:
+  - New dependency approval may be required for image decoding/resizing (`Pillow`).
+  - Embedded artwork size variance can create CPU spikes; cache and frame-budget profiling are required before enabling rotation effects.
+  - TinyTag artwork support differs by media container/tag type; fallback messaging must remain explicit and user-friendly.
+- Status: `done`
+
 ## Archived Completed Work
 
 ### V3 Visualization Expansion (Extra Scope) — Completed

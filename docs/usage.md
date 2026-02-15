@@ -76,6 +76,14 @@ Current keys:
 - `z`: cycle visualizer plugin
 - `escape`: dismiss modal/popup; in Find it clears query and exits Find mode
 
+Built-in visualizer IDs include:
+- `basic`
+- `matrix.green`, `matrix.blue`, `matrix.red`
+- `ops.hackscope`
+- `vu.reactive`
+- `cover.ascii.static`, `cover.ascii.motion` (embedded artwork ASCII; requires embedded cover art in media files)
+  - Fallback lookup is local-only and also checks sidecar files in the same directory (`cover.*`, `folder.*`, `front.*`, `album.*`, `artwork.*`, `<track-stem>.*`).
+
 Status pane controls:
 - Click or drag the TIME bar to seek.
 - Click or drag the VOL and SPD bars to change volume and speed.

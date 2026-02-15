@@ -14,6 +14,7 @@ from types import ModuleType
 
 from .base import VisualizerPlugin
 from .basic import BasicVisualizer
+from .cover_ascii import CoverAsciiMotionVisualizer, CoverAsciiStaticVisualizer
 from .hackscope import HackScopeVisualizer
 from .matrix import MatrixBlueVisualizer, MatrixGreenVisualizer, MatrixRedVisualizer
 from .vu import VuReactiveVisualizer
@@ -57,6 +58,8 @@ class VisualizerRegistry:
             MatrixRedVisualizer,
             HackScopeVisualizer,
             VuReactiveVisualizer,
+            CoverAsciiStaticVisualizer,
+            CoverAsciiMotionVisualizer,
         ]
         if local_plugin_paths:
             plugin_types.extend(_discover_local_plugin_types(local_plugin_paths))

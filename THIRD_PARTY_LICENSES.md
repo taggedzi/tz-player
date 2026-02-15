@@ -22,6 +22,10 @@ This summary is informational and not legal advice.
   - License: MIT
   - Source: https://pypi.org/project/tinytag/
 
+- Pillow
+  - License: HPND (historical PIL license)
+  - Source: https://pypi.org/project/Pillow/
+
 ## Optional External Tools
 
 - VLC/libVLC (system-installed for real playback backend)

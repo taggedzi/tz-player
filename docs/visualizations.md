@@ -196,6 +196,20 @@ This section documents planned extra-scope visualizers before implementation.
   - explicit source labeling in UI output (`LIVE`, `ENVELOPE`, `FALLBACK`)
   - graceful fallback when signal stream unavailable
 
+### 4) Embedded Cover ASCII (Static + Motion)
+
+- Goal: render embedded track artwork as ANSI-capable ASCII without blocking UI input.
+- Implemented IDs:
+  - `cover.ascii.static`
+  - `cover.ascii.motion`
+- Contract:
+  - cover extraction and image decode run in a background executor and are cached by track fingerprint + pane size
+  - source priority is local-only: embedded artwork tags -> sidecar image files in track directory (`cover.*`, `folder.*`, `front.*`, `album.*`, `artwork.*`, `<track-stem>.*`)
+  - visualizers render placeholders while loading (`Loading artwork...`) and explicit fallback states (`No embedded/sidecar artwork`, `Artwork decode failed`)
+  - static variant renders deterministic art for a given cached frame
+  - motion variant applies deterministic wipe/slide transforms driven by `frame_index` while playing
+  - both variants degrade safely when no track or no local artwork is available
+
 ## Implementation Prerequisites
 
 - Add a level-signal provider contract for backend integrations.

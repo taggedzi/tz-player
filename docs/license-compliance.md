@@ -12,6 +12,7 @@ From `pyproject.toml`:
 - `platformdirs` (MIT)
 - `python-vlc` (LGPL-2.1-or-later)
 - `tinytag` (MIT)
+- `Pillow` (HPND)
 
 ## External Tools
 
