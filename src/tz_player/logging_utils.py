@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+from contextlib import suppress
 from datetime import datetime, timezone
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -104,7 +105,10 @@ def setup_logging(
     file_handler.setFormatter(file_formatter)
     root_logger = logging.getLogger()
     root_logger.setLevel(numeric)
-    root_logger.handlers.clear()
+    for handler in list(root_logger.handlers):
+        root_logger.removeHandler(handler)
+        with suppress(Exception):
+            handler.close()
     root_logger.addHandler(file_handler)
     if console:
         stream_handler = logging.StreamHandler()

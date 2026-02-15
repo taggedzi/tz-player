@@ -80,6 +80,32 @@ def test_setup_logging_can_disable_console_handler(tmp_path) -> None:
         root.setLevel(original_level)
 
 
+def test_setup_logging_closes_previous_root_handlers(tmp_path) -> None:
+    root = logging.getLogger()
+    original_handlers = list(root.handlers)
+    original_level = root.level
+    closed = {"called": False}
+
+    class ClosingHandler(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            del record
+
+        def close(self) -> None:
+            closed["called"] = True
+            super().close()
+
+    try:
+        root.handlers.clear()
+        root.addHandler(ClosingHandler())
+        setup_logging(log_dir=tmp_path, level="INFO")
+        assert closed["called"] is True
+    finally:
+        root.handlers.clear()
+        for handler in original_handlers:
+            root.addHandler(handler)
+        root.setLevel(original_level)
+
+
 def test_cli_main_passes_effective_level_and_log_file(monkeypatch, tmp_path) -> None:
     args = SimpleNamespace(
         verbose=True,
