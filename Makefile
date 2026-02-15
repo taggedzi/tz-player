@@ -1,21 +1,23 @@
 .PHONY: fmt lint test typecheck all release
 
+PYTHON := $(if $(wildcard .ubuntu-venv/bin/python),.ubuntu-venv/bin/python,python)
+
 fmt:
-	ruff format .
+	$(PYTHON) -m ruff format .
 
 lint:
-	ruff check .
+	$(PYTHON) -m ruff check .
 
 
 typecheck:
-	mypy src
+	$(PYTHON) -m mypy src
 
 
 test:
-	pytest
+	$(PYTHON) -m pytest
 
 all: lint typecheck test
 
 release:
 	@if [ -z "$(VERSION)" ]; then echo "Usage: make release VERSION=0.5.2"; exit 1; fi
-	python tools/release.py $(VERSION)
+	$(PYTHON) tools/release.py $(VERSION)
