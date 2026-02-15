@@ -6,6 +6,7 @@ import asyncio
 from pathlib import Path
 
 from textual.app import App, ComposeResult
+from textual.geometry import Region
 
 import tz_player.paths as paths
 from tz_player.app import TzPlayerApp
@@ -140,6 +141,12 @@ def test_actions_menu_dismisses_on_escape() -> None:
             app.exit()
 
     _run(run_app())
+
+
+def test_actions_menu_dismiss_is_idempotent_when_detached() -> None:
+    popup = ActionsMenuPopup(Region(0, 0, 10, 2))
+    popup.dismiss()
+    popup.dismiss()
 
 
 def test_actions_menu_dismisses_on_outside_mouse_down(tmp_path, monkeypatch) -> None:

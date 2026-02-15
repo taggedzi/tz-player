@@ -54,6 +54,7 @@ class ActionsMenuPopup(Widget):
     def __init__(self, anchor: Region, **kwargs) -> None:
         super().__init__(**kwargs)
         self._anchor = anchor
+        self._dismissed = False
         self._menu = OptionList(
             Option("Add files...", id="add_files"),
             Option("Add folder...", id="add_folder"),
@@ -89,8 +90,12 @@ class ActionsMenuPopup(Widget):
             event.stop()
 
     def dismiss(self) -> None:
+        if self._dismissed:
+            return
+        self._dismissed = True
         self.post_message(ActionsMenuDismissed())
-        self.remove()
+        if self.is_attached:
+            self.remove()
 
     def _place_menu(self) -> None:
         labels = [option.prompt for option in self._menu.options]
