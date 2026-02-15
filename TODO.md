@@ -110,7 +110,7 @@ Execution tracker derived from `SPEC.md`.
 - [x] `tests/test_playlist_store.py`
 - [x] `tests/test_playlist_viewport.py`
 - [x] `tests/test_release_prepare.py`
-- [ ] `tests/test_runtime_config.py`
+- [x] `tests/test_runtime_config.py`
 - [ ] `tests/test_slider_bar.py`
 - [ ] `tests/test_smoke.py`
 - [ ] `tests/test_startup_resilience.py`
