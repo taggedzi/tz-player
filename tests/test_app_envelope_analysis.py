@@ -202,6 +202,30 @@ def test_wav_path_without_ffmpeg_keeps_notice_clear(tmp_path, monkeypatch) -> No
     assert app._audio_level_notice is None
 
 
+def test_ensure_envelope_failure_sets_runtime_notice(
+    tmp_path, monkeypatch, caplog
+) -> None:
+    _setup_dirs(tmp_path, monkeypatch)
+    app = app_module.TzPlayerApp(auto_init=False)
+    store = _StoreStub(has_hit=False)
+    app.audio_envelope_store = store  # type: ignore[assignment]
+
+    def _raise(_path):  # type: ignore[no-untyped-def]
+        raise RuntimeError("analysis exploded")
+
+    monkeypatch.setattr(app_module, "analyze_track_envelope", _raise)
+    with caplog.at_level("WARNING"):
+        _run(app._ensure_envelope_for_track(_track()))
+
+    assert any(
+        f"Envelope analysis failed for {TRACK_PATH_STR}" in rec.message
+        for rec in caplog.records
+    )
+    assert (
+        app._runtime_notice == "Envelope analysis failed; using fallback audio levels."
+    )
+
+
 def test_next_track_prewarm_schedules_and_warms_predicted_item(
     tmp_path, monkeypatch
 ) -> None:
