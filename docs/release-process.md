@@ -43,7 +43,7 @@ What `tools/release.py` does:
 2. Runs `tools/release_prepare.py` to update `src/tz_player/version.py` and `CHANGELOG.md`.
 3. Runs required quality gates: `ruff check`, `ruff format --check`, `mypy src`, `pytest`.
 4. Creates/pushes a release branch and opens a PR to `main`.
-5. Waits for PR checks, merges the PR.
+5. Waits for PR checks, enables auto-merge, and waits for PR merge.
 6. Creates/pushes tag `v<version>` on the merged commit.
 7. Tag push triggers the `Release` GitHub workflow, which builds and uploads artifacts.
 
