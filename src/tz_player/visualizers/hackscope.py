@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import random
 import re
 from dataclasses import dataclass
@@ -176,7 +177,7 @@ def _locate_phase(global_frame: int) -> tuple[str, int, int]:
 
 
 def _duration_text(seconds: float | None) -> str:
-    if seconds is None:
+    if seconds is None or not math.isfinite(seconds):
         return "Unknown"
     value = max(0, int(seconds))
     mins, secs = divmod(value, 60)

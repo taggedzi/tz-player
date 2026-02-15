@@ -82,3 +82,29 @@ def test_hackscope_ansi_output_has_no_partial_escape_sequences() -> None:
             end = cleaned.find("m", start + 2)
             assert end != -1
             cleaned = cleaned[:start] + cleaned[end + 1 :]
+
+
+def test_hackscope_handles_non_finite_duration_without_crash() -> None:
+    plugin = HackScopeVisualizer()
+    plugin.on_activate(VisualizerContext(ansi_enabled=False, unicode_enabled=True))
+    frame = _frame(width=70, height=12, frame_index=84)
+    frame = VisualizerFrameInput(
+        frame_index=frame.frame_index,
+        monotonic_s=frame.monotonic_s,
+        width=frame.width,
+        height=frame.height,
+        status=frame.status,
+        position_s=frame.position_s,
+        duration_s=float("nan"),
+        volume=frame.volume,
+        speed=frame.speed,
+        repeat_mode=frame.repeat_mode,
+        shuffle=frame.shuffle,
+        track_id=frame.track_id,
+        track_path=frame.track_path,
+        title=frame.title,
+        artist=frame.artist,
+        album=frame.album,
+    )
+    output = plugin.render(frame)
+    assert "Unknown" in output
