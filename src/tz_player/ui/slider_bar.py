@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from time import monotonic
 
 from rich.text import Text
@@ -197,4 +198,7 @@ class SliderBar(Widget):
 
 
 def _clamp_fraction(value: float) -> float:
-    return max(0.0, min(value, 1.0))
+    normalized = float(value)
+    if not math.isfinite(normalized):
+        return 0.0
+    return max(0.0, min(normalized, 1.0))

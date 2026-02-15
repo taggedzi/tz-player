@@ -70,3 +70,9 @@ def test_slider_bar_rejects_invalid_constructor_values() -> None:
         SliderBar(name="volume", label="Vol", key_step=0.0)
     with pytest.raises(ValueError, match="emit_interval must be >= 0"):
         SliderBar(name="volume", label="Vol", emit_interval=-0.1)
+
+
+def test_slider_bar_non_finite_fraction_clamps_to_safe_default() -> None:
+    slider = SliderBar(name="volume", label="Vol")
+    slider.set_fraction(float("nan"))
+    assert slider.fraction == 0.0

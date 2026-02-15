@@ -111,7 +111,7 @@ Execution tracker derived from `SPEC.md`.
 - [x] `tests/test_playlist_viewport.py`
 - [x] `tests/test_release_prepare.py`
 - [x] `tests/test_runtime_config.py`
-- [ ] `tests/test_slider_bar.py`
+- [x] `tests/test_slider_bar.py`
 - [ ] `tests/test_smoke.py`
 - [ ] `tests/test_startup_resilience.py`
 - [ ] `tests/test_state_store.py`
