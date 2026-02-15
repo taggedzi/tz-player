@@ -93,7 +93,7 @@ Execution tracker derived from `SPEC.md`.
 - [x] `tests/test_audio_envelope_analysis.py`
 - [x] `tests/test_audio_envelope_store.py`
 - [x] `tests/test_audio_level_service.py`
-- [ ] `tests/test_audio_tags.py`
+- [x] `tests/test_audio_tags.py`
 - [ ] `tests/test_backend_selection.py`
 - [ ] `tests/test_doctor.py`
 - [ ] `tests/test_extract_changelog_release.py`

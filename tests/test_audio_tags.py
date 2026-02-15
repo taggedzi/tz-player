@@ -59,3 +59,35 @@ def test_read_audio_tags_wave_fallback_when_tinytag_read_fails(
     assert tags.duration_ms > 0
     assert tags.bitrate_kbps is not None
     assert tags.bitrate_kbps > 0
+
+
+def test_read_audio_tags_ignores_non_finite_tinytag_numbers(
+    tmp_path, monkeypatch
+) -> None:
+    path = tmp_path / "tone.wav"
+    _write_wave(path, duration_sec=0.25, framerate=8000)
+
+    class _Tag:
+        title = "Track"
+        artist = "Artist"
+        album = "Album"
+        year = "2024"
+        genre = "Synth"
+        duration = float("nan")
+        bitrate = float("inf")
+
+    class _TinyTag:
+        @staticmethod
+        def get(_path: str):  # type: ignore[no-untyped-def]
+            return _Tag()
+
+    monkeypatch.setattr(
+        audio_tags_module,
+        "import_module",
+        lambda _name: SimpleNamespace(TinyTag=_TinyTag),
+    )
+
+    tags = read_audio_tags(path)
+    assert tags.error is None
+    assert tags.duration_ms is None
+    assert tags.bitrate_kbps is None

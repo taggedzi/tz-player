@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import re
 import wave
 from dataclasses import dataclass
@@ -44,16 +45,8 @@ def _read_with_tinytag(path: Path) -> AudioTags | None:
         tag = TinyTag.get(str(path))
     except Exception as exc:
         return AudioTags(error=str(exc))
-    duration_ms = (
-        int(float(tag.duration) * 1000)
-        if isinstance(tag.duration, (int, float))
-        else None
-    )
-    bitrate_kbps = (
-        int(round(float(tag.bitrate)))
-        if isinstance(tag.bitrate, (int, float))
-        else None
-    )
+    duration_ms = _safe_duration_ms(getattr(tag, "duration", None))
+    bitrate_kbps = _safe_bitrate_kbps(getattr(tag, "bitrate", None))
     return AudioTags(
         title=_clean_text(tag.title),
         artist=_clean_text(tag.artist),
@@ -98,3 +91,21 @@ def _parse_year(value: str | None) -> int | None:
         except ValueError:
             return None
     return None
+
+
+def _safe_duration_ms(value: object) -> int | None:
+    if not isinstance(value, (int, float)):
+        return None
+    normalized = float(value)
+    if not math.isfinite(normalized) or normalized <= 0:
+        return None
+    return int(normalized * 1000)
+
+
+def _safe_bitrate_kbps(value: object) -> int | None:
+    if not isinstance(value, (int, float)):
+        return None
+    normalized = float(value)
+    if not math.isfinite(normalized) or normalized <= 0:
+        return None
+    return int(round(normalized))
