@@ -65,7 +65,7 @@ Execution tracker derived from `SPEC.md`.
 - [x] `src/tz_player/ui/actions_menu.py`
 - [x] `src/tz_player/ui/modals/__init__.py`
 - [x] `src/tz_player/ui/modals/confirm.py`
-- [ ] `src/tz_player/ui/modals/error.py`
+- [x] `src/tz_player/ui/modals/error.py`
 - [ ] `src/tz_player/ui/modals/path_input.py`
 - [ ] `src/tz_player/ui/playlist_pane.py`
 - [ ] `src/tz_player/ui/playlist_viewport.py`

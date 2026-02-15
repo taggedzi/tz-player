@@ -18,6 +18,7 @@ from tz_player.ui.actions_menu import (
     ActionsMenuSelected,
 )
 from tz_player.ui.modals.confirm import ConfirmModal
+from tz_player.ui.modals.error import ErrorModal
 from tz_player.ui.playlist_pane import PlaylistPane
 from tz_player.ui.playlist_viewport import PlaylistViewport
 from tz_player.ui.status_pane import StatusPane
@@ -266,6 +267,58 @@ def test_confirm_modal_enter_dismisses_true() -> None:
                 await asyncio.sleep(0.01)
             app.exit()
         assert app.result is True
+
+    _run(run_app())
+
+
+def test_error_modal_escape_dismisses() -> None:
+    class ErrorApp(App):
+        dismissed = False
+
+        def _on_result(self, _result: None) -> None:
+            self.dismissed = True
+
+        async def on_mount(self) -> None:
+            self.push_screen(ErrorModal("Oops"), callback=self._on_result)
+
+    app = ErrorApp()
+
+    async def run_app() -> None:
+        async with app.run_test() as pilot:
+            await asyncio.sleep(0)
+            await pilot.press("escape")
+            for _ in range(20):
+                if app.dismissed:
+                    break
+                await asyncio.sleep(0.01)
+            app.exit()
+        assert app.dismissed is True
+
+    _run(run_app())
+
+
+def test_error_modal_enter_dismisses() -> None:
+    class ErrorApp(App):
+        dismissed = False
+
+        def _on_result(self, _result: None) -> None:
+            self.dismissed = True
+
+        async def on_mount(self) -> None:
+            self.push_screen(ErrorModal("Oops"), callback=self._on_result)
+
+    app = ErrorApp()
+
+    async def run_app() -> None:
+        async with app.run_test() as pilot:
+            await asyncio.sleep(0)
+            await pilot.press("enter")
+            for _ in range(20):
+                if app.dismissed:
+                    break
+                await asyncio.sleep(0.01)
+            app.exit()
+        assert app.dismissed is True
 
     _run(run_app())
 
