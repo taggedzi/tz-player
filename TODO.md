@@ -130,7 +130,7 @@ Execution tracker derived from `SPEC.md`.
 - [x] `tests/test_vlc_backend.py`
 - [x] `tests/test_vlc_backend_unit.py`
 - [x] `tools/extract_changelog_release.py`
-- [ ] `tools/py_tree.py`
+- [x] `tools/py_tree.py`
 - [ ] `tools/release.py`
 - [ ] `tools/release_prepare.py`
 - [ ] `tools/tree_maker.py`
