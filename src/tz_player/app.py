@@ -1118,10 +1118,20 @@ def _read_track_extras(path: Path) -> tuple[str | None, int | None]:
 
 
 def _resolve_backend_name(cli_backend: str | None, state_backend: str | None) -> str:
-    if cli_backend in {"fake", "vlc"}:
-        return cli_backend
-    if state_backend in {"fake", "vlc"}:
-        return state_backend
+    def _normalize(value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip().lower()
+        if normalized in {"fake", "vlc"}:
+            return normalized
+        return None
+
+    cli_normalized = _normalize(cli_backend)
+    if cli_normalized is not None:
+        return cli_normalized
+    state_normalized = _normalize(state_backend)
+    if state_normalized is not None:
+        return state_normalized
     return "fake"
 
 

@@ -18,3 +18,8 @@ def test_backend_selection_state_fallback() -> None:
     assert _resolve_backend_name(None, "vlc") == "vlc"
     assert _resolve_backend_name("invalid", "vlc") == "vlc"
     assert _resolve_backend_name(None, "invalid") == "fake"
+
+
+def test_backend_selection_normalizes_case_and_whitespace() -> None:
+    assert _resolve_backend_name(" VLC ", "fake") == "vlc"
+    assert _resolve_backend_name(None, "  Fake  ") == "fake"
