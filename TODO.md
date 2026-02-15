@@ -99,7 +99,7 @@ Execution tracker derived from `SPEC.md`.
 - [x] `tests/test_extract_changelog_release.py`
 - [x] `tests/test_focus_navigation_matrix.py`
 - [x] `tests/test_gui_parser.py`
-- [ ] `tests/test_logging_config.py`
+- [x] `tests/test_logging_config.py`
 - [ ] `tests/test_metadata_debounce.py`
 - [ ] `tests/test_metadata_service.py`
 - [ ] `tests/test_non_blocking_paths.py`
