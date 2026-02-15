@@ -49,7 +49,7 @@ Execution tracker derived from `SPEC.md`.
 - [x] `src/tz_player/logging_utils.py`
 - [x] `src/tz_player/paths.py`
 - [x] `src/tz_player/runtime_config.py`
-- [ ] `src/tz_player/services/__init__.py`
+- [x] `src/tz_player/services/__init__.py`
 - [ ] `src/tz_player/services/audio_envelope_analysis.py`
 - [ ] `src/tz_player/services/audio_envelope_store.py`
 - [ ] `src/tz_player/services/audio_level_service.py`
