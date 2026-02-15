@@ -78,6 +78,29 @@ def test_move_selection_cursor(tmp_path) -> None:
     assert updated[0].item_id == cursor_id
 
 
+def test_move_selection_rejects_invalid_direction(tmp_path) -> None:
+    db_path = tmp_path / "library.sqlite"
+    store = PlaylistStore(db_path)
+    _run(store.initialize())
+    playlist_id = _run(store.create_playlist("Queue"))
+
+    track_paths = [tmp_path / "track_0.mp3", tmp_path / "track_1.mp3"]
+    for path in track_paths:
+        _touch(path)
+    _run(store.add_tracks(playlist_id, track_paths))
+
+    rows = _run(store.fetch_window(playlist_id, 0, 10))
+    with pytest.raises(ValueError, match="direction must be 'up' or 'down'"):
+        _run(
+            store.move_selection(
+                playlist_id,
+                "sideways",  # type: ignore[arg-type]
+                [rows[0].item_id],
+                None,
+            )
+        )
+
+
 def test_invalidate_metadata(tmp_path) -> None:
     db_path = tmp_path / "library.sqlite"
     store = PlaylistStore(db_path)

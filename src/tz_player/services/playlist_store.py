@@ -143,6 +143,8 @@ class PlaylistStore:
         selection: list[int],
         cursor: int | None,
     ) -> None:
+        if direction not in {"up", "down"}:
+            raise ValueError("direction must be 'up' or 'down'")
         await run_blocking(
             self._move_selection_sync, playlist_id, direction, selection, cursor
         )
