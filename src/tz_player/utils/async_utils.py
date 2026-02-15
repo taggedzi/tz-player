@@ -20,6 +20,8 @@ def _shutdown_io_executor() -> None:
 
 async def run_blocking(func: Callable[..., T], /, *args: Any, **kwargs: Any) -> T:
     """Run blocking callables on a dedicated IO executor."""
+    if not callable(func):
+        raise TypeError("func must be callable")
     loop = asyncio.get_running_loop()
     if kwargs:
         bound = partial(func, *args, **kwargs)

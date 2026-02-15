@@ -5,9 +5,12 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
+import pytest
+
 import tz_player.services.metadata_service as metadata_service_module
 import tz_player.ui.playlist_pane as playlist_pane_module
 from tz_player.ui.playlist_pane import PlaylistPane
+from tz_player.utils.async_utils import run_blocking
 
 
 def _run(coro):
@@ -37,6 +40,11 @@ def test_metadata_safe_stat_uses_run_blocking(monkeypatch, tmp_path) -> None:
     func, args = calls[0]
     assert getattr(func, "__name__", "") == "stat"
     assert args == ()
+
+
+def test_run_blocking_rejects_non_callable() -> None:
+    with pytest.raises(TypeError, match="func must be callable"):
+        _run(run_blocking(None))  # type: ignore[arg-type]
 
 
 def test_add_folder_scans_via_run_blocking(monkeypatch, tmp_path) -> None:
