@@ -121,7 +121,7 @@ Execution tracker derived from `SPEC.md`.
 - [x] `tests/test_transport_controls.py`
 - [x] `tests/test_ui.py`
 - [x] `tests/test_visualizer_cover_ascii.py`
-- [ ] `tests/test_visualizer_hackscope.py`
+- [x] `tests/test_visualizer_hackscope.py`
 - [ ] `tests/test_visualizer_host.py`
 - [ ] `tests/test_visualizer_matrix.py`
 - [ ] `tests/test_visualizer_registry.py`
