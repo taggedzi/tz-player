@@ -28,3 +28,9 @@ def test_gui_parser_accepts_repeatable_visualizer_plugin_paths() -> None:
         ]
     )
     assert args.visualizer_plugin_paths == ["plugins.one", "plugins.two"]
+
+
+def test_gui_parser_defaults_visualizer_plugin_paths_to_none() -> None:
+    parser = build_parser()
+    args = parser.parse_args([])
+    assert args.visualizer_plugin_paths is None
