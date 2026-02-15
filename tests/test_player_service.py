@@ -756,6 +756,46 @@ def test_stopped_event_advances_after_elapsed_play_time_with_low_position() -> N
     _run(run())
 
 
+def test_stopped_event_while_paused_does_not_advance() -> None:
+    async def emit_event(_event: object) -> None:
+        return None
+
+    async def track_info(_playlist_id: int, item_id: int) -> TrackInfo:
+        return TrackInfo(
+            title=f"Song {item_id}",
+            artist=None,
+            album=None,
+            year=None,
+            path=f"/tmp/{item_id}.mp3",
+            duration_ms=5000,
+        )
+
+    async def next_provider(_playlist_id: int, item_id: int, _wrap: bool) -> int | None:
+        return 2 if item_id == 1 else None
+
+    async def run() -> None:
+        service = PlayerService(
+            emit_event=emit_event,
+            track_info_provider=track_info,
+            backend=FakePlaybackBackend(tick_interval_ms=50),
+            next_track_provider=next_provider,
+            initial_state=PlayerState(
+                status="paused",
+                playlist_id=1,
+                item_id=1,
+                position_ms=1000,
+                duration_ms=5000,
+                repeat_mode="ALL",
+            ),
+        )
+        await service._handle_backend_event(StateChanged("stopped"))
+        assert service.state.item_id == 1
+        assert service.state.status == "stopped"
+        await service.shutdown()
+
+    _run(run())
+
+
 def test_poll_fallback_advances_when_backend_stops_without_event() -> None:
     class PollOnlyStopBackend:
         def __init__(self) -> None:
@@ -837,6 +877,87 @@ def test_poll_fallback_advances_when_backend_stops_without_event() -> None:
         await asyncio.sleep(1.2)
         assert service.state.item_id == 2
         assert service.state.status == "playing"
+        await service.shutdown()
+
+    _run(run())
+
+
+def test_poll_fallback_does_not_advance_when_paused_and_backend_idle() -> None:
+    class IdleWhilePausedBackend:
+        def set_event_handler(self, _handler) -> None:  # type: ignore[no-untyped-def]
+            return None
+
+        async def start(self) -> None:
+            return None
+
+        async def shutdown(self) -> None:
+            return None
+
+        async def play(  # type: ignore[no-untyped-def]
+            self, item_id, track_path, start_ms=0, *, duration_ms=None
+        ) -> None:
+            return None
+
+        async def toggle_pause(self) -> None:
+            return None
+
+        async def stop(self) -> None:
+            return None
+
+        async def seek_ms(self, position_ms: int) -> None:
+            return None
+
+        async def set_volume(self, volume: int) -> None:
+            return None
+
+        async def set_speed(self, speed: float) -> None:
+            return None
+
+        async def get_position_ms(self) -> int:
+            return 500
+
+        async def get_duration_ms(self) -> int:
+            return 5000
+
+        async def get_state(self) -> str:
+            return "idle"
+
+    async def emit_event(_event: object) -> None:
+        return None
+
+    async def track_info(_playlist_id: int, item_id: int) -> TrackInfo:
+        return TrackInfo(
+            title=f"Song {item_id}",
+            artist=None,
+            album=None,
+            year=None,
+            path=f"/tmp/{item_id}.mp3",
+            duration_ms=5000,
+        )
+
+    async def next_provider(_playlist_id: int, item_id: int, _wrap: bool) -> int | None:
+        return 2 if item_id == 1 else None
+
+    async def run() -> None:
+        service = PlayerService(
+            emit_event=emit_event,
+            track_info_provider=track_info,
+            backend=IdleWhilePausedBackend(),  # type: ignore[arg-type]
+            next_track_provider=next_provider,
+            initial_state=PlayerState(
+                status="paused",
+                playlist_id=1,
+                item_id=1,
+                position_ms=500,
+                duration_ms=5000,
+                repeat_mode="ALL",
+            ),
+        )
+        service._track_started_monotonic_s = time.monotonic() - 10.0
+        await service.start()
+        await asyncio.sleep(0.35)
+        assert service.state.item_id == 1
+        assert service.state.status == "paused"
         await service.shutdown()
 
     _run(run())

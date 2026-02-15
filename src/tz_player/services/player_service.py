@@ -456,7 +456,7 @@ class PlayerService:
                 if (
                     event.status == "stopped"
                     and not self._stop_requested
-                    and previous_status in {"playing", "paused"}
+                    and previous_status == "playing"
                     and self._state.duration_ms > 0
                     and self._max_position_seen_ms <= STALE_STOP_START_WINDOW_MS
                     and (track_age_s is None or track_age_s <= 2.0)
@@ -469,7 +469,7 @@ class PlayerService:
                 if (
                     event.status == "stopped"
                     and not self._stop_requested
-                    and previous_status in {"playing", "paused"}
+                    and previous_status == "playing"
                     and self._state.item_id is not None
                     and self._state.item_id != self._end_handled_item_id
                 ):
@@ -720,7 +720,7 @@ class PlayerService:
                     if (
                         backend_state in {"stopped", "idle"}
                         and not self._stop_requested
-                        and previous_status in {"playing", "paused"}
+                        and previous_status == "playing"
                         and self._state.item_id is not None
                         and self._state.item_id != self._end_handled_item_id
                         and self._state.duration_ms > 0
