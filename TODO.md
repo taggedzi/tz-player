@@ -34,7 +34,7 @@ Execution tracker derived from `SPEC.md`.
 ### CR-001 Review Queue (Python + Supported Config/Setup Files)
 - [x] `pyproject.toml`
 - [x] `repo_mcp.toml`
-- [ ] `.pre-commit-config.yaml`
+- [x] `.pre-commit-config.yaml`
 - [ ] `Makefile`
 - [ ] `tools/release.sh`
 - [ ] `noxfile.py`
