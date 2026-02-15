@@ -97,3 +97,9 @@ def test_transport_controls_play_button_mouse_click() -> None:
 def test_text_button_rejects_empty_action() -> None:
     with pytest.raises(ValueError, match="action must be non-empty"):
         TextButton("Play", action=" ")
+
+
+def test_transport_controls_rejects_unknown_action() -> None:
+    controls = TransportControls()
+    with pytest.raises(ValueError, match="Unsupported transport action: invalid"):
+        controls.on_text_button_pressed(TextButtonPressed("invalid"))

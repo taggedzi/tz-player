@@ -72,7 +72,7 @@ Execution tracker derived from `SPEC.md`.
 - [x] `src/tz_player/ui/slider_bar.py`
 - [x] `src/tz_player/ui/status_pane.py`
 - [x] `src/tz_player/ui/text_button.py`
-- [ ] `src/tz_player/ui/transport_controls.py`
+- [x] `src/tz_player/ui/transport_controls.py`
 - [ ] `src/tz_player/utils/__init__.py`
 - [ ] `src/tz_player/utils/async_utils.py`
 - [ ] `src/tz_player/utils/time_format.py`

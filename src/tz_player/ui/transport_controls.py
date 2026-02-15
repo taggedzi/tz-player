@@ -143,6 +143,8 @@ class TransportControls(Widget):
                     cast(Literal["prev", "toggle_play", "stop", "next"], action)
                 )
             )
+        else:
+            raise ValueError(f"Unsupported transport action: {action}")
 
 
 def _styled_track_counter_markup(counter: str) -> str:
