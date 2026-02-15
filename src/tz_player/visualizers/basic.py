@@ -22,6 +22,8 @@ class BasicVisualizer:
     def render(self, frame: VisualizerFrameInput) -> str:
         width = max(1, frame.width)
         if frame.status not in {"playing", "paused"}:
+            if frame.status == "error":
+                return "Error"
             return "Idle" if frame.status in {"idle", "stopped"} else "Loading"
 
         if frame.status == "paused":
