@@ -106,7 +106,7 @@ Execution tracker derived from `SPEC.md`.
 - [x] `tests/test_paths.py`
 - [x] `tests/test_performance_opt_in.py`
 - [x] `tests/test_player_service.py`
-- [ ] `tests/test_playlist_editing_integration.py`
+- [x] `tests/test_playlist_editing_integration.py`
 - [ ] `tests/test_playlist_store.py`
 - [ ] `tests/test_playlist_viewport.py`
 - [ ] `tests/test_release_prepare.py`
