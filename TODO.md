@@ -89,7 +89,7 @@ Execution tracker derived from `SPEC.md`.
 - [x] `tests/conftest.py`
 - [x] `tests/test_app_envelope_analysis.py`
 - [x] `tests/test_app_parser.py`
-- [ ] `tests/test_app_speed_limits.py`
+- [x] `tests/test_app_speed_limits.py`
 - [ ] `tests/test_audio_envelope_analysis.py`
 - [ ] `tests/test_audio_envelope_store.py`
 - [ ] `tests/test_audio_level_service.py`
