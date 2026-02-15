@@ -116,4 +116,7 @@ def _fallback_levels(
 
 
 def _clamp(value: float) -> float:
-    return max(0.0, min(1.0, float(value)))
+    normalized = float(value)
+    if not math.isfinite(normalized):
+        return 0.0
+    return max(0.0, min(1.0, normalized))

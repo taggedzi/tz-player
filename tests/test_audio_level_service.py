@@ -26,6 +26,11 @@ class _EnvelopeProvider:
         return LevelSample(left=0.4, right=0.5)
 
 
+class _NonFiniteLiveProvider:
+    async def get_level_sample(self) -> LevelSample | None:
+        return LevelSample(left=float("nan"), right=float("inf"))
+
+
 def _run(coro):
     return asyncio.run(coro)
 
@@ -105,5 +110,27 @@ def test_audio_level_service_returns_none_when_not_playing_or_paused() -> None:
             track_path="/tmp/song.mp3",
         )
         assert reading is None
+
+    _run(run())
+
+
+def test_audio_level_service_sanitizes_non_finite_live_levels() -> None:
+    async def run() -> None:
+        service = AudioLevelService(
+            live_provider=_NonFiniteLiveProvider(),
+            envelope_provider=_EnvelopeProvider(),
+        )
+        reading = await service.sample(
+            status="playing",
+            position_ms=1000,
+            duration_ms=5000,
+            volume=60,
+            speed=1.0,
+            track_path="/tmp/song.mp3",
+        )
+        assert reading is not None
+        assert reading.source == "live"
+        assert reading.left == 0.0
+        assert reading.right == 0.0
 
     _run(run())
