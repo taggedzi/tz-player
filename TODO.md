@@ -12,7 +12,135 @@ Execution tracker derived from `SPEC.md`.
 
 ## Active Backlog
 
-### T-026 DB Startup Failure Classification and User Guidance
+### CR-000 File-by-File Maintainer Review Campaign
+- Goal:
+  - Review every Python file and Python-supporting config/setup file one at a time using the standardized reviewer prompt.
+  - Keep scope to a single file per review pass unless cross-file test updates are required.
+- Review prompt:
+  - Use the maintainer review prompt provided in the working thread for each file, replacing `<PATH/TO/FILE.py>` with the active target path.
+- Execution policy:
+  - One file per review cycle.
+  - If code changes are made, run required quality gates before committing:
+    - `.ubuntu-venv/bin/python -m ruff check .`
+    - `.ubuntu-venv/bin/python -m ruff format --check .`
+    - `.ubuntu-venv/bin/python -m mypy src`
+    - `.ubuntu-venv/bin/python -m pytest`
+  - Commit after tests pass for that file review so rollback remains granular.
+  - Commit message format:
+    - `review(<path>): apply maintainer review findings`
+  - Mark the reviewed file entry as complete only after commit.
+- Status: `in_progress`
+
+### CR-001 Review Queue (Python + Supported Config/Setup Files)
+- [ ] `pyproject.toml`
+- [ ] `repo_mcp.toml`
+- [ ] `.pre-commit-config.yaml`
+- [ ] `Makefile`
+- [ ] `tools/release.sh`
+- [ ] `noxfile.py`
+- [ ] `src/tz_player/__init__.py`
+- [ ] `src/tz_player/app.py`
+- [ ] `src/tz_player/cli.py`
+- [ ] `src/tz_player/db/__init__.py`
+- [ ] `src/tz_player/db/schema.py`
+- [ ] `src/tz_player/doctor.py`
+- [ ] `src/tz_player/events.py`
+- [ ] `src/tz_player/gui.py`
+- [ ] `src/tz_player/logging_utils.py`
+- [ ] `src/tz_player/paths.py`
+- [ ] `src/tz_player/runtime_config.py`
+- [ ] `src/tz_player/services/__init__.py`
+- [ ] `src/tz_player/services/audio_envelope_analysis.py`
+- [ ] `src/tz_player/services/audio_envelope_store.py`
+- [ ] `src/tz_player/services/audio_level_service.py`
+- [ ] `src/tz_player/services/audio_tags.py`
+- [ ] `src/tz_player/services/fake_backend.py`
+- [ ] `src/tz_player/services/metadata_service.py`
+- [ ] `src/tz_player/services/playback_backend.py`
+- [ ] `src/tz_player/services/player_service.py`
+- [ ] `src/tz_player/services/playlist_store.py`
+- [ ] `src/tz_player/services/vlc_backend.py`
+- [ ] `src/tz_player/state_store.py`
+- [ ] `src/tz_player/ui/__init__.py`
+- [ ] `src/tz_player/ui/actions_menu.py`
+- [ ] `src/tz_player/ui/modals/__init__.py`
+- [ ] `src/tz_player/ui/modals/confirm.py`
+- [ ] `src/tz_player/ui/modals/error.py`
+- [ ] `src/tz_player/ui/modals/path_input.py`
+- [ ] `src/tz_player/ui/playlist_pane.py`
+- [ ] `src/tz_player/ui/playlist_viewport.py`
+- [ ] `src/tz_player/ui/slider_bar.py`
+- [ ] `src/tz_player/ui/status_pane.py`
+- [ ] `src/tz_player/ui/text_button.py`
+- [ ] `src/tz_player/ui/transport_controls.py`
+- [ ] `src/tz_player/utils/__init__.py`
+- [ ] `src/tz_player/utils/async_utils.py`
+- [ ] `src/tz_player/utils/time_format.py`
+- [ ] `src/tz_player/version.py`
+- [ ] `src/tz_player/visualizers/__init__.py`
+- [ ] `src/tz_player/visualizers/base.py`
+- [ ] `src/tz_player/visualizers/basic.py`
+- [ ] `src/tz_player/visualizers/cover_ascii.py`
+- [ ] `src/tz_player/visualizers/hackscope.py`
+- [ ] `src/tz_player/visualizers/host.py`
+- [ ] `src/tz_player/visualizers/matrix.py`
+- [ ] `src/tz_player/visualizers/registry.py`
+- [ ] `src/tz_player/visualizers/vu.py`
+- [ ] `tests/conftest.py`
+- [ ] `tests/test_app_envelope_analysis.py`
+- [ ] `tests/test_app_parser.py`
+- [ ] `tests/test_app_speed_limits.py`
+- [ ] `tests/test_audio_envelope_analysis.py`
+- [ ] `tests/test_audio_envelope_store.py`
+- [ ] `tests/test_audio_level_service.py`
+- [ ] `tests/test_audio_tags.py`
+- [ ] `tests/test_backend_selection.py`
+- [ ] `tests/test_doctor.py`
+- [ ] `tests/test_extract_changelog_release.py`
+- [ ] `tests/test_focus_navigation_matrix.py`
+- [ ] `tests/test_gui_parser.py`
+- [ ] `tests/test_logging_config.py`
+- [ ] `tests/test_metadata_debounce.py`
+- [ ] `tests/test_metadata_service.py`
+- [ ] `tests/test_non_blocking_paths.py`
+- [ ] `tests/test_paths.py`
+- [ ] `tests/test_performance_opt_in.py`
+- [ ] `tests/test_player_service.py`
+- [ ] `tests/test_playlist_editing_integration.py`
+- [ ] `tests/test_playlist_store.py`
+- [ ] `tests/test_playlist_viewport.py`
+- [ ] `tests/test_release_prepare.py`
+- [ ] `tests/test_runtime_config.py`
+- [ ] `tests/test_slider_bar.py`
+- [ ] `tests/test_smoke.py`
+- [ ] `tests/test_startup_resilience.py`
+- [ ] `tests/test_state_store.py`
+- [ ] `tests/test_status_pane.py`
+- [ ] `tests/test_time_format.py`
+- [ ] `tests/test_track_info_panel.py`
+- [ ] `tests/test_transport_controls.py`
+- [ ] `tests/test_ui.py`
+- [ ] `tests/test_visualizer_cover_ascii.py`
+- [ ] `tests/test_visualizer_hackscope.py`
+- [ ] `tests/test_visualizer_host.py`
+- [ ] `tests/test_visualizer_matrix.py`
+- [ ] `tests/test_visualizer_registry.py`
+- [ ] `tests/test_visualizer_selection_integration.py`
+- [ ] `tests/test_visualizer_vu.py`
+- [ ] `tests/test_vlc_backend.py`
+- [ ] `tests/test_vlc_backend_unit.py`
+- [ ] `tools/extract_changelog_release.py`
+- [ ] `tools/py_tree.py`
+- [ ] `tools/release.py`
+- [ ] `tools/release_prepare.py`
+- [ ] `tools/tree_maker.py`
+- [ ] `tools/vlc_smoke.py`
+
+## Archived Completed Work
+
+### T-026 to T-032 Stabilization Tasks — Completed
+
+#### T-026 DB Startup Failure Classification and User Guidance
 - Spec Ref: Section `8` (Common failure classes), `WF-01`
 - Scope:
   - Detect and classify SQLite init/access failures during startup (for example: file permission denied, path not writable, locked/corrupt DB).
@@ -26,7 +154,7 @@ Execution tracker derived from `SPEC.md`.
 - Status: `done`
 - Commit: `cf77a9e`
 
-### T-027 Fatal Startup Exit-Code Contract Hardening
+#### T-027 Fatal Startup Exit-Code Contract Hardening
 - Spec Ref: Section `8` (Fatal startup failure non-zero exit), Section `10`
 - Scope:
   - Ensure irrecoverable startup failures produce non-zero process exit codes from CLI entrypoints.
@@ -40,7 +168,7 @@ Execution tracker derived from `SPEC.md`.
 - Status: `done`
 - Commit: `cf77a9e`
 
-### T-028 Unified Non-Fatal Error Surfacing (Banner/Status Channel)
+#### T-028 Unified Non-Fatal Error Surfacing (Banner/Status Channel)
 - Spec Ref: Section `8` (UI errors surfaced with modal/error banner), Section `4`
 - Scope:
   - Add a consistent non-fatal UI error surface for operational failures that do not require modal interruption.
@@ -54,7 +182,7 @@ Execution tracker derived from `SPEC.md`.
 - Status: `done`
 - Commit: `e5fa8a2`
 
-### T-029 Visualizer Observability Completion (Load/Activate/Fallback)
+#### T-029 Visualizer Observability Completion (Load/Activate/Fallback)
 - Spec Ref: Section `9` (Visualizer observability)
 - Scope:
   - Ensure explicit structured logs for registry load summary, plugin activation success/failure, and fallback transitions.
@@ -68,7 +196,7 @@ Execution tracker derived from `SPEC.md`.
 - Status: `done`
 - Commit: `e5fa8a2`
 
-### T-030 Configurable Local Plugin Path UX/CLI Wiring
+#### T-030 Configurable Local Plugin Path UX/CLI Wiring
 - Spec Ref: Section `6` (Plugin discovery sources), Section `WF-07`
 - Scope:
   - Add first-class runtime configuration for local visualizer plugin paths (CLI and persisted state).
@@ -83,7 +211,7 @@ Execution tracker derived from `SPEC.md`.
 - Status: `done`
 - Commit: `e5fa8a2`
 
-### T-031 Final Reliability/Observability Acceptance and Docs Parity
+#### T-031 Final Reliability/Observability Acceptance and Docs Parity
 - Spec Ref: Sections `8`, `9`, `10`, `11`
 - Scope:
   - Update acceptance mapping and user docs to cover T-026..T-030 behavior.
@@ -96,7 +224,7 @@ Execution tracker derived from `SPEC.md`.
 - Status: `done`
 - Commit: `e5fa8a2`
 
-### T-032 Embedded Cover Art ASCII Visualizer Pack (Static + Motion)
+#### T-032 Embedded Cover Art ASCII Visualizer Pack (Static + Motion)
 - Spec Ref: `WF-06`, Sections `4`, `6`, `8`, `11`
 - Scope:
   - Add a new visualizer pack that renders embedded track artwork as terminal-safe color ASCII.
@@ -142,8 +270,6 @@ Execution tracker derived from `SPEC.md`.
   - Embedded artwork size variance can create CPU spikes; cache and frame-budget profiling are required before enabling rotation effects.
   - TinyTag artwork support differs by media container/tag type; fallback messaging must remain explicit and user-friendly.
 - Status: `done`
-
-## Archived Completed Work
 
 ### V3 Visualization Expansion (Extra Scope) — Completed
 
