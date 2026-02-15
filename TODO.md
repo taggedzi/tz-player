@@ -77,7 +77,7 @@ Execution tracker derived from `SPEC.md`.
 - [x] `src/tz_player/utils/async_utils.py`
 - [x] `src/tz_player/utils/time_format.py`
 - [x] `src/tz_player/version.py`
-- [ ] `src/tz_player/visualizers/__init__.py`
+- [x] `src/tz_player/visualizers/__init__.py`
 - [ ] `src/tz_player/visualizers/base.py`
 - [ ] `src/tz_player/visualizers/basic.py`
 - [ ] `src/tz_player/visualizers/cover_ascii.py`
