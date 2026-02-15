@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 from .base import VisualizerContext, VisualizerFrameInput
@@ -26,6 +27,7 @@ class _MatrixRainBase:
     def render(self, frame: VisualizerFrameInput) -> str:
         width = max(1, frame.width)
         height = max(1, frame.height)
+        monotonic_s = frame.monotonic_s if math.isfinite(frame.monotonic_s) else 0.0
         # Use continuous monotonic time to avoid quantized per-frame jumps/stutter.
         # Tuned to feel smooth while remaining slower than the earlier cadence.
         base_rows_per_second = 7.5
@@ -36,7 +38,7 @@ class _MatrixRainBase:
                 speed_scale = 0.75 + ((x * 11) % 4) * 0.2
                 period = height + 14 + (x % 7)
                 head = (
-                    frame.monotonic_s * base_rows_per_second * speed_scale + x * 17
+                    monotonic_s * base_rows_per_second * speed_scale + x * 17
                 ) % period - 7
                 trail = 5 + (x % 6)
                 distance = head - y

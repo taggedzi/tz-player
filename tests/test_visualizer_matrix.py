@@ -11,10 +11,16 @@ from tz_player.visualizers.matrix import (
 from tz_player.visualizers.registry import VisualizerRegistry
 
 
-def _frame(*, width: int, height: int, frame_index: int = 0) -> VisualizerFrameInput:
+def _frame(
+    *,
+    width: int,
+    height: int,
+    frame_index: int = 0,
+    monotonic_s: float = 0.0,
+) -> VisualizerFrameInput:
     return VisualizerFrameInput(
         frame_index=frame_index,
-        monotonic_s=0.0,
+        monotonic_s=monotonic_s,
         width=width,
         height=height,
         status="playing",
@@ -68,3 +74,15 @@ def test_matrix_variants_emit_ansi_color_when_enabled() -> None:
     output = plugin.render(_frame(width=10, height=3, frame_index=4))
     assert "\x1b[" in output
     assert "38;2;" in output
+
+
+def test_matrix_render_handles_non_finite_monotonic_time() -> None:
+    plugin = MatrixGreenVisualizer()
+    plugin.on_activate(VisualizerContext(ansi_enabled=False, unicode_enabled=True))
+    frame = _frame(width=12, height=4, frame_index=3, monotonic_s=float("nan"))
+
+    output = plugin.render(frame)
+
+    lines = output.splitlines()
+    assert len(lines) == 4
+    assert all(len(line) == 12 for line in lines)
