@@ -49,6 +49,17 @@ def test_state_bool_values_do_not_coerce_to_numeric_fields(tmp_path) -> None:
     assert state.speed == 1.0
 
 
+def test_state_non_finite_numeric_values_fall_back_to_defaults(tmp_path) -> None:
+    path = tmp_path / "state.json"
+    path.write_text(
+        '{"volume": NaN, "speed": Infinity, "visualizer_fps": 10}',
+        encoding="utf-8",
+    )
+    state = load_state(path)
+    assert state.volume == 1.0
+    assert state.speed == 1.0
+
+
 def test_state_corrupt_json_defaults(tmp_path, caplog) -> None:
     path = tmp_path / "state.json"
     path.write_text("{bad json", encoding="utf-8")

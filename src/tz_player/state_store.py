@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -37,7 +38,10 @@ def _coerce_state(data: dict[str, Any]) -> AppState:
         if isinstance(value, bool):
             return default
         if isinstance(value, (int, float)):
-            return float(value)
+            normalized = float(value)
+            if math.isfinite(normalized):
+                return normalized
+            return default
         return default
 
     def _bool_or_default(value: Any, default: bool) -> bool:
