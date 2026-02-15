@@ -95,7 +95,7 @@ Execution tracker derived from `SPEC.md`.
 - [x] `tests/test_audio_level_service.py`
 - [x] `tests/test_audio_tags.py`
 - [x] `tests/test_backend_selection.py`
-- [ ] `tests/test_doctor.py`
+- [x] `tests/test_doctor.py`
 - [ ] `tests/test_extract_changelog_release.py`
 - [ ] `tests/test_focus_navigation_matrix.py`
 - [ ] `tests/test_gui_parser.py`
