@@ -42,6 +42,10 @@ class SliderBar(Widget):
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
+        if key_step <= 0:
+            raise ValueError("key_step must be > 0")
+        if emit_interval < 0:
+            raise ValueError("emit_interval must be >= 0")
         self.slider_name = name
         self.label = label
         self.fraction = _clamp_fraction(fraction)

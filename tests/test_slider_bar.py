@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 
+import pytest
 from textual.geometry import Size
 from textual.message import Message
 
@@ -62,3 +63,10 @@ def test_slider_bar_mouse_drag_emits_progress_and_final() -> None:
     assert isinstance(emitted[2], SliderChanged)
     assert emitted[2].is_final is True
     assert emitted[2].fraction == 1.0
+
+
+def test_slider_bar_rejects_invalid_constructor_values() -> None:
+    with pytest.raises(ValueError, match="key_step must be > 0"):
+        SliderBar(name="volume", label="Vol", key_step=0.0)
+    with pytest.raises(ValueError, match="emit_interval must be >= 0"):
+        SliderBar(name="volume", label="Vol", emit_interval=-0.1)
