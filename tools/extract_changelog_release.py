@@ -11,6 +11,8 @@ def extract_release_section(*, changelog_text: str, version: str) -> str:
     version = version.strip()
     if version.startswith(("v", "V")):
         version = version[1:]
+    if not version.strip():
+        raise ValueError("Version must not be empty.")
     pattern = re.compile(
         rf"^## \[{re.escape(version)}\].*?(?=^## \[|\Z)", re.MULTILINE | re.DOTALL
     )
