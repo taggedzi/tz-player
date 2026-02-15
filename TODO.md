@@ -118,7 +118,7 @@ Execution tracker derived from `SPEC.md`.
 - [x] `tests/test_status_pane.py`
 - [x] `tests/test_time_format.py`
 - [x] `tests/test_track_info_panel.py`
-- [ ] `tests/test_transport_controls.py`
+- [x] `tests/test_transport_controls.py`
 - [ ] `tests/test_ui.py`
 - [ ] `tests/test_visualizer_cover_ascii.py`
 - [ ] `tests/test_visualizer_hackscope.py`
