@@ -38,7 +38,7 @@ Execution tracker derived from `SPEC.md`.
 - [x] `Makefile`
 - [x] `tools/release.sh`
 - [x] `noxfile.py`
-- [ ] `src/tz_player/__init__.py`
+- [x] `src/tz_player/__init__.py`
 - [ ] `src/tz_player/app.py`
 - [ ] `src/tz_player/cli.py`
 - [ ] `src/tz_player/db/__init__.py`
