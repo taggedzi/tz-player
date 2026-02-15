@@ -36,3 +36,9 @@ def test_app_parser_accepts_repeatable_visualizer_plugin_paths() -> None:
         ]
     )
     assert args.visualizer_plugin_paths == ["plugins.alpha", "plugins.beta"]
+
+
+def test_app_parser_allows_unclamped_visualizer_fps_for_runtime_clamping() -> None:
+    parser = build_parser()
+    args = parser.parse_args(["--visualizer-fps", "31"])
+    assert args.visualizer_fps == 31
