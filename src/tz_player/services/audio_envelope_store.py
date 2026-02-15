@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import os
 import sqlite3
 from pathlib import Path
@@ -246,4 +247,7 @@ def _stat_path(path: Path) -> tuple[int | None, int | None]:
 
 
 def _clamp(value: float) -> float:
-    return max(0.0, min(1.0, float(value)))
+    normalized = float(value)
+    if not math.isfinite(normalized):
+        return 0.0
+    return max(0.0, min(1.0, normalized))
