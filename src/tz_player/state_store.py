@@ -29,9 +29,13 @@ class AppState:
 
 def _coerce_state(data: dict[str, Any]) -> AppState:
     def _int_or_none(value: Any) -> int | None:
+        if isinstance(value, bool):
+            return None
         return int(value) if isinstance(value, int) else None
 
     def _float_or_default(value: Any, default: float) -> float:
+        if isinstance(value, bool):
+            return default
         if isinstance(value, (int, float)):
             return float(value)
         return default

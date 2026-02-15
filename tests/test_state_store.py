@@ -36,6 +36,19 @@ def test_state_backwards_track_id(tmp_path) -> None:
     assert state.current_item_id == 5
 
 
+def test_state_bool_values_do_not_coerce_to_numeric_fields(tmp_path) -> None:
+    path = tmp_path / "state.json"
+    path.write_text(
+        '{"playlist_id": true, "current_item_id": false, "volume": true, "speed": false}',
+        encoding="utf-8",
+    )
+    state = load_state(path)
+    assert state.playlist_id is None
+    assert state.current_item_id is None
+    assert state.volume == 1.0
+    assert state.speed == 1.0
+
+
 def test_state_corrupt_json_defaults(tmp_path, caplog) -> None:
     path = tmp_path / "state.json"
     path.write_text("{bad json", encoding="utf-8")
