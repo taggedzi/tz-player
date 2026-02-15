@@ -1,16 +1,19 @@
-name: Manual Release
+name: Release
 
 on:
+  push:
+    tags:
+      - "v*"
   workflow_dispatch:
     inputs:
       version:
-        description: "Release version (for example 1.2.3 or 1.2.3rc1)"
+        description: "Existing release version/tag (for example 1.2.3 or v1.2.3)"
         required: true
         type: string
       prerelease:
-        description: "Mark release as pre-release"
+        description: "Mark release as pre-release (workflow_dispatch only)"
         required: true
-        default: true
+        default: false
         type: boolean
       sign_artifacts:
         description: "Sign artifacts with GPG (requires release signing secrets)"
@@ -20,15 +23,11 @@ on:
 
 permissions:
   contents: write
-  id-token: write
 
 jobs:
   release:
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
     env:
-      RELEASE_VERSION: ${{ inputs.version }}
-      RELEASE_PRERELEASE: ${{ inputs.prerelease }}
       RELEASE_SIGN_ARTIFACTS: ${{ inputs.sign_artifacts }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -50,9 +49,14 @@ jobs:
           python -m pip install -e ".[dev]"
           python -m pip install build twine
 
-      - name: Normalize release version
+      - name: Resolve release tag/version
         run: |
-          norm="${RELEASE_VERSION}"
+          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+            raw="${GITHUB_REF_NAME}"
+          else
+            raw="${{ inputs.version }}"
+          fi
+          norm="${raw}"
           case "${norm}" in
             v*|V*) norm="${norm#?}" ;;
           esac
@@ -61,19 +65,33 @@ jobs:
             exit 1
           fi
           echo "RELEASE_VERSION_NORM=${norm}" >> "${GITHUB_ENV}"
+          echo "RELEASE_TAG=v${norm}" >> "${GITHUB_ENV}"
 
-      - name: Validate release tag does not already exist
+      - name: Set prerelease mode
         run: |
-          if git rev-parse "v${RELEASE_VERSION_NORM}" >/dev/null 2>&1; then
-            echo "Tag v${RELEASE_VERSION_NORM} already exists."
-            exit 1
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            echo "RELEASE_PRERELEASE=${{ inputs.prerelease }}" >> "${GITHUB_ENV}"
+          elif [[ "${RELEASE_VERSION_NORM}" =~ (a|b|rc|dev|post) ]]; then
+            echo "RELEASE_PRERELEASE=true" >> "${GITHUB_ENV}"
+          else
+            echo "RELEASE_PRERELEASE=false" >> "${GITHUB_ENV}"
           fi
 
-      - name: Prepare version and changelog
+      - name: Ensure release tag exists and checkout
         run: |
-          python tools/release_prepare.py \
+          if ! git rev-parse "${RELEASE_TAG}" >/dev/null 2>&1; then
+            echo "Tag ${RELEASE_TAG} not found."
+            echo "Create and push the tag first, then run this workflow."
+            exit 1
+          fi
+          git checkout "${RELEASE_TAG}"
+
+      - name: Build release notes from changelog
+        run: |
+          python tools/extract_changelog_release.py \
             --version "${RELEASE_VERSION_NORM}" \
-            --notes-file RELEASE_NOTES.md
+            --changelog CHANGELOG.md \
+            --output RELEASE_NOTES.md
 
       - name: Lint
         run: |
@@ -133,24 +151,18 @@ jobs:
               --detach-sign "${file}"
           done
 
-      - name: Commit release files and create tag
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/tz_player/version.py CHANGELOG.md
-          git commit -m "release: v${RELEASE_VERSION_NORM}"
-          git tag "v${RELEASE_VERSION_NORM}"
-          git push origin HEAD:main
-          git push origin "v${RELEASE_VERSION_NORM}"
-
-      - name: Publish GitHub release
+      - name: Publish or update GitHub release
         run: |
           prerelease_flag=""
           if [ "${RELEASE_PRERELEASE}" = "true" ]; then
             prerelease_flag="--prerelease"
           fi
-          gh release create "v${RELEASE_VERSION_NORM}" \
-            --title "v${RELEASE_VERSION_NORM}" \
-            --notes-file RELEASE_NOTES.md \
-            ${prerelease_flag} \
-            dist/*
+          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+            gh release upload "${RELEASE_TAG}" dist/* --clobber
+          else
+            gh release create "${RELEASE_TAG}" \
+              --title "${RELEASE_TAG}" \
+              --notes-file RELEASE_NOTES.md \
+              ${prerelease_flag} \
+              dist/*
+          fi
