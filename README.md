@@ -1,10 +1,21 @@
 # tz-player
 
-[![CI](https://github.com/taggedzi/tz-player/actions/workflows/ci.yml/badge.svg)](https://github.com/taggedzi/tz-player/actions/workflows/ci.yml)
-[![PyPI](https://img.shields.io/pypi/v/tz-player.svg)](https://pypi.org/project/tz-player/)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![CI](https://github.com/taggedzi/tz-player/actions/workflows/ci.yml/badge.svg)](https://github.com/taggedzi/tz-player/actions)
+![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue)
+![Platform: Linux](https://img.shields.io/badge/platform-linux-lightgrey)
+![Platform: Windows](https://img.shields.io/badge/platform-windows-lightgrey)
+![Platform: macOS (untested)](https://img.shields.io/badge/platform-macOS-untested-yellow)
+![License: MIT](https://img.shields.io/badge/license-MIT-green)
 
-TaggedZ's command line music player.
+A clean, keyboard-driven music player for the terminal.
+
+`tz-player` is a simple TUI music player built with Python and powered by VLC.
+If VLC can play it, `tz-player` can play it.
+
+No streaming.
+No accounts.
+No background services.
+Just your music, in your terminal.
 
 ## Screenshots
 
@@ -14,63 +25,238 @@ TaggedZ's command line music player.
 
 ![VU Meter Screenshot](/docs/images/tz-player_vu-meter_screenshot.png)
 
-## Quickstart
+---
+
+## Platform Support
+
+* ✅ Tested on Linux
+* ✅ Tested on Windows
+* ⚠️ Expected to work on macOS (Python + VLC), but not officially tested
+
+The goal is full cross-platform support anywhere Python and VLC are available.
+macOS support is intended, but cannot be guaranteed due to lack of testing hardware.
+
+---
+
+## Python Version Support
+
+`tz-player` supports:
+
+* Python 3.9 through current stable releases
+
+(3.9 is the lowest supported version. Newer versions should work as Python itself evolves.)
+
+---
+
+## Why Use tz-player?
+
+Because sometimes you just want:
+
+* A fast music player that starts instantly
+* Full keyboard control
+* A clean terminal interface
+* A local-first tool that doesn’t phone home
+* Something lightweight that stays out of your way
+
+`tz-player` is built for people who live in the terminal and prefer tools that feel direct and responsive.
+
+It does not try to be Spotify.
+It does not try to manage your entire media library.
+It just plays your music well.
+
+---
+
+# Requirements
+
+## 1. VLC (Required)
+
+`tz-player` uses VLC (libVLC) for playback.
+
+You must have VLC installed on your system for real audio playback.
+
+If VLC is not installed or not found, the player cannot play music.
+
+Install VLC from:
+
+[https://www.videolan.org/vlc/](https://www.videolan.org/vlc/)
+
+---
+
+# Installation
+
+At the moment, `tz-player` is not published to PyPI.
+
+Clone the repository:
+
+```bash
+git clone https://github.com/taggedzi/tz-player.git
+cd tz-player
+```
+
+Create a virtual environment:
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+```
+
+Install:
+
+```bash
 pip install -e .
 ```
 
+Run:
+
+```bash
+tz-player --backend vlc
+```
+
+---
+
+# What Can It Play?
+
+Anything VLC can play.
+
+That includes:
+
+* MP3
+* FLAC
+* WAV
+* OGG
+* M4A
+* AAC
+* And many more formats and codecs
+
+VLC handles decoding. `tz-player` handles the interface.
+
+---
+
+# Basic Usage
+
+Launch:
 
 ```bash
 tz-player
 ```
 
+On startup the player:
 
-## Installation
+* Restores your last playlist
+* Restores playback settings
+* Focuses the playlist immediately
 
+You can start navigating right away.
 
-```bash
-pip install tz-player
+---
+
+## Keyboard Controls
+
+### Playlist Navigation
+
+| Key           | Action                                  |
+| ------------- | --------------------------------------- |
+| ↑ / ↓         | Move cursor                             |
+| Shift + ↑ / ↓ | Reorder item                            |
+| v             | Select item                             |
+| Delete        | Remove selected (confirmation required) |
+| a             | Playlist actions menu                   |
+| f             | Focus search                            |
+
+---
+
+### Playback Controls
+
+| Key              | Action                |
+| ---------------- | --------------------- |
+| Space            | Play / Pause          |
+| n                | Next track            |
+| p                | Previous track        |
+| x                | Stop                  |
+| Seek keys        | Move within track     |
+| Volume keys      | Adjust volume         |
+| Speed keys       | Change playback speed |
+| Repeat / Shuffle | Toggle modes          |
+
+You do not need to leave the keyboard to control playback.
+
+---
+
+## Search
+
+Press:
+
+```
+f
 ```
 
-## Media Backend Setup
+Type to filter your playlist.
 
-`tz-player` can run with a fake backend out of the box. Real audio playback and advanced visual analysis need external media tools.
+* Enter returns focus to the playlist.
+* Escape exits search.
+* You are never trapped in a search box.
 
-- VLC/libVLC: required for real playback with `--backend vlc`.
-- FFmpeg: optional, used only for non-WAV precomputed VU envelope analysis.
+---
 
-Install guidance:
+## Visualizers
 
-- `docs/usage.md` (runtime usage)
-- `docs/media-setup.md` (platform install commands)
+`tz-player` includes a visualizer pane on the right side.
 
-## Licensing and Compliance
+* Visualizers update during playback.
+* Plugins are supported.
+* If a visualizer fails, the player switches to a safe default automatically.
+* Visualizers never interrupt playback.
 
-- Project license: MIT (`LICENSE`)
-- Third-party notices: `THIRD_PARTY_LICENSES.md`
-- Compliance notes and distribution guidance: `docs/license-compliance.md`
+This keeps the interface stable even if a plugin misbehaves.
 
-Metadata extraction uses `tinytag` (MIT) to keep runtime licensing permissive.
+---
 
+## Logging and Troubleshooting
 
-## Generate From Template
-
-If this project was created with Copier, update it later with:
+Run with:
 
 ```bash
-copier update
+tz-player --backend vlc --verbose
 ```
 
-## Development
+Or write logs to a file:
 
 ```bash
+tz-player --backend vlc --log-file player.log
+```
+
+Useful flags:
+
+* `--backend vlc` (required for real playback)
+* `--verbose`
+* `--quiet`
+* `--log-file <path>`
+
+If something fails, error messages explain what happened and what to check.
+
+---
+
+# For Developers
+
+This section is for contributors and future maintainers.
+
+---
+
+## Development Setup
+
+```bash
+git clone https://github.com/taggedzi/tz-player.git
+cd tz-player
 python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 ```
+
+---
+
+## Quality Checks
+
+Before committing:
 
 ```bash
 python -m ruff check .
@@ -79,61 +265,72 @@ python -m mypy src
 python -m pytest
 ```
 
+Or:
 
 ```bash
 nox -s lint typecheck tests
-nox -s local
 ```
 
+---
 
-## Release
+## Architecture Overview
 
-- Manual release automation is in GitHub Actions: `.github/workflows/release.yml`.
-- Version source of truth is `src/tz_player/version.py`.
-- Full instructions (including optional signing setup): `docs/release-process.md`.
-- Release checklist and quality notes: `PRODUCTION_READY_CHECKLIST.md`.
+* Source code: `src/tz_player`
+* TUI built with Textual
+* SQLite for playlists and metadata
+* JSON for UI state
+* Playback handled through a backend abstraction
+* VLC backend provides real audio playback
+* Visualizers loaded through a plugin registry
 
-## Project Layout
+Blocking IO is kept off the UI loop to prevent interface freezes.
 
-- `src/tz_player/` package source
-- `tests/` tests
-- `docs/` lightweight docs and notes
+---
 
-## Keyboard and Focus Behavior
+## Runtime Configuration
 
-- `f` focuses Find.
-- While Find is focused, text entry keys are handled by the input.
-- `enter` in Find returns focus to the playlist pane.
-- `escape` handling order:
-  - closes active modal/popup first
-  - then clears/exits Find mode
-- Playback keys (`space`, `n`, `p`, `x`, seek/volume/speed/repeat/shuffle) are available from main UI focus states.
+Configuration precedence:
 
-See `docs/usage.md` for the full key map.
+1. CLI flags
+2. Saved state
+3. Built-in defaults
 
-## Workflow Acceptance
+If VLC fails to initialize, the app reports the error clearly and exits with a non-zero code.
 
-See `docs/workflow-acceptance.md` for the per-workflow acceptance checklist and mapped tests.
+---
 
-## Visualization Plugins
+## Testing Expectations
 
-See `docs/visualizations.md` for visualization subsystem goals, plugin contract, and authoring guidance.
+Tests cover:
 
-## Runtime Flags and Diagnostics
+* Keyboard navigation
+* Focus transitions
+* Playlist mutation
+* State persistence
+* Visualizer loading and fallback behavior
 
-Common runtime flags:
+No test should hang indefinitely.
 
-- `--backend {fake,vlc}`: choose playback backend for this run.
-- `--verbose`: enable debug logging.
-- `--quiet`: warnings/errors only (`--quiet` overrides `--verbose`).
-- `--log-file <path>`: write logs to an explicit path.
-- `--visualizer-plugin-path <path_or_module>`: add local visualizer plugin discovery path/module (repeatable; CLI overrides persisted list for that run).
+Workflow acceptance is documented in `docs/workflow-acceptance.md`.
 
-Behavior notes:
+---
 
-- If `--backend vlc` is selected but VLC/libVLC is unavailable, the app falls back to `fake` and shows a clear in-app error.
-- Default log path when `--log-file` is not provided: `<user_data_dir>/logs/tz-player.log`.
-- Fatal startup errors return non-zero exit code and print a remediation hint.
-- Non-fatal runtime issues (for example visualizer fallback, missing ffmpeg envelope source) are surfaced in the status line as `Notice:` messages.
+# License
 
-See `docs/usage.md` for full keybindings and troubleshooting guidance.
+MIT License
+See `LICENSE` and `THIRD_PARTY_LICENSES.md`.
+
+---
+
+# Closing
+
+`tz-player` exists for people who prefer simple, local tools.
+
+If you want:
+
+* A terminal-native music player
+* Full keyboard control
+* Reliable VLC playback
+* No accounts, no cloud, no noise
+
+This is for you.
