@@ -123,7 +123,7 @@ Execution tracker derived from `SPEC.md`.
 - [x] `tests/test_visualizer_cover_ascii.py`
 - [x] `tests/test_visualizer_hackscope.py`
 - [x] `tests/test_visualizer_host.py`
-- [ ] `tests/test_visualizer_matrix.py`
+- [x] `tests/test_visualizer_matrix.py`
 - [ ] `tests/test_visualizer_registry.py`
 - [ ] `tests/test_visualizer_selection_integration.py`
 - [ ] `tests/test_visualizer_vu.py`
