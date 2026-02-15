@@ -6,6 +6,14 @@
 
 TaggedZ's command line music player.
 
+## Screenshots
+
+![Cover Art Screenshot](/docs/images/tz-player_cover-ascii-art_screenshot.png)
+
+![Hackscope Screenshot](/docs/images/tz-player_hackscope_screenshot.png)
+
+![VU Meter Screenshot](/docs/images/tz-player_vu-meter_screenshot.png)
+
 ## Quickstart
 
 ```bash
