@@ -102,7 +102,7 @@ Execution tracker derived from `SPEC.md`.
 - [x] `tests/test_logging_config.py`
 - [x] `tests/test_metadata_debounce.py`
 - [x] `tests/test_metadata_service.py`
-- [ ] `tests/test_non_blocking_paths.py`
+- [x] `tests/test_non_blocking_paths.py`
 - [ ] `tests/test_paths.py`
 - [ ] `tests/test_performance_opt_in.py`
 - [ ] `tests/test_player_service.py`
