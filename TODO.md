@@ -37,7 +37,7 @@ Execution tracker derived from `SPEC.md`.
 - [x] `.pre-commit-config.yaml`
 - [x] `Makefile`
 - [x] `tools/release.sh`
-- [ ] `noxfile.py`
+- [x] `noxfile.py`
 - [ ] `src/tz_player/__init__.py`
 - [ ] `src/tz_player/app.py`
 - [ ] `src/tz_player/cli.py`
