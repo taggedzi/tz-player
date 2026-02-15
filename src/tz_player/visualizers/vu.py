@@ -78,6 +78,8 @@ class VuReactiveVisualizer:
 def _extract_live_levels(frame: VisualizerFrameInput) -> tuple[float, float] | None:
     if frame.level_left is None or frame.level_right is None:
         return None
+    if not math.isfinite(frame.level_left) or not math.isfinite(frame.level_right):
+        return None
     return (_clamp(frame.level_left), _clamp(frame.level_right))
 
 
@@ -213,7 +215,10 @@ def _fmt_clock(value: float | None) -> str:
 
 
 def _clamp(value: float) -> float:
-    return max(0.0, min(1.0, float(value)))
+    normalized = float(value)
+    if not math.isfinite(normalized):
+        return 0.0
+    return max(0.0, min(1.0, normalized))
 
 
 def _pad_line(text: str, width: int) -> str:

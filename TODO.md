@@ -85,7 +85,7 @@ Execution tracker derived from `SPEC.md`.
 - [x] `src/tz_player/visualizers/host.py`
 - [x] `src/tz_player/visualizers/matrix.py`
 - [x] `src/tz_player/visualizers/registry.py`
-- [ ] `src/tz_player/visualizers/vu.py`
+- [x] `src/tz_player/visualizers/vu.py`
 - [ ] `tests/conftest.py`
 - [ ] `tests/test_app_envelope_analysis.py`
 - [ ] `tests/test_app_parser.py`

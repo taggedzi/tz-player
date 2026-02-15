@@ -214,6 +214,23 @@ def test_vu_low_levels_are_visibly_normalized() -> None:
     assert right_pct >= 15
 
 
+def test_vu_non_finite_live_levels_degrade_to_fallback() -> None:
+    plugin = VuReactiveVisualizer()
+    plugin.on_activate(VisualizerContext(ansi_enabled=False, unicode_enabled=True))
+    output = plugin.render(
+        _frame(
+            width=72,
+            height=8,
+            frame_index=3,
+            level_left=float("nan"),
+            level_right=0.7,
+            level_source="live",
+        )
+    )
+    assert "VU REACTIVE [SIM-R]" in output
+    assert "SRC SIMULATED FALLBACK" in output
+
+
 def _meter_pct(output: str, label: str) -> int:
     for line in output.splitlines():
         if line.startswith(f"{label} ["):
