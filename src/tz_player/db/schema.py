@@ -63,6 +63,12 @@ SCHEMA_V1_STATEMENTS = [
 def create_schema(conn: sqlite3.Connection) -> None:
     """Create all schema objects in the supplied connection."""
     version = conn.execute("PRAGMA user_version").fetchone()[0]
+    if version > SCHEMA_VERSION:
+        raise RuntimeError(
+            "Unsupported database schema version.\n"
+            f"Likely cause: database version {version} is newer than supported version {SCHEMA_VERSION}.\n"
+            "Next step: run this tz-player build against a compatible database or upgrade tz-player."
+        )
     if version == 0:
         _create_schema_v1(conn)
         conn.execute("PRAGMA user_version = 1")

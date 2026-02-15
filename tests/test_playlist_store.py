@@ -202,6 +202,21 @@ def test_migration_adds_item_id(tmp_path) -> None:
         assert version == 3
 
 
+def test_initialize_fails_on_newer_schema_version(tmp_path) -> None:
+    db_path = tmp_path / "library.sqlite"
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("PRAGMA user_version = 999")
+
+    store = PlaylistStore(db_path)
+    with pytest.raises(RuntimeError) as excinfo:
+        _run(store.initialize())
+
+    message = str(excinfo.value)
+    assert "Unsupported database schema version." in message
+    assert "Likely cause:" in message
+    assert "Next step:" in message
+
+
 def test_search_item_ids_and_fetch_by_item_ids(tmp_path) -> None:
     db_path = tmp_path / "library.sqlite"
     store = PlaylistStore(db_path)
