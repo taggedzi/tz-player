@@ -28,7 +28,7 @@ class StatusPane(Widget):
         min-width: 20;
     }
 
-    #status-spacer {
+    #volume-spacer {
         width: 3;
     }
 
@@ -62,8 +62,7 @@ class StatusPane(Widget):
             key_step=SPEED_STEP / (SPEED_MAX - SPEED_MIN),
             id="spd-bar",
         )
-        self._status_spacer = Static("   ", id="status-spacer")
-        self._volume_spacer = Static("   ", id="status-spacer")
+        self._volume_spacer = Static("   ", id="volume-spacer")
         self._status_line = Static("", id="status-line")
         self._player_service: PlayerService | None = None
         self._state: PlayerState | None = None

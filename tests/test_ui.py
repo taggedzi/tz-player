@@ -825,6 +825,7 @@ def test_status_pane_updates() -> None:
     async def run_app() -> None:
         async with app.run_test():
             await asyncio.sleep(0)
+            assert pane.query_one("#volume-spacer")
             pane.update_state(
                 PlayerState(
                     status="playing",
