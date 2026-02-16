@@ -24,8 +24,9 @@ class TextButton(Static):
     }
 
     .text-button:focus {
-        background: $boost;
-        color: $text;
+        background: $accent;
+        color: $background;
+        text-style: bold;
     }
     """
 

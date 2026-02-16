@@ -23,7 +23,9 @@ from tz_player.ui.modals.error import ErrorModal
 from tz_player.ui.modals.path_input import PathInputModal
 from tz_player.ui.playlist_pane import PlaylistPane
 from tz_player.ui.playlist_viewport import PlaylistViewport
+from tz_player.ui.slider_bar import SliderBar
 from tz_player.ui.status_pane import StatusPane
+from tz_player.ui.text_button import TextButton
 from tz_player.ui.transport_controls import TransportControls
 
 
@@ -71,6 +73,19 @@ def test_app_mounts(tmp_path, monkeypatch) -> None:
             app.exit()
 
     _run(run_app())
+
+
+def test_focus_style_hooks_exist_for_interactive_widgets() -> None:
+    app_css = TzPlayerApp.CSS
+    assert "#playlist-pane:focus-within" in app_css
+    assert "#playlist-find:focus" in app_css
+    assert "#playlist-viewport:focus" in app_css
+    assert "Input:focus" in app_css
+    assert "Button:focus" in app_css
+    assert ".text-button:focus" in TextButton.DEFAULT_CSS
+    assert "SliderBar:focus" in SliderBar.DEFAULT_CSS
+    assert "#actions-menu:focus" in ActionsMenuPopup.DEFAULT_CSS
+    assert ".option-list--option-highlighted" in ActionsMenuPopup.DEFAULT_CSS
 
 
 def test_playlist_pane_empty_db(tmp_path) -> None:
