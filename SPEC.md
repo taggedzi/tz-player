@@ -107,6 +107,7 @@ Acceptance criteria:
 ### Keyboard contract
 
 - `up/down` move playlist cursor.
+- `pageup/pagedown` move playlist cursor and viewport by one visible page.
 - `shift+up/shift+down` reorder selected/cursor item(s).
 - `v` toggles selection.
 - `delete` removes selection after confirmation.
