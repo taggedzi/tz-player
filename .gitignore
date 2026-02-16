@@ -31,3 +31,9 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
+
+
+# tz-player associated files
+.config/
+*.sqlite
+*.log
