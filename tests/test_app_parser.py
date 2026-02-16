@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from tz_player.app import build_parser
+from tz_player.version import PROJECT_URL, __version__
 
 
 def test_app_parser_defaults_to_run_command() -> None:
     parser = build_parser()
-    args = parser.parse_args(["--backend", "vlc"])
+    args = parser.parse_args([])
     assert args.command == "run"
     assert args.backend == "vlc"
 
@@ -42,3 +43,11 @@ def test_app_parser_allows_unclamped_visualizer_fps_for_runtime_clamping() -> No
     parser = build_parser()
     args = parser.parse_args(["--visualizer-fps", "31"])
     assert args.visualizer_fps == 31
+
+
+def test_app_help_includes_project_metadata() -> None:
+    parser = build_parser()
+    help_text = parser.format_help()
+    assert f"Project URL: {PROJECT_URL}" in help_text
+    assert "Platform: " in help_text
+    assert f"Version: {__version__}" in help_text

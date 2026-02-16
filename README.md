@@ -109,7 +109,7 @@ pip install -e .
 Run:
 
 ```bash
-tz-player --backend vlc
+tz-player
 ```
 
 ---
@@ -227,7 +227,7 @@ tz-player --backend vlc --log-file player.log
 
 Useful flags:
 
-* `--backend vlc` (required for real playback)
+* `--backend vlc` (default; explicit override if needed)
 * `--verbose`
 * `--quiet`
 * `--log-file <path>`

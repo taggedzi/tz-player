@@ -46,6 +46,7 @@ from .ui.modals.error import ErrorModal
 from .ui.playlist_pane import PlaylistPane
 from .ui.status_pane import StatusPane
 from .utils.async_utils import run_blocking
+from .version import build_help_epilog
 from .visualizers import (
     VisualizerContext,
     VisualizerFrameInput,
@@ -315,31 +316,11 @@ class TzPlayerApp(App):
                 await self.player_service.start()
             except Exception as exc:
                 logger.exception("Failed to start backend %s: %s", backend_name, exc)
-                if backend_name != "fake":
-                    backend_name = "fake"
-                    self.state = replace(self.state, playback_backend=backend_name)
-                    await run_blocking(save_state, state_path(), self.state)
-                    backend = _build_backend(backend_name)
-                    self.player_service = PlayerService(
-                        emit_event=self._handle_player_event,
-                        track_info_provider=self._track_info_provider,
-                        backend=backend,
-                        next_track_provider=self._next_track_provider,
-                        prev_track_provider=self._prev_track_provider,
-                        playlist_item_ids_provider=self._playlist_item_ids_provider,
-                        envelope_provider=self.audio_envelope_store,
-                        initial_state=self.player_state,
-                    )
-                    await self.player_service.start()
-                    await self.push_screen(
-                        ErrorModal(
-                            "VLC backend unavailable; using fake backend.\n"
-                            "Cause: VLC/libVLC runtime is not available.\n"
-                            "Next step: install VLC/libVLC, then restart to use --backend vlc."
-                        )
-                    )
-                else:
-                    raise
+                if backend_name == "vlc":
+                    raise RuntimeError(
+                        "VLC backend unavailable. Ensure VLC/libVLC is installed and discoverable."
+                    ) from exc
+                raise RuntimeError(f"{backend_name} backend failed to start.") from exc
             self.query_one(StatusPane).set_player_service(self.player_service)
             self._last_persisted = self._state_tuple(self.player_state)
             pane = self.query_one(PlaylistPane)
@@ -359,6 +340,8 @@ class TzPlayerApp(App):
         except Exception as exc:
             logger.exception("Failed to initialize app: %s", exc)
             self.startup_failed = True
+            self.player_service = None
+            self.metadata_service = None
             await self.push_screen(ErrorModal(_startup_failure_message(exc, db_path())))
 
     async def on_unmount(self) -> None:
@@ -1132,7 +1115,7 @@ def _resolve_backend_name(cli_backend: str | None, state_backend: str | None) ->
     state_normalized = _normalize(state_backend)
     if state_normalized is not None:
         return state_normalized
-    return "fake"
+    return "vlc"
 
 
 def _build_backend(name: str) -> FakePlaybackBackend | VLCPlaybackBackend:
@@ -1154,7 +1137,10 @@ def _clamp_int(value: int, min_value: int, max_value: int) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="tz-player", description="TaggedZ's command line music player."
+        prog="tz-player",
+        description="TaggedZ's command line music player.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=build_help_epilog(),
     )
     parser.add_argument(
         "command",
@@ -1174,6 +1160,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--backend",
         choices=("fake", "vlc"),
+        default="vlc",
         help="Playback backend to use (fake or vlc).",
     )
     parser.add_argument(
@@ -1202,7 +1189,7 @@ def main() -> int:
             console=False,
         )
         if getattr(args, "command", "run") == "doctor":
-            report = run_doctor(args.backend or "fake")
+            report = run_doctor(args.backend or "vlc")
             print(render_report(report))
             return report.exit_code
         logging.getLogger(__name__).info("Starting tz-player TUI")
@@ -1241,11 +1228,32 @@ def _startup_failure_message(exc: Exception, db_file: Path) -> str:
     db_failure_message = _classify_db_startup_failure(exc, db_file)
     if db_failure_message is not None:
         return db_failure_message
+    backend_failure_message = _classify_backend_startup_failure(exc)
+    if backend_failure_message is not None:
+        return backend_failure_message
     return (
         "Failed to initialize app.\n"
         "Likely cause: state/database/backend startup failure.\n"
         "Next step: verify file permissions/paths and review the log file."
     )
+
+
+def _classify_backend_startup_failure(exc: Exception) -> str | None:
+    chain: list[BaseException] = []
+    current: BaseException | None = exc
+    while current is not None and current not in chain:
+        chain.append(current)
+        current = current.__cause__
+    for item in chain:
+        message = str(item).lower()
+        if "vlc backend unavailable" in message or "libvlc" in message:
+            return (
+                "Failed to initialize playback backend.\n"
+                "Likely cause: VLC/libVLC runtime is unavailable.\n"
+                "Next step: install VLC/libVLC, verify PATH/runtime linkage, "
+                "then run `tz-player doctor --backend vlc`."
+            )
+    return None
 
 
 def _classify_db_startup_failure(exc: Exception, db_file: Path) -> str | None:

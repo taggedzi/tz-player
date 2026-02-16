@@ -25,7 +25,7 @@ tz-player --visualizer-plugin-path ./my_visualizers --visualizer-plugin-path myp
 ```
 
 Notes:
-- Default backend is `fake`.
+- Default backend is `vlc`.
 - The VLC backend requires VLC/libVLC installed on your system.
 
 GUI entrypoint supports the same flag:
@@ -118,8 +118,8 @@ Common failure cases:
 
 1. VLC backend unavailable:
 - Symptom: app cannot initialize VLC backend.
-- Behavior: app falls back to `fake` backend and shows an actionable error.
-- Next step: install VLC/libVLC and re-run with `--backend vlc`.
+- Behavior: startup stops and shows an actionable error modal; process exits non-zero.
+- Next step: install VLC/libVLC, verify runtime linkage/PATH, then run `tz-player doctor --backend vlc`.
 
 5. Missing ffmpeg for non-WAV VU envelope analysis:
 - Symptom: VU source stays in fallback mode for MP3/FLAC/OGG and visualizer shows an ffmpeg diagnostic notice.

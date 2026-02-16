@@ -76,6 +76,28 @@ def test_probe_tinytag_ok(monkeypatch) -> None:
     assert "9.9.9" in check.detail
 
 
+def test_probe_vlc_ok_when_runtime_works_without_instance_version_method(
+    monkeypatch,
+) -> None:
+    class FakeInstance:
+        def media_player_new(self) -> object:
+            return object()
+
+    fake_vlc = types.SimpleNamespace(
+        __version__="3.0.0",
+        Instance=lambda: FakeInstance(),
+    )
+    monkeypatch.setattr(
+        doctor_module.importlib, "import_module", lambda _name: fake_vlc
+    )
+
+    check = doctor_module.probe_vlc(required=True)
+
+    assert check.status == "ok"
+    assert check.required is True
+    assert "python-vlc 3.0.0" in check.detail
+
+
 def test_render_report_includes_result_and_hint() -> None:
     report = doctor_module.DoctorReport(
         backend="vlc",

@@ -43,7 +43,7 @@ def _setup_dirs(tmp_path, monkeypatch) -> None:
     paths.get_app_dirs.cache_clear()
 
 
-def test_startup_falls_back_to_fake_backend_when_vlc_fails(
+def test_startup_fails_with_actionable_error_when_vlc_fails(
     tmp_path, monkeypatch
 ) -> None:
     _setup_dirs(tmp_path, monkeypatch)
@@ -56,9 +56,7 @@ def test_startup_falls_back_to_fake_backend_when_vlc_fails(
 
     def fake_build_backend(name: str):
         build_calls.append(name)
-        if name == "vlc":
-            return FailingBackend()
-        return FakePlaybackBackend()
+        return FailingBackend()
 
     monkeypatch.setattr(TzPlayerApp, "push_screen", capture_push_screen)
     monkeypatch.setattr(app_module, "_build_backend", fake_build_backend)
@@ -70,15 +68,16 @@ def test_startup_falls_back_to_fake_backend_when_vlc_fails(
             await app._initialize_state()
             pane = app.query_one(PlaylistPane)
             status = app.query_one(StatusPane)
-            assert app.state.playback_backend == "fake"
-            assert app.player_service is not None
-            assert status._player_service is app.player_service
+            assert app.state.playback_backend == "vlc"
+            assert app.player_service is None
+            assert status._player_service is None
             assert app.playlist_id is not None
             assert pane.total_count == 0
-            assert build_calls == ["vlc", "fake"]
+            assert app.startup_failed is True
+            assert build_calls == ["vlc"]
             assert any(
                 isinstance(screen, ErrorModal)
-                and "VLC backend unavailable; using fake backend." in screen._message
+                and "Failed to initialize playback backend." in screen._message
                 and "install VLC/libVLC" in screen._message
                 for screen in pushed_screens
             )
@@ -86,7 +85,7 @@ def test_startup_falls_back_to_fake_backend_when_vlc_fails(
 
     _run(run_app())
     persisted_state = load_state(paths.state_path())
-    assert persisted_state.playback_backend == "fake"
+    assert persisted_state.playback_backend == "vlc"
 
 
 def test_startup_shows_generic_init_error_when_backend_start_fails(

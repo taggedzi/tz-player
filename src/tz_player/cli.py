@@ -11,11 +11,15 @@ from . import __version__
 from .logging_utils import setup_logging
 from .paths import log_dir
 from .runtime_config import resolve_log_level
+from .version import build_help_epilog
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="tz-player", description="TaggedZ's command line music player."
+        prog="tz-player",
+        description="TaggedZ's command line music player.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=build_help_epilog(),
     )
     parser.add_argument(
         "--version", action="version", version=f"%(prog)s {__version__}"
@@ -28,6 +32,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--backend",
         choices=("fake", "vlc"),
+        default="vlc",
         help="Playback backend to use (fake or vlc).",
     )
     return parser

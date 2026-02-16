@@ -91,7 +91,6 @@ def probe_vlc(*, required: bool) -> DoctorCheck:
     version = getattr(vlc, "__version__", "unknown")
     try:
         instance = vlc.Instance()
-        release = instance.libvlc_get_version()
     except Exception as exc:
         return DoctorCheck(
             name="vlc/libvlc",
@@ -100,7 +99,18 @@ def probe_vlc(*, required: bool) -> DoctorCheck:
             detail=f"python-vlc {version}; libVLC runtime unavailable ({exc.__class__.__name__})",
             hint="Install VLC/libVLC and verify runtime library search path.",
         )
-    release_text = str(release) if release else "unknown"
+    try:
+        # Creating a media player verifies that the runtime bindings are actually usable.
+        instance.media_player_new()
+    except Exception as exc:
+        return DoctorCheck(
+            name="vlc/libvlc",
+            status="error",
+            required=required,
+            detail=f"python-vlc {version}; libVLC runtime unavailable ({exc.__class__.__name__})",
+            hint="Install VLC/libVLC and verify runtime library search path.",
+        )
+    release_text = _libvlc_version(vlc, instance)
     return DoctorCheck(
         name="vlc/libvlc",
         status="ok",
@@ -162,3 +172,25 @@ def _status_token(status: DoctorStatus) -> str:
     if status == "missing":
         return "[MISS]"
     return "[ERR]"
+
+
+def _libvlc_version(vlc: object, instance: object) -> str:
+    candidates = (
+        getattr(vlc, "libvlc_get_version", None),
+        getattr(instance, "libvlc_get_version", None),
+    )
+    for getter in candidates:
+        if not callable(getter):
+            continue
+        try:
+            release = getter()
+        except Exception:
+            continue
+        if isinstance(release, bytes):
+            try:
+                return release.decode("utf-8", errors="replace")
+            except Exception:
+                return "unknown"
+        if release:
+            return str(release)
+    return "detected"

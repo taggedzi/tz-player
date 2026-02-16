@@ -4,7 +4,7 @@ This guide is for users who want real playback (`vlc` backend) and optional non-
 
 ## VLC/libVLC (Playback)
 
-`tz-player --backend vlc` requires VLC/libVLC installed on the system.
+`tz-player` defaults to the `vlc` backend, which requires VLC/libVLC installed on the system.
 
 Windows:
 

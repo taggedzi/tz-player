@@ -20,7 +20,7 @@ class AppState:
     speed: float = 1.0
     repeat_mode: str = "off"
     shuffle: bool = False
-    playback_backend: str = "fake"
+    playback_backend: str = "vlc"
     visualizer_id: str | None = None
     visualizer_fps: int = 10
     visualizer_plugin_paths: tuple[str, ...] = ()
@@ -70,7 +70,7 @@ def _coerce_state(data: dict[str, Any]) -> AppState:
         speed=_float_or_default(data.get("speed"), 1.0),
         repeat_mode=_str_or_default(data.get("repeat_mode"), "off"),
         shuffle=_bool_or_default(data.get("shuffle"), False),
-        playback_backend=_str_or_default(data.get("playback_backend"), "fake"),
+        playback_backend=_str_or_default(data.get("playback_backend"), "vlc"),
         visualizer_id=data.get("visualizer_id")
         if isinstance(data.get("visualizer_id"), str)
         else None,

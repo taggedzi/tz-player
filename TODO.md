@@ -31,112 +31,28 @@ Execution tracker derived from `SPEC.md`.
   - Mark the reviewed file entry as complete only after commit.
 - Status: `in_progress`
 
-### CR-001 Review Queue (Python + Supported Config/Setup Files)
-- [x] `pyproject.toml`
-- [x] `repo_mcp.toml`
-- [x] `.pre-commit-config.yaml`
-- [x] `Makefile`
-- [x] `tools/release.sh`
-- [x] `noxfile.py`
-- [x] `src/tz_player/__init__.py`
-- [x] `src/tz_player/app.py`
-- [x] `src/tz_player/cli.py`
-- [x] `src/tz_player/db/__init__.py`
-- [x] `src/tz_player/db/schema.py`
-- [x] `src/tz_player/doctor.py`
-- [x] `src/tz_player/events.py`
-- [x] `src/tz_player/gui.py`
-- [x] `src/tz_player/logging_utils.py`
-- [x] `src/tz_player/paths.py`
-- [x] `src/tz_player/runtime_config.py`
-- [x] `src/tz_player/services/__init__.py`
-- [x] `src/tz_player/services/audio_envelope_analysis.py`
-- [x] `src/tz_player/services/audio_envelope_store.py`
-- [x] `src/tz_player/services/audio_level_service.py`
-- [x] `src/tz_player/services/audio_tags.py`
-- [x] `src/tz_player/services/fake_backend.py`
-- [x] `src/tz_player/services/metadata_service.py`
-- [x] `src/tz_player/services/playback_backend.py`
-- [x] `src/tz_player/services/player_service.py`
-- [x] `src/tz_player/services/playlist_store.py`
-- [x] `src/tz_player/services/vlc_backend.py`
-- [x] `src/tz_player/state_store.py`
-- [x] `src/tz_player/ui/__init__.py`
-- [x] `src/tz_player/ui/actions_menu.py`
-- [x] `src/tz_player/ui/modals/__init__.py`
-- [x] `src/tz_player/ui/modals/confirm.py`
-- [x] `src/tz_player/ui/modals/error.py`
-- [x] `src/tz_player/ui/modals/path_input.py`
-- [x] `src/tz_player/ui/playlist_pane.py`
-- [x] `src/tz_player/ui/playlist_viewport.py`
-- [x] `src/tz_player/ui/slider_bar.py`
-- [x] `src/tz_player/ui/status_pane.py`
-- [x] `src/tz_player/ui/text_button.py`
-- [x] `src/tz_player/ui/transport_controls.py`
-- [x] `src/tz_player/utils/__init__.py`
-- [x] `src/tz_player/utils/async_utils.py`
-- [x] `src/tz_player/utils/time_format.py`
-- [x] `src/tz_player/version.py`
-- [x] `src/tz_player/visualizers/__init__.py`
-- [x] `src/tz_player/visualizers/base.py`
-- [x] `src/tz_player/visualizers/basic.py`
-- [x] `src/tz_player/visualizers/cover_ascii.py`
-- [x] `src/tz_player/visualizers/hackscope.py`
-- [x] `src/tz_player/visualizers/host.py`
-- [x] `src/tz_player/visualizers/matrix.py`
-- [x] `src/tz_player/visualizers/registry.py`
-- [x] `src/tz_player/visualizers/vu.py`
-- [x] `tests/conftest.py`
-- [x] `tests/test_app_envelope_analysis.py`
-- [x] `tests/test_app_parser.py`
-- [x] `tests/test_app_speed_limits.py`
-- [x] `tests/test_audio_envelope_analysis.py`
-- [x] `tests/test_audio_envelope_store.py`
-- [x] `tests/test_audio_level_service.py`
-- [x] `tests/test_audio_tags.py`
-- [x] `tests/test_backend_selection.py`
-- [x] `tests/test_doctor.py`
-- [x] `tests/test_extract_changelog_release.py`
-- [x] `tests/test_focus_navigation_matrix.py`
-- [x] `tests/test_gui_parser.py`
-- [x] `tests/test_logging_config.py`
-- [x] `tests/test_metadata_debounce.py`
-- [x] `tests/test_metadata_service.py`
-- [x] `tests/test_non_blocking_paths.py`
-- [x] `tests/test_paths.py`
-- [x] `tests/test_performance_opt_in.py`
-- [x] `tests/test_player_service.py`
-- [x] `tests/test_playlist_editing_integration.py`
-- [x] `tests/test_playlist_store.py`
-- [x] `tests/test_playlist_viewport.py`
-- [x] `tests/test_release_prepare.py`
-- [x] `tests/test_runtime_config.py`
-- [x] `tests/test_slider_bar.py`
-- [x] `tests/test_smoke.py`
-- [x] `tests/test_startup_resilience.py`
-- [x] `tests/test_state_store.py`
-- [x] `tests/test_status_pane.py`
-- [x] `tests/test_time_format.py`
-- [x] `tests/test_track_info_panel.py`
-- [x] `tests/test_transport_controls.py`
-- [x] `tests/test_ui.py`
-- [x] `tests/test_visualizer_cover_ascii.py`
-- [x] `tests/test_visualizer_hackscope.py`
-- [x] `tests/test_visualizer_host.py`
-- [x] `tests/test_visualizer_matrix.py`
-- [x] `tests/test_visualizer_registry.py`
-- [x] `tests/test_visualizer_selection_integration.py`
-- [x] `tests/test_visualizer_vu.py`
-- [x] `tests/test_vlc_backend.py`
-- [x] `tests/test_vlc_backend_unit.py`
-- [x] `tools/extract_changelog_release.py`
-- [x] `tools/py_tree.py`
-- [x] `tools/release.py`
-- [x] `tools/release_prepare.py`
-- [x] `tools/tree_maker.py`
-- [x] `tools/vlc_smoke.py`
-
 ## Archived Completed Work
+
+### CR-001 Review Queue (Python + Supported Config/Setup Files) — Completed
+- Scope: Track completion of the file-by-file maintainer review queue defined by CR-000.
+- Outcome:
+  - All listed Python and Python-supporting config/setup files were reviewed and checked off.
+  - Active queue removed after full completion to keep backlog focused.
+- Status: `done`
+
+### T-033 CLI Help Metadata Footer
+- Spec Ref: Section `10` (CLI and process-level behavior), Section `11` (user docs parity)
+- Scope:
+  - Add project metadata to CLI help output:
+    - GitHub repository URL
+    - Current runtime platform
+    - Current version
+- Acceptance:
+  - `--help` output includes URL, platform, and version in a visible footer section.
+  - Parser behavior remains compatible across app/gui/cli entrypoints.
+- Tests:
+  - Parser help tests assert metadata footer content for app/gui/cli parser builders.
+- Status: `done`
 
 ### T-026 to T-032 Stabilization Tasks — Completed
 
