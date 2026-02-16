@@ -12,7 +12,11 @@ Execution tracker derived from `SPEC.md`.
 
 ## Active Backlog
 
-### CR-000 File-by-File Maintainer Review Campaign
+- No active tasks. Add new `todo` items here.
+
+## Archived Completed Work
+
+### CR-000 File-by-File Maintainer Review Campaign — Completed
 - Goal:
   - Review every Python file and Python-supporting config/setup file one at a time using the standardized reviewer prompt.
   - Keep scope to a single file per review pass unless cross-file test updates are required.
@@ -29,117 +33,21 @@ Execution tracker derived from `SPEC.md`.
   - Commit message format:
     - `review(<path>): apply maintainer review findings`
   - Mark the reviewed file entry as complete only after commit.
-- Status: `in_progress`
-
-### T-034 Actions -> Add files: Replace Text Modal with Tree File Picker
-- Spec Ref: `WF-05`, Section `4` (Focus contract), Section `5` (non-blocking IO)
-- Scope:
-  - Replace `PathInputModal` flow for `Add files...` with a keyboard-first tree selector modal.
-  - Support drive roots and recursive directory navigation.
-  - Support single-select and multi-select of files.
-  - Filter visible/selectable files to VLC-supported audio formats.
-- Implementation Decisions Needed:
-  - Create a new reusable modal (for example `FileTreePickerModal`) rather than extending `PathInputModal`.
-  - Keep directory listing/scanning off the Textual event loop (`run_blocking` / thread worker).
-  - Define one source of truth for allowed file types (shared constant/module), then use it for:
-    - picker filtering
-    - folder scan add flow
-    - validation before store insert
-  - On Windows, top-level picker must expose available drive letters explicitly.
-  - Selection UX contract:
-    - `space` toggles file selection
-    - `enter` confirms selection
-    - `escape` cancels without side effects
-    - no keyboard trap states; focus returns to playlist pane after close
-- Acceptance:
-  - User can browse drives/folders and add one or many files without typing raw paths.
-  - Non-audio files are not shown as selectable entries.
-  - Large directory navigation remains responsive.
-  - Modal focus indicator is visually clear at all times.
-- Tests:
-  - UI tests for tree navigation, multi-select, confirm/cancel behavior, and focus return.
-  - Unit tests for file-type filtering and path normalization.
-  - Non-blocking regression test for large directory listing path.
-- ADR/Docs:
-  - Evaluate whether `docs/adr/ADR-0002-keyboard-first-focus-contract.md` needs an update for tree-picker key contract.
-  - Update `docs/usage.md` with new add-files workflow.
 - Status: `done`
 
-### T-035 Actions -> Add folder: Tree Folder Picker with Directory-Only Selection
-- Spec Ref: `WF-05`, Section `4` (Focus contract), Section `5` (non-blocking IO)
+### T-034 to T-037 QoL Task Set — Completed
 - Scope:
-  - Replace `PathInputModal` flow for `Add folder...` with the same tree-picker UX family as `T-034`.
-  - Restrict selectable nodes to directories only.
-  - On confirm, scan selected directory recursively and add matching audio files.
-- Implementation Decisions Needed:
-  - Reuse `FileTreePickerModal` via mode flags (`files`, `folders`) to avoid duplicate UI logic.
-  - Keep folder scan behavior deterministic (stable ordering of discovered paths before insert).
-  - Reuse the same VLC-supported format filter source defined in `T-034`.
-  - Decide whether hidden/system directories are shown by default or toggled via explicit control.
+  - T-034 `Add files...` text modal replaced by keyboard-first tree picker with drive/root navigation and multi-file selection.
+  - T-035 `Add folder...` moved to tree picker folder-only mode with deterministic recursive scan/add.
+  - T-036 Added `pageup/pagedown` playlist navigation with clamped page movement.
+  - T-037 Completed focus visibility pass for interactive controls.
 - Acceptance:
-  - User can select a folder from a tree view without typing raw paths.
-  - File nodes cannot be confirmed in folder mode.
-  - Empty/no-match scans surface actionable non-fatal messaging.
-  - Focus is restored deterministically to playlist pane after close.
+  - Add files/folder workflows now use tree selection UX.
+  - Page navigation works from keyboard-first playlist flows.
+  - Focus visibility is clear across main interactive controls.
 - Tests:
-  - UI tests for folder-only selection constraints and cancel/confirm flows.
-  - Integration test for folder scan add behavior and stable ordering.
-  - Regression test for invalid/unreadable directories showing actionable error text.
-- ADR/Docs:
-  - If keybindings/focus semantics differ from existing contract, update `docs/adr/ADR-0002-keyboard-first-focus-contract.md`.
-  - Update `docs/usage.md` for folder picker behavior.
-- Status: `todo`
-
-### T-036 Keyboard QoL: Page Up / Page Down Playlist Navigation
-- Spec Ref: Section `4` (Keyboard contract), `WF-05`
-- Scope:
-  - Add `pageup` and `pagedown` bindings for faster playlist movement.
-  - Behavior should move viewport and cursor by one visible page with clamped bounds.
-- Implementation Decisions Needed:
-  - Bind at `PlaylistPane` level to avoid conflicts with global transport keys.
-  - Keep movement deterministic when near top/bottom bounds and when filtered search is active.
-  - Define exact cursor rule:
-    - cursor tracks target row after page move when rows exist
-    - cursor remains `None` on empty playlists
-- Acceptance:
-  - `pageup`/`pagedown` consistently move by viewport height (or nearest valid bound).
-  - No regression to existing `up/down` and search focus behavior.
-  - Key handling remains keyboard-first with no trap/focus loss.
-- Tests:
-  - Unit/UI tests for page navigation across small/large playlists and boundary clamps.
-  - Focus-routing regression tests ensuring find input still consumes text input keys correctly.
-- ADR/Docs:
-  - Update keyboard contract docs (`SPEC.md` or docs mirror) to include new bindings once implemented.
-- Status: `todo`
-
-### T-037 Focus Visibility Pass: Clear Highlight for All Interactive UI Elements
-- Spec Ref: Section `4` (Focus contract: visible indicator required), `WF-04`
-- Scope:
-  - Ensure every keyboard-focusable control has a clear visual focus state (not only playlist/find).
-  - Cover at minimum:
-    - actions button/menu
-    - reorder buttons
-    - transport controls
-    - modal buttons/inputs
-    - right-pane interactive widgets (where focusable)
-- Implementation Decisions Needed:
-  - Establish one consistent focus style token set (border/background/foreground) and apply across widgets.
-  - Audit custom widgets (`TextButton`, `SliderBar`, popup/menu widgets, modal controls) for missing `:focus` CSS.
-  - Keep focus contrast readable against current theme.
-  - Ensure mouse interactions do not leave hidden focus states or unrecoverable focus targets.
-- Acceptance:
-  - Tabbing/keyboard navigation always shows the active focused control.
-  - Focus style is visually consistent and discoverable across main UI and modal/popup contexts.
-  - No regressions to current keyboard workflows.
-- Tests:
-  - Focus navigation matrix updates asserting deterministic focus transitions across controls.
-  - UI snapshot/assertion tests for focus class/style hooks on key widgets.
-- ADR/Docs:
-  - Update `docs/adr/ADR-0002-keyboard-first-focus-contract.md` if focus visibility rules are refined beyond current wording.
-  - Update `docs/usage.md` keyboard/focus guidance if tab flow changes.
-- Status: `todo`
-
-## Archived Completed Work
+  - UI and integration coverage updated for picker flows, folder selection constraints, page navigation, and focus-style hooks.
+- Status: `done`
 
 ### CR-001 Review Queue (Python + Supported Config/Setup Files) — Completed
 - Scope: Track completion of the file-by-file maintainer review queue defined by CR-000.

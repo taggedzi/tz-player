@@ -449,6 +449,24 @@ def test_file_tree_picker_submit_returns_selected_paths(tmp_path) -> None:
     assert dismissed["value"] == [song, song_b]
 
 
+def test_file_tree_picker_folder_mode_submit_returns_selected_folder(tmp_path) -> None:
+    folder_a = tmp_path / "music_a"
+    folder_a.mkdir(parents=True, exist_ok=True)
+    folder_b = tmp_path / "music_b"
+    folder_b.mkdir(parents=True, exist_ok=True)
+
+    modal = FileTreePickerModal("Add folder", mode="folders")
+    modal._selected_paths = {folder_b}  # noqa: SLF001
+    dismissed: dict[str, list[Path] | None] = {"value": None}
+
+    def fake_dismiss(result: list[Path] | None) -> None:
+        dismissed["value"] = result
+
+    modal.dismiss = fake_dismiss  # type: ignore[assignment]
+    modal.action_submit()
+    assert dismissed["value"] == [folder_b]
+
+
 def test_file_tree_picker_directory_listing_filters_audio(tmp_path) -> None:
     root = tmp_path / "library"
     root.mkdir()
@@ -462,6 +480,17 @@ def test_file_tree_picker_directory_listing_filters_audio(tmp_path) -> None:
     assert "subdir/" in labels
     assert "a.flac" in labels
     assert "readme.txt" not in labels
+
+
+def test_file_tree_picker_folder_mode_lists_only_directories(tmp_path) -> None:
+    root = tmp_path / "library"
+    root.mkdir()
+    (root / "subdir").mkdir()
+    (root / "a.flac").write_bytes(b"")
+    entries = _list_directory_entries(root, mode="folders")
+    labels = [entry.label for entry in entries]
+    assert "subdir/" in labels
+    assert "a.flac" not in labels
 
 
 def test_file_tree_picker_roots_returns_non_empty() -> None:

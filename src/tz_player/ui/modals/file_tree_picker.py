@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
@@ -24,7 +25,7 @@ class TreeEntry:
 
 
 class FileTreePickerModal(ModalScreen):
-    """Modal for tree navigation and multi-file selection."""
+    """Modal for tree navigation and file/folder selection."""
 
     BINDINGS = [
         ("escape", "cancel", "Cancel"),
@@ -35,16 +36,23 @@ class FileTreePickerModal(ModalScreen):
         ("ctrl+s", "submit", "Add"),
     ]
 
-    def __init__(self, title: str = "Add files") -> None:
+    def __init__(
+        self,
+        title: str = "Add files",
+        *,
+        mode: Literal["files", "folders"] = "files",
+    ) -> None:
         super().__init__()
         self._title = title
+        self._mode = mode
         self._current_dir: Path | None = None
         self._entries: list[TreeEntry] = []
         self._selected_paths: set[Path] = set()
         self._path_label = Label("", id="file-tree-current-path")
         self._hint_label = Label("", id="file-tree-hint")
         self._list = OptionList(id="file-tree-options")
-        self._add_button = Button("Add selected", id="add")
+        button_text = "Add selected" if mode == "files" else "Use selected folder"
+        self._add_button = Button(button_text, id="add")
 
     def compose(self) -> ComposeResult:
         yield Vertical(
@@ -82,11 +90,20 @@ class FileTreePickerModal(ModalScreen):
         if entry.is_dir:
             await self._load_dir(entry.path)
             return
+        if self._mode == "folders":
+            return
         self._toggle_path(entry.path)
 
     async def action_toggle_selected(self) -> None:
         entry = self._highlighted_entry()
-        if entry is None or entry.is_dir:
+        if entry is None:
+            return
+        if self._mode == "files":
+            if entry.is_dir:
+                return
+            self._toggle_path(entry.path)
+            return
+        if not entry.is_dir or entry.label == "..":
             return
         self._toggle_path(entry.path)
 
@@ -118,7 +135,9 @@ class FileTreePickerModal(ModalScreen):
 
     async def _load_dir(self, directory: Path) -> None:
         self._current_dir = directory
-        self._entries = await run_blocking(_list_directory_entries, directory)
+        self._entries = await run_blocking(
+            _list_directory_entries, directory, self._mode
+        )
         self._refresh_options()
         self._update_labels()
 
@@ -138,13 +157,17 @@ class FileTreePickerModal(ModalScreen):
             "Drives / roots" if self._current_dir is None else str(self._current_dir)
         )
         selected = len(self._selected_paths)
+        if self._mode == "files":
+            hint = "Selected: {selected} | Enter=open/toggle | Space=toggle | Ctrl+S=add | Ctrl+R=drives"
+        else:
+            hint = "Selected folders: {selected} | Enter=open | Space=select folder | Ctrl+S=use | Ctrl+R=drives"
         self._path_label.update(f"Location: {location}")
-        self._hint_label.update(
-            f"Selected: {selected} | Enter=open/toggle | Space=toggle | Ctrl+S=add | Ctrl+R=drives"
-        )
+        self._hint_label.update(hint.format(selected=selected))
 
     def _toggle_path(self, path: Path) -> None:
-        if path in self._selected_paths:
+        if self._mode == "folders":
+            self._selected_paths = {path} if path not in self._selected_paths else set()
+        elif path in self._selected_paths:
             self._selected_paths.remove(path)
         else:
             self._selected_paths.add(path)
@@ -162,7 +185,8 @@ class FileTreePickerModal(ModalScreen):
 
 def _entry_prompt(entry: TreeEntry, *, selected: bool) -> str:
     if entry.is_dir:
-        return f"[DIR] {entry.label}"
+        marker = "[x]" if selected else "[ ]"
+        return f"{marker} [DIR] {entry.label}"
     marker = "[x]" if selected else "[ ]"
     return f"{marker} {entry.label}"
 
@@ -181,7 +205,9 @@ def _list_roots() -> list[TreeEntry]:
     ]
 
 
-def _list_directory_entries(directory: Path) -> list[TreeEntry]:
+def _list_directory_entries(
+    directory: Path, mode: Literal["files", "folders"] = "files"
+) -> list[TreeEntry]:
     entries: list[TreeEntry] = []
     if not directory.exists() or not directory.is_dir():
         return entries
@@ -202,6 +228,8 @@ def _list_directory_entries(directory: Path) -> list[TreeEntry]:
                             is_dir=True,
                         )
                     )
+                    continue
+                if mode == "folders":
                     continue
                 if not item.is_file(follow_symlinks=False):
                     continue

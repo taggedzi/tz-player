@@ -195,9 +195,8 @@ def test_add_folder_invalid_path_shows_actionable_error(tmp_path, monkeypatch) -
             file_path.write_bytes(b"")
             shown_errors: list[str] = []
 
-            async def prompt_path(_title: str, placeholder: str = "") -> str:
-                assert placeholder
-                return str(file_path)
+            async def prompt_folder() -> Path:
+                return file_path
 
             async def show_error(message: str) -> None:
                 shown_errors.append(message)
@@ -209,7 +208,7 @@ def test_add_folder_invalid_path_shows_actionable_error(tmp_path, monkeypatch) -
                 tasks.append(task)
                 return task
 
-            pane._prompt_path = prompt_path  # type: ignore[assignment]
+            pane._prompt_folder = prompt_folder  # type: ignore[assignment]
             pane._show_error = show_error  # type: ignore[assignment]
             pane.run_worker = run_worker  # type: ignore[assignment]
             await app.on_actions_menu_selected(ActionsMenuSelected("add_folder"))
@@ -221,6 +220,50 @@ def test_add_folder_invalid_path_shows_actionable_error(tmp_path, monkeypatch) -
             assert "Folder path is invalid or not a directory." in shown_errors[-1]
             assert "Likely cause:" in shown_errors[-1]
             assert "Next step:" in shown_errors[-1]
+            app.exit()
+
+    _run(run_app())
+
+
+def test_add_folder_tree_picker_scans_and_updates_playlist(
+    tmp_path, monkeypatch
+) -> None:
+    _setup_dirs(tmp_path, monkeypatch)
+    app = TzPlayerApp(auto_init=False)
+
+    async def run_app() -> None:
+        async with app.run_test():
+            await asyncio.sleep(0)
+            await app.store.initialize()
+            playlist_id = await app.store.ensure_playlist("Default")
+            pane = app.query_one(PlaylistPane)
+            await pane.configure(app.store, playlist_id, None)
+
+            folder = tmp_path / "music"
+            folder.mkdir(parents=True, exist_ok=True)
+            (folder / "a.mp3").write_bytes(b"")
+            (folder / "b.flac").write_bytes(b"")
+            (folder / "ignore.txt").write_text("x", encoding="utf-8")
+
+            async def prompt_folder() -> Path:
+                return folder
+
+            tasks = []
+
+            def run_worker(coro, exclusive=False):  # type: ignore[no-untyped-def]
+                task = asyncio.create_task(coro)
+                tasks.append(task)
+                return task
+
+            pane._prompt_folder = prompt_folder  # type: ignore[assignment]
+            pane.run_worker = run_worker  # type: ignore[assignment]
+            await app.on_actions_menu_selected(ActionsMenuSelected("add_folder"))
+            if tasks:
+                await asyncio.gather(*tasks)
+
+            assert await app.store.count(playlist_id) == 2
+            rows = await app.store.fetch_window(playlist_id, 0, 10)
+            assert [row.path.name for row in rows] == ["a.mp3", "b.flac"]
             app.exit()
 
     _run(run_app())
