@@ -82,10 +82,6 @@ class TzPlayerApp(App):
         layout: vertical;
     }
 
-    *:focus {
-        outline: tall $accent;
-    }
-
     #main {
         height: 1fr;
     }

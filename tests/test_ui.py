@@ -77,7 +77,6 @@ def test_app_mounts(tmp_path, monkeypatch) -> None:
 
 def test_focus_style_hooks_exist_for_interactive_widgets() -> None:
     app_css = TzPlayerApp.CSS
-    assert "*:focus" in app_css
     assert "#playlist-pane:focus-within" in app_css
     assert "#playlist-find:focus" in app_css
     assert "#playlist-viewport:focus" in app_css
