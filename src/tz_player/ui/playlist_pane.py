@@ -29,7 +29,6 @@ from tz_player.ui.actions_menu import (
 from tz_player.ui.modals.confirm import ConfirmModal
 from tz_player.ui.modals.error import ErrorModal
 from tz_player.ui.modals.file_tree_picker import FileTreePickerModal
-from tz_player.ui.modals.path_input import PathInputModal
 from tz_player.ui.playlist_viewport import PlaylistViewport
 from tz_player.ui.text_button import TextButton, TextButtonPressed
 from tz_player.ui.transport_controls import (
@@ -761,10 +760,9 @@ class PlaylistPane(Static):
     async def _add_folder(self) -> None:
         if self.store is None:
             return
-        result = await self._prompt_path("Add folder", placeholder="C:\\music")
-        if not result:
+        folder = await self._prompt_folder()
+        if folder is None:
             return
-        folder = Path(result).expanduser()
         if not folder.exists() or not folder.is_dir():
             await self._show_error(
                 "Folder path is invalid or not a directory.\n"
@@ -879,11 +877,6 @@ class PlaylistPane(Static):
         result = await self.app.push_screen_wait(ConfirmModal(message))
         return bool(result)
 
-    async def _prompt_path(self, title: str, placeholder: str = "") -> str | None:
-        return await self.app.push_screen_wait(
-            PathInputModal(title, placeholder=placeholder)
-        )
-
     async def _prompt_files(self) -> list[Path] | None:
         result: object = await self.app.push_screen_wait(
             FileTreePickerModal("Add files")
@@ -893,6 +886,15 @@ class PlaylistPane(Static):
         if not isinstance(result, list):
             return None
         return [Path(path) for path in result]
+
+    async def _prompt_folder(self) -> Path | None:
+        result: object = await self.app.push_screen_wait(
+            FileTreePickerModal("Add folder", mode="folders")
+        )
+        if result is None or not isinstance(result, list) or not result:
+            return None
+        first = result[0]
+        return first if isinstance(first, Path) else Path(first)
 
     async def _show_error(self, message: str) -> None:
         self.app.push_screen(ErrorModal(message))
@@ -928,7 +930,7 @@ def _scan_media_files(folder: Path) -> list[Path]:
     for path in folder.rglob("*"):
         if path.is_file() and is_supported_audio_file(path):
             files.append(path)
-    return files
+    return sorted(files, key=lambda path: str(path).lower())
 
 
 def _needs_metadata(row: PlaylistRow) -> bool:

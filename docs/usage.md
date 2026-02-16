@@ -110,6 +110,11 @@ Add files picker:
 - Only supported audio files are listed.
 - `space` toggles file selection, `enter` opens folders (or toggles file), and `ctrl+s` confirms selected files.
 
+Add folder picker:
+- `Actions -> Add folder...` opens the same tree navigation modal in folder-selection mode.
+- Only folders are selectable.
+- `space` selects the highlighted folder and `ctrl+s` confirms it for recursive media scan/add.
+
 ## Troubleshooting
 
 Startup failure contract:

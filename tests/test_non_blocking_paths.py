@@ -68,9 +68,8 @@ def test_add_folder_scans_via_run_blocking(monkeypatch, tmp_path) -> None:
         calls.append((func, args))
         return func(*args, **kwargs)
 
-    async def fake_prompt_path(title: str, placeholder: str = "") -> str:
-        del title, placeholder
-        return str(folder)
+    async def fake_prompt_folder() -> Path:
+        return folder
 
     async def fake_run_store_action(label: str, func, *args) -> None:  # type: ignore[no-untyped-def]
         added["label"] = label
@@ -78,7 +77,7 @@ def test_add_folder_scans_via_run_blocking(monkeypatch, tmp_path) -> None:
         added["args"] = args
 
     monkeypatch.setattr(playlist_pane_module, "run_blocking", fake_run_blocking)
-    pane._prompt_path = fake_prompt_path  # type: ignore[assignment]
+    pane._prompt_folder = fake_prompt_folder  # type: ignore[assignment]
     pane._run_store_action = fake_run_store_action  # type: ignore[assignment]
 
     _run(pane._add_folder())

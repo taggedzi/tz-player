@@ -88,7 +88,7 @@ Execution tracker derived from `SPEC.md`.
 - ADR/Docs:
   - If keybindings/focus semantics differ from existing contract, update `docs/adr/ADR-0002-keyboard-first-focus-contract.md`.
   - Update `docs/usage.md` for folder picker behavior.
-- Status: `todo`
+- Status: `done`
 
 ### T-036 Keyboard QoL: Page Up / Page Down Playlist Navigation
 - Spec Ref: Section `4` (Keyboard contract), `WF-05`
