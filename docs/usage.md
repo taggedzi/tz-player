@@ -55,6 +55,7 @@ Theme:
 
 Current keys:
 - `up` / `down`: move cursor up/down in the playlist
+- `pageup` / `pagedown`: move cursor and viewport by one playlist page
 - `shift+up` / `shift+down`: reorder selection up/down
 - `v`: toggle selection for the current row
 - `delete`: remove selected tracks (confirm)

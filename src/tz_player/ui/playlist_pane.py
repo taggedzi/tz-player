@@ -65,6 +65,8 @@ class PlaylistPane(Static):
     BINDINGS = [
         ("down", "cursor_down", "Down"),
         ("up", "cursor_up", "Up"),
+        ("pagedown", "cursor_page_down", "Page down"),
+        ("pageup", "cursor_page_up", "Page up"),
         ("enter", "play_selected", "Play"),
         ("shift+up", "move_selection_up", "Move up"),
         ("shift+down", "move_selection_down", "Move down"),
@@ -573,6 +575,12 @@ class PlaylistPane(Static):
     async def action_cursor_up(self) -> None:
         await self._move_cursor(-1)
 
+    async def action_cursor_page_down(self) -> None:
+        await self._move_cursor_by_page(1)
+
+    async def action_cursor_page_up(self) -> None:
+        await self._move_cursor_by_page(-1)
+
     async def action_play_selected(self) -> None:
         app = cast("TzPlayerApp", self.app)
         self.run_worker(app.action_play_selected(), exclusive=True)
@@ -616,6 +624,30 @@ class PlaylistPane(Static):
             self.cursor_item_id = new_ids[pinned_idx]
             self._update_viewport()
             await self._refresh_transport_controls()
+
+    async def _move_cursor_by_page(self, direction: Literal[-1, 1]) -> None:
+        if not self._rows:
+            return
+        step = max(1, self.limit)
+        item_ids = [row.item_id for row in self._rows]
+        if self.cursor_item_id in item_ids:
+            pinned_idx = item_ids.index(self.cursor_item_id)
+        else:
+            pinned_idx = 0 if direction > 0 else len(item_ids) - 1
+        new_offset = self._clamp_offset(self.window_offset + (direction * step))
+        if new_offset == self.window_offset:
+            return
+        self.window_offset = new_offset
+        await self._refresh_window()
+        if not self._rows:
+            self.cursor_item_id = None
+            self._update_viewport()
+            await self._refresh_transport_controls()
+            return
+        new_ids = [row.item_id for row in self._rows]
+        self.cursor_item_id = new_ids[min(pinned_idx, len(new_ids) - 1)]
+        self._update_viewport()
+        await self._refresh_transport_controls()
 
     async def _scroll(self, delta: int) -> None:
         if self.total_count == 0:
