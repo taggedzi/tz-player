@@ -112,6 +112,20 @@ class TzPlayerApp(App):
         overflow: hidden;
     }
 
+    #playlist-actions:focus,
+    #reorder-up:focus,
+    #reorder-down:focus,
+    #repeat-indicator:focus,
+    #shuffle-indicator:focus,
+    #transport-prev:focus,
+    #transport-play:focus,
+    #transport-stop:focus,
+    #transport-next:focus {
+        background: $accent;
+        color: $background;
+        text-style: bold;
+    }
+
     #reorder-up, #reorder-down {
         width: 2;
         height: 1;
