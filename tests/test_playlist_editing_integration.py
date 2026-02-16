@@ -138,9 +138,7 @@ def test_remove_selected_respects_confirm_and_cancel(tmp_path, monkeypatch) -> N
     _run(run_app())
 
 
-def test_add_files_action_parses_paths_and_updates_playlist(
-    tmp_path, monkeypatch
-) -> None:
+def test_add_files_action_tree_picker_updates_playlist(tmp_path, monkeypatch) -> None:
     _setup_dirs(tmp_path, monkeypatch)
     app = TzPlayerApp(auto_init=False)
 
@@ -157,9 +155,8 @@ def test_add_files_action_parses_paths_and_updates_playlist(
             file_a.write_bytes(b"")
             file_b.write_bytes(b"")
 
-            async def prompt_path(_title: str, placeholder: str = "") -> str:
-                assert placeholder
-                return f'"{file_a}";\n{file_b}'
+            async def prompt_files() -> list[Path]:
+                return [file_a, file_b]
 
             tasks = []
 
@@ -168,7 +165,7 @@ def test_add_files_action_parses_paths_and_updates_playlist(
                 tasks.append(task)
                 return task
 
-            pane._prompt_path = prompt_path  # type: ignore[assignment]
+            pane._prompt_files = prompt_files  # type: ignore[assignment]
             pane.run_worker = run_worker  # type: ignore[assignment]
             await app.on_actions_menu_selected(ActionsMenuSelected("add_files"))
             if tasks:

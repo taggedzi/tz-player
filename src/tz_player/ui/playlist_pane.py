@@ -18,6 +18,7 @@ from tz_player.events import (
     PlaylistRowDoubleClicked,
     PlaylistScrollRequested,
 )
+from tz_player.media_formats import is_supported_audio_file
 from tz_player.services.playlist_store import PlaylistRow, PlaylistStore
 from tz_player.ui.actions_menu import (
     ActionsMenuButton,
@@ -27,6 +28,7 @@ from tz_player.ui.actions_menu import (
 )
 from tz_player.ui.modals.confirm import ConfirmModal
 from tz_player.ui.modals.error import ErrorModal
+from tz_player.ui.modals.file_tree_picker import FileTreePickerModal
 from tz_player.ui.modals.path_input import PathInputModal
 from tz_player.ui.playlist_viewport import PlaylistViewport
 from tz_player.ui.text_button import TextButton, TextButtonPressed
@@ -45,7 +47,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-MEDIA_EXTENSIONS = {".mp3", ".flac", ".wav", ".m4a", ".ogg"}
 DEBUG_VIEWPORT = False
 
 
@@ -747,12 +748,12 @@ class PlaylistPane(Static):
     async def _add_files(self) -> None:
         if self.store is None:
             return
-        result = await self._prompt_path(
-            "Add files (separate with ';')", placeholder="C:\\music\\a.mp3; D:\\b.flac"
-        )
+        result = await self._prompt_files()
         if not result:
             return
-        paths = _parse_paths(result)
+        paths = [
+            path for path in result if path.exists() and is_supported_audio_file(path)
+        ]
         if not paths:
             return
         await self._run_store_action("add files", self.store.add_tracks, paths)
@@ -883,6 +884,16 @@ class PlaylistPane(Static):
             PathInputModal(title, placeholder=placeholder)
         )
 
+    async def _prompt_files(self) -> list[Path] | None:
+        result: object = await self.app.push_screen_wait(
+            FileTreePickerModal("Add files")
+        )
+        if result is None:
+            return None
+        if not isinstance(result, list):
+            return None
+        return [Path(path) for path in result]
+
     async def _show_error(self, message: str) -> None:
         self.app.push_screen(ErrorModal(message))
 
@@ -910,17 +921,12 @@ class PlaylistPane(Static):
             self._metadata_pending.difference_update(track_ids)
 
 
-def _parse_paths(text: str) -> list[Path]:
-    parts = [part.strip().strip('"') for part in text.replace("\n", ";").split(";")]
-    return [Path(part) for part in parts if part]
-
-
 def _scan_media_files(folder: Path) -> list[Path]:
     if not folder.exists():
         return []
     files: list[Path] = []
     for path in folder.rglob("*"):
-        if path.is_file() and path.suffix.lower() in MEDIA_EXTENSIONS:
+        if path.is_file() and is_supported_audio_file(path):
             files.append(path)
     return files
 

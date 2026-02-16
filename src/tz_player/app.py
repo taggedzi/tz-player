@@ -206,6 +206,24 @@ class TzPlayerApp(App):
         width: 60%;
     }
 
+    #file-tree-current-path {
+        color: $text-muted;
+        height: auto;
+    }
+
+    #file-tree-hint {
+        color: $text-muted;
+        height: auto;
+        margin-bottom: 1;
+    }
+
+    #file-tree-options {
+        height: 12;
+        min-height: 8;
+        border: solid $secondary;
+        margin-bottom: 1;
+    }
+
     """
     BINDINGS = [
         ("escape", "dismiss_modal", "Dismiss"),
