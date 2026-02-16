@@ -91,6 +91,10 @@ class TzPlayerApp(App):
         min-width: 50%;
     }
 
+    #playlist-pane:focus-within {
+        background: $boost;
+    }
+
     #playlist-top {
         height: 1;
         content-align: left middle;
@@ -106,6 +110,20 @@ class TzPlayerApp(App):
         margin-right: 1;
         text-wrap: nowrap;
         overflow: hidden;
+    }
+
+    #playlist-actions:focus,
+    #reorder-up:focus,
+    #reorder-down:focus,
+    #repeat-indicator:focus,
+    #shuffle-indicator:focus,
+    #transport-prev:focus,
+    #transport-play:focus,
+    #transport-stop:focus,
+    #transport-next:focus {
+        background: $accent;
+        color: $background;
+        text-style: bold;
     }
 
     #reorder-up, #reorder-down {
@@ -124,8 +142,9 @@ class TzPlayerApp(App):
     }
 
     #playlist-find:focus {
-        background: $boost;
+        background: $primary;
         color: $text;
+        text-style: bold;
     }
 
     #playlist-viewport {
@@ -134,7 +153,19 @@ class TzPlayerApp(App):
     }
 
     #playlist-viewport:focus {
-        background: $boost;
+        background: $primary;
+    }
+
+    Input:focus {
+        background: $primary;
+        color: $text;
+        text-style: bold;
+    }
+
+    Button:focus {
+        background: $accent;
+        color: $background;
+        text-style: bold;
     }
 
     #right-pane {

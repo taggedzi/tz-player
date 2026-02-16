@@ -27,7 +27,9 @@ class SliderBar(Widget):
         height: 1;
     }
     SliderBar:focus {
-        background: $boost;
+        background: $accent;
+        color: $background;
+        text-style: bold;
     }
     """
 

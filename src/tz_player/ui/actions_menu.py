@@ -49,6 +49,17 @@ class ActionsMenuPopup(Widget):
         text-wrap: nowrap;
         overflow: hidden;
     }
+
+    #actions-menu:focus {
+        border: tall $accent;
+        background: $boost;
+    }
+
+    #actions-menu > .option-list--option-highlighted {
+        background: $accent;
+        color: $background;
+        text-style: bold;
+    }
     """
 
     def __init__(self, anchor: Region, **kwargs) -> None:
