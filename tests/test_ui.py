@@ -20,6 +20,11 @@ from tz_player.ui.actions_menu import (
 )
 from tz_player.ui.modals.confirm import ConfirmModal
 from tz_player.ui.modals.error import ErrorModal
+from tz_player.ui.modals.file_tree_picker import (
+    FileTreePickerModal,
+    _list_directory_entries,
+    _list_roots,
+)
 from tz_player.ui.modals.path_input import PathInputModal
 from tz_player.ui.playlist_pane import PlaylistPane
 from tz_player.ui.playlist_viewport import PlaylistViewport
@@ -397,6 +402,72 @@ def test_path_input_modal_enter_submits_trimmed_value() -> None:
         assert app.result == "a.mp3"
 
     _run(run_app())
+
+
+def test_file_tree_picker_escape_dismisses_none() -> None:
+    class PickerApp(App):
+        result: list[Path] | None | str = "unset"
+
+        def _on_result(self, result: list[Path] | None) -> None:
+            self.result = result
+
+        async def on_mount(self) -> None:
+            self.push_screen(FileTreePickerModal("Add files"), callback=self._on_result)
+
+    app = PickerApp()
+
+    async def run_app() -> None:
+        async with app.run_test() as pilot:
+            await asyncio.sleep(0.1)
+            await pilot.press("escape")
+            for _ in range(20):
+                if app.result != "unset":
+                    break
+                await asyncio.sleep(0.01)
+            app.exit()
+        assert app.result is None
+
+    _run(run_app())
+
+
+def test_file_tree_picker_submit_returns_selected_paths(tmp_path) -> None:
+    root = tmp_path / "music"
+    root.mkdir(parents=True, exist_ok=True)
+    song = root / "song.mp3"
+    song.write_bytes(b"")
+    song_b = root / "song_b.flac"
+    song_b.write_bytes(b"")
+    modal = FileTreePickerModal("Add files")
+    modal._selected_paths = {song_b, song}  # noqa: SLF001
+    dismissed: dict[str, list[Path] | None] = {"value": None}
+
+    def fake_dismiss(result: list[Path] | None) -> None:
+        dismissed["value"] = result
+
+    modal.dismiss = fake_dismiss  # type: ignore[assignment]
+    modal.action_submit()
+    assert dismissed["value"] == [song, song_b]
+
+
+def test_file_tree_picker_directory_listing_filters_audio(tmp_path) -> None:
+    root = tmp_path / "library"
+    root.mkdir()
+    (root / "subdir").mkdir()
+    song = root / "a.flac"
+    song.write_bytes(b"")
+    text_file = root / "readme.txt"
+    text_file.write_text("x", encoding="utf-8")
+    entries = _list_directory_entries(root)
+    labels = [entry.label for entry in entries]
+    assert "subdir/" in labels
+    assert "a.flac" in labels
+    assert "readme.txt" not in labels
+
+
+def test_file_tree_picker_roots_returns_non_empty() -> None:
+    roots = _list_roots()
+    assert roots
+    assert all(entry.is_dir for entry in roots)
 
 
 def test_playlist_pane_refresh_with_tracks(tmp_path) -> None:

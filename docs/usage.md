@@ -105,6 +105,11 @@ Find/filter behavior:
 - Escape priority is deterministic: popup/modal dismisses first, then Find exits/clears.
 - Playback keys are available from main UI focus states (playlist pane, viewport, footer controls).
 
+Add files picker:
+- `Actions -> Add files...` opens a tree picker with drive/root navigation.
+- Only supported audio files are listed.
+- `space` toggles file selection, `enter` opens folders (or toggles file), and `ctrl+s` confirms selected files.
+
 ## Troubleshooting
 
 Startup failure contract:

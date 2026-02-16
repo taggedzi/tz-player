@@ -63,7 +63,7 @@ Execution tracker derived from `SPEC.md`.
 - ADR/Docs:
   - Evaluate whether `docs/adr/ADR-0002-keyboard-first-focus-contract.md` needs an update for tree-picker key contract.
   - Update `docs/usage.md` with new add-files workflow.
-- Status: `todo`
+- Status: `done`
 
 ### T-035 Actions -> Add folder: Tree Folder Picker with Directory-Only Selection
 - Spec Ref: `WF-05`, Section `4` (Focus contract), Section `5` (non-blocking IO)
