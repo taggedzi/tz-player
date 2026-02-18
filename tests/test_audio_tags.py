@@ -11,6 +11,7 @@ from tz_player.services.audio_tags import read_audio_tags
 
 
 def _write_wave(path: Path, duration_sec: float = 0.5, framerate: int = 44100) -> None:
+    """Create deterministic WAV fixture for metadata fallback assertions."""
     frames = int(duration_sec * framerate)
     with wave.open(str(path), "wb") as wave_file:
         wave_file.setnchannels(2)

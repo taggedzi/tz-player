@@ -71,48 +71,48 @@ Status values:
 
 - [x] `done` `tests/conftest.py`
 - [x] `done` `tests/test_app_envelope_analysis.py`
-- [ ] `todo` `tests/test_app_parser.py`
-- [ ] `todo` `tests/test_app_speed_limits.py`
+- [x] `done` `tests/test_app_parser.py`
+- [x] `done` `tests/test_app_speed_limits.py`
 - [x] `done` `tests/test_audio_envelope_analysis.py`
-- [ ] `todo` `tests/test_audio_envelope_store.py`
+- [x] `done` `tests/test_audio_envelope_store.py`
 - [x] `done` `tests/test_audio_level_service.py`
-- [ ] `todo` `tests/test_audio_tags.py`
-- [ ] `todo` `tests/test_backend_selection.py`
-- [ ] `todo` `tests/test_cli_parser.py`
-- [ ] `todo` `tests/test_doctor.py`
-- [ ] `todo` `tests/test_extract_changelog_release.py`
+- [x] `done` `tests/test_audio_tags.py`
+- [x] `done` `tests/test_backend_selection.py`
+- [x] `done` `tests/test_cli_parser.py`
+- [x] `done` `tests/test_doctor.py`
+- [x] `done` `tests/test_extract_changelog_release.py`
 - [x] `done` `tests/test_focus_navigation_matrix.py`
-- [ ] `todo` `tests/test_gui_parser.py`
+- [x] `done` `tests/test_gui_parser.py`
 - [x] `done` `tests/test_logging_config.py`
 - [x] `done` `tests/test_metadata_debounce.py`
 - [x] `done` `tests/test_metadata_service.py`
 - [x] `done` `tests/test_non_blocking_paths.py`
-- [ ] `todo` `tests/test_paths.py`
+- [x] `done` `tests/test_paths.py`
 - [x] `done` `tests/test_performance_opt_in.py`
 - [x] `done` `tests/test_player_service.py`
-- [ ] `todo` `tests/test_playlist_editing_integration.py`
+- [x] `done` `tests/test_playlist_editing_integration.py`
 - [x] `done` `tests/test_playlist_store.py`
 - [x] `done` `tests/test_playlist_viewport.py`
-- [ ] `todo` `tests/test_release_prepare.py`
-- [ ] `todo` `tests/test_runtime_config.py`
-- [ ] `todo` `tests/test_slider_bar.py`
-- [ ] `todo` `tests/test_smoke.py`
+- [x] `done` `tests/test_release_prepare.py`
+- [x] `done` `tests/test_runtime_config.py`
+- [x] `done` `tests/test_slider_bar.py`
+- [x] `done` `tests/test_smoke.py`
 - [x] `done` `tests/test_startup_resilience.py`
-- [ ] `todo` `tests/test_state_store.py`
-- [ ] `todo` `tests/test_status_pane.py`
-- [ ] `todo` `tests/test_time_format.py`
-- [ ] `todo` `tests/test_track_info_panel.py`
-- [ ] `todo` `tests/test_transport_controls.py`
+- [x] `done` `tests/test_state_store.py`
+- [x] `done` `tests/test_status_pane.py`
+- [x] `done` `tests/test_time_format.py`
+- [x] `done` `tests/test_track_info_panel.py`
+- [x] `done` `tests/test_transport_controls.py`
 - [x] `done` `tests/test_ui.py`
-- [ ] `todo` `tests/test_visualizer_basic.py`
+- [x] `done` `tests/test_visualizer_basic.py`
 - [x] `done` `tests/test_visualizer_cover_ascii.py`
-- [ ] `todo` `tests/test_visualizer_hackscope.py`
+- [x] `done` `tests/test_visualizer_hackscope.py`
 - [x] `done` `tests/test_visualizer_host.py`
-- [ ] `todo` `tests/test_visualizer_matrix.py`
+- [x] `done` `tests/test_visualizer_matrix.py`
 - [x] `done` `tests/test_visualizer_registry.py`
 - [x] `done` `tests/test_visualizer_selection_integration.py`
-- [ ] `todo` `tests/test_visualizer_vu.py`
-- [ ] `todo` `tests/test_vlc_backend.py`
+- [x] `done` `tests/test_visualizer_vu.py`
+- [x] `done` `tests/test_vlc_backend.py`
 - [x] `done` `tests/test_vlc_backend_unit.py`
 
 ## Tooling Scripts (`tools/`)

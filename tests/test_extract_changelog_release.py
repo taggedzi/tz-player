@@ -1,3 +1,5 @@
+"""Tests for changelog release-section extraction utility script."""
+
 from __future__ import annotations
 
 import importlib.util
@@ -7,6 +9,7 @@ import pytest
 
 
 def _load_extract_release_section():
+    """Dynamically load tool module function under test from `tools/`."""
     module_path = (
         Path(__file__).resolve().parents[1] / "tools" / "extract_changelog_release.py"
     )

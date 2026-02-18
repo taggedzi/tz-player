@@ -12,16 +12,20 @@ from tz_player.ui.playlist_pane import PlaylistPane
 
 
 class FakeAppDirs:
+    """Path-dir stub isolating app state/data into temporary directories."""
+
     def __init__(self, data_dir: Path, config_dir: Path) -> None:
         self.user_data_dir = str(data_dir)
         self.user_config_dir = str(config_dir)
 
 
 def _run(coro):
+    """Run async UI integration scenario from sync test body."""
     return asyncio.run(coro)
 
 
 def _setup_dirs(tmp_path, monkeypatch) -> None:
+    """Patch path resolution to use test-local AppDirs values."""
     data_dir = tmp_path / "data"
     config_dir = tmp_path / "config"
 
@@ -38,6 +42,7 @@ async def _configure_playlist(
     *,
     names: list[str],
 ) -> tuple[PlaylistPane, int]:
+    """Initialize default playlist with provided filenames and configure pane."""
     await app.store.initialize()
     playlist_id = await app.store.ensure_playlist("Default")
     files = [tmp_path / name for name in names]

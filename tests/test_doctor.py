@@ -119,6 +119,7 @@ def test_render_report_includes_result_and_hint() -> None:
 
 
 def _check(name: str, status: str, required: bool) -> doctor_module.DoctorCheck:
+    """Build concise `DoctorCheck` fixture for report behavior tests."""
     return doctor_module.DoctorCheck(
         name=name,
         status=status,  # type: ignore[arg-type]

@@ -10,10 +10,12 @@ from tz_player.services.audio_envelope_store import SqliteEnvelopeStore
 
 
 def _run(coro):
+    """Run async envelope-store call from sync test."""
     return asyncio.run(coro)
 
 
 def _touch(path: Path, content: bytes = b"x") -> None:
+    """Write bytes to file path to establish track fingerprint fixture."""
     path.write_bytes(content)
 
 

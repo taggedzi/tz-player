@@ -16,6 +16,8 @@ from tz_player.ui.transport_controls import (
 
 
 class _FakeClickEvent:
+    """Click-event stub tracking whether widget consumed the event."""
+
     def __init__(self) -> None:
         self.stopped = False
 
