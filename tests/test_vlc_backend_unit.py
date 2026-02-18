@@ -12,11 +12,15 @@ from tz_player.services.vlc_backend import VLCPlaybackBackend, _Command
 
 
 class _DummyInstance:
+    """Minimal VLC-instance stub returning media path as mock media object."""
+
     def media_new_path(self, path: str) -> str:
         return path
 
 
 class _DummyPlayer:
+    """Minimal VLC-player stub recording command effects for assertions."""
+
     def __init__(self) -> None:
         self.play_called = False
         self.stop_called = False
@@ -37,6 +41,8 @@ class _DummyPlayer:
 
 
 class _RecordingBackend(VLCPlaybackBackend):
+    """Backend subclass capturing emitted events without async thread wiring."""
+
     def __init__(self) -> None:
         super().__init__()
         self.emitted: list[object] = []

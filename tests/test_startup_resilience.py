@@ -18,21 +18,27 @@ from tz_player.ui.status_pane import StatusPane
 
 
 class FakeAppDirs:
+    """Path-dir stub used to isolate startup persistence paths in tests."""
+
     def __init__(self, data_dir: Path, config_dir: Path) -> None:
         self.user_data_dir = str(data_dir)
         self.user_config_dir = str(config_dir)
 
 
 class FailingBackend(FakePlaybackBackend):
+    """Backend stub that fails during startup for resilience-path coverage."""
+
     async def start(self) -> None:
         raise RuntimeError("backend start failed")
 
 
 def _run(coro):
+    """Run async startup scenario from sync test function."""
     return asyncio.run(coro)
 
 
 def _setup_dirs(tmp_path, monkeypatch) -> None:
+    """Patch path resolution to test-local app data/config directories."""
     data_dir = tmp_path / "data"
     config_dir = tmp_path / "config"
 

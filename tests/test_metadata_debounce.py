@@ -11,6 +11,7 @@ from tz_player.ui.playlist_pane import PlaylistPane
 
 
 def _run(coro):
+    """Run async debounce scenario from sync tests."""
     return asyncio.run(coro)
 
 

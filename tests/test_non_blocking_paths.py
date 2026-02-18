@@ -14,6 +14,7 @@ from tz_player.utils.async_utils import run_blocking
 
 
 def _run(coro):
+    """Run async helper from sync test code."""
     return asyncio.run(coro)
 
 
