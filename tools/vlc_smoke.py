@@ -12,6 +12,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 
 async def _run(path: Path) -> None:
+    """Run short start/play/stop/shutdown cycle against VLC backend."""
     from tz_player.services.vlc_backend import VLCPlaybackBackend
 
     backend = VLCPlaybackBackend()
@@ -28,6 +29,7 @@ async def _run(path: Path) -> None:
 
 
 def main() -> None:
+    """CLI entrypoint for local manual VLC backend smoke test."""
     parser = argparse.ArgumentParser(description="VLC backend smoke test.")
     parser.add_argument("path", type=Path, help="Path to an audio file.")
     args = parser.parse_args()

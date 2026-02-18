@@ -18,10 +18,12 @@ HEADING_RE = re.compile(r"^### (Added|Changed|Fixed)\s*$", re.MULTILINE)
 
 
 def _run_git(args: list[str]) -> str:
+    """Run git command and return stripped stdout text."""
     return subprocess.check_output(["git", *args], text=True).strip()
 
 
 def _latest_tag() -> str | None:
+    """Return latest `v*` tag or `None` when no matching tag exists."""
     try:
         tag = _run_git(["describe", "--tags", "--abbrev=0", "--match", "v*"])
     except subprocess.CalledProcessError:
@@ -30,6 +32,7 @@ def _latest_tag() -> str | None:
 
 
 def _normalize_commit_subject(subject: str) -> str:
+    """Normalize commit subject text for changelog bullet rendering."""
     text = subject.strip()
     text = re.sub(
         r"^(feat|fix|docs|chore|refactor|test|perf|build|ci)(\([^)]+\))?!?:\s*",
@@ -41,6 +44,7 @@ def _normalize_commit_subject(subject: str) -> str:
 
 
 def _categorize_commit(subject: str) -> str:
+    """Map commit subject into changelog bucket category."""
     lower = subject.lower().strip()
     if lower.startswith(("feat", "add")):
         return "Added"
@@ -50,6 +54,7 @@ def _categorize_commit(subject: str) -> str:
 
 
 def _commit_buckets() -> dict[str, list[str]]:
+    """Collect commit subjects since last tag grouped by changelog category."""
     buckets: dict[str, list[str]] = {"Added": [], "Changed": [], "Fixed": []}
     last_tag = _latest_tag()
     range_expr = "HEAD" if last_tag is None else f"{last_tag}..HEAD"
@@ -62,6 +67,7 @@ def _commit_buckets() -> dict[str, list[str]]:
 
 
 def _parse_unreleased_buckets(unreleased_body: str) -> dict[str, list[str]]:
+    """Parse existing unreleased changelog section into category buckets."""
     buckets: dict[str, list[str]] = {"Added": [], "Changed": [], "Fixed": []}
     headings = list(HEADING_RE.finditer(unreleased_body))
     if not headings:
@@ -87,6 +93,7 @@ def _parse_unreleased_buckets(unreleased_body: str) -> dict[str, list[str]]:
 
 
 def _dedupe(values: Iterable[str]) -> list[str]:
+    """Deduplicate non-empty entries preserving first-seen order."""
     seen: set[str] = set()
     out: list[str] = []
     for value in values:
@@ -99,6 +106,7 @@ def _dedupe(values: Iterable[str]) -> list[str]:
 
 
 def _render_section(version: str, date_str: str, buckets: dict[str, list[str]]) -> str:
+    """Render one release changelog section from categorized buckets."""
     lines = [f"## [{version}] - {date_str}", ""]
     for category in ("Added", "Changed", "Fixed"):
         lines.append(f"### {category}")
@@ -112,6 +120,7 @@ def _render_section(version: str, date_str: str, buckets: dict[str, list[str]]) 
 
 
 def _render_unreleased_template() -> str:
+    """Return canonical empty `Unreleased` section template."""
     return (
         "## [Unreleased]\n\n"
         "### Added\n\n"
@@ -126,6 +135,7 @@ def _render_unreleased_template() -> str:
 def prepare_release(
     *, repo_root: Path, version: str, release_date: str, notes_file: Path | None
 ) -> None:
+    """Update version/changelog and optionally write extracted release notes."""
     version = version.strip()
     if version.startswith(("v", "V")):
         version = version[1:]
@@ -176,6 +186,7 @@ def prepare_release(
 
 
 def _parse_args() -> argparse.Namespace:
+    """Build and parse CLI args for release-preparation command."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--version", required=True, help="Release version (for example 1.2.3)."

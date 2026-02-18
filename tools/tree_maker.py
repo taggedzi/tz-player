@@ -70,7 +70,7 @@ def print_tree(
 
 
 def main():
-    """The main function to run the script."""
+    """CLI entrypoint that prints project tree using .treeignore filters."""
     script_location = Path(__file__).resolve()
     project_root = find_project_root(script_location)
 

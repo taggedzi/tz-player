@@ -9,8 +9,8 @@ Status values:
 
 ## Root Project Files
 
-- [ ] `todo` `pyproject.toml`
-- [ ] `todo` `noxfile.py`
+- [x] `done` `pyproject.toml`
+- [x] `done` `noxfile.py`
 - [ ] `todo` `README.md`
 - [ ] `todo` `CONTRIBUTING.md`
 
@@ -117,10 +117,10 @@ Status values:
 
 ## Tooling Scripts (`tools/`)
 
-- [ ] `todo` `tools/extract_changelog_release.py`
-- [ ] `todo` `tools/py_tree.py`
-- [ ] `todo` `tools/release.py`
-- [ ] `todo` `tools/release.sh`
-- [ ] `todo` `tools/release_prepare.py`
-- [ ] `todo` `tools/tree_maker.py`
-- [ ] `todo` `tools/vlc_smoke.py`
+- [x] `done` `tools/extract_changelog_release.py`
+- [x] `done` `tools/py_tree.py`
+- [x] `done` `tools/release.py`
+- [x] `done` `tools/release.sh`
+- [x] `done` `tools/release_prepare.py`
+- [x] `done` `tools/tree_maker.py`
+- [x] `done` `tools/vlc_smoke.py`
