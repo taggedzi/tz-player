@@ -13,7 +13,7 @@ Execution tracker derived from `SPEC.md`.
 ## Active Backlog
 
 ### DOC-001 Internal Documentation Campaign (All Project Files)
-- Status: `todo`
+- Status: `in_progress`
 - Goal:
   - Add maintainable internal documentation so a contributor can open any project file and quickly understand purpose, relationships, dependencies, and non-obvious logic.
   - Execute this work on a dedicated branch and merge by PR after full validation.
@@ -35,8 +35,8 @@ Execution tracker derived from `SPEC.md`.
   - Prefer dependency and relationship notes near integration boundaries (UI/app/service/storage/playback/plugin).
   - Keep comments/docstrings synchronized with actual behavior; avoid stale narrative text.
 - Tasks:
-  - `DOC-001A` Build coverage inventory file (for example `docs/internal-doc-coverage.md`) listing every in-scope file with status (`todo`/`in_progress`/`done`).
-  - `DOC-001B` Document application entrypoint and app shell wiring (focus, actions, event routing, startup/shutdown flow).
+  - `DOC-001A` Build coverage inventory file (for example `docs/internal-doc-coverage.md`) listing every in-scope file with status (`todo`/`in_progress`/`done`). Status: `done` (`docs/internal-doc-coverage.md`)
+  - `DOC-001B` Document application entrypoint and app shell wiring (focus, actions, event routing, startup/shutdown flow). Status: `in_progress` (`src/tz_player/app.py`, `src/tz_player/gui.py`, `src/tz_player/cli.py`, `src/tz_player/__init__.py` documented; remaining app-shell files pending)
   - `DOC-001C` Document playback, queue, and transport layers with lifecycle and error-handling notes.
   - `DOC-001D` Document persistence/state/config services including schema assumptions and migration-sensitive behavior.
   - `DOC-001E` Document visualizer/plugin architecture, registry/fallback decisions, and service dependencies.
