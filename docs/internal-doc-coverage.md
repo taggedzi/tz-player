@@ -11,8 +11,8 @@ Status values:
 
 - [x] `done` `pyproject.toml`
 - [x] `done` `noxfile.py`
-- [ ] `todo` `README.md`
-- [ ] `todo` `CONTRIBUTING.md`
+- [x] `done` `README.md`
+- [x] `done` `CONTRIBUTING.md`
 
 ## Source Files (`src/`)
 

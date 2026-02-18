@@ -42,8 +42,8 @@ Execution tracker derived from `SPEC.md`.
   - `DOC-001E` Document visualizer/plugin architecture, registry/fallback decisions, and service dependencies. Status: `done` (`visualizers/__init__`, `base`, `registry`, `host`, `basic`, `matrix`, `hackscope`, `vu`, `cover_ascii`)
   - `DOC-001F` Document shared utilities/helpers and cross-cutting abstractions. Status: `done` (`events`, `media_formats`, `version`, `utils/*`, `services/__init__`, `ui/__init__`)
   - `DOC-001G` Document tests with intent-focused docstrings for fixtures/helpers and non-obvious scenarios. Status: `done` (all files under `tests/` reviewed/documented and marked complete in `docs/internal-doc-coverage.md`)
-  - `DOC-001H` Document tooling/config files with rationale for important settings and developer workflow dependencies. Status: `in_progress` (`pyproject.toml`, `noxfile.py`, and all `tools/*` scripts documented; top-level contributor docs pending)
-  - `DOC-001I` Run required quality gates and fix docstring/comment style issues discovered by lint/type/test checks.
+  - `DOC-001H` Document tooling/config files with rationale for important settings and developer workflow dependencies. Status: `done` (`pyproject.toml`, `noxfile.py`, all `tools/*` scripts, `README.md`, `CONTRIBUTING.md`)
+  - `DOC-001I` Run required quality gates and fix docstring/comment style issues discovered by lint/type/test checks. Status: `in_progress`
   - `DOC-001J` Open PR with a completion checklist confirming 100% inventory coverage and reviewer notes.
 - Minimum validation per docs change set:
   - `.ubuntu-venv/bin/python -m ruff check .`
