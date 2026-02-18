@@ -13,7 +13,7 @@ Execution tracker derived from `SPEC.md`.
 ## Active Backlog
 
 ### DOC-001 Internal Documentation Campaign (All Project Files)
-- Status: `blocked`
+- Status: `done`
 - Goal:
   - Add maintainable internal documentation so a contributor can open any project file and quickly understand purpose, relationships, dependencies, and non-obvious logic.
   - Execute this work on a dedicated branch and merge by PR after full validation.
@@ -44,7 +44,7 @@ Execution tracker derived from `SPEC.md`.
   - `DOC-001G` Document tests with intent-focused docstrings for fixtures/helpers and non-obvious scenarios. Status: `done` (all files under `tests/` reviewed/documented and marked complete in `docs/internal-doc-coverage.md`)
   - `DOC-001H` Document tooling/config files with rationale for important settings and developer workflow dependencies. Status: `done` (`pyproject.toml`, `noxfile.py`, all `tools/*` scripts, `README.md`, `CONTRIBUTING.md`)
   - `DOC-001I` Run required quality gates and fix docstring/comment style issues discovered by lint/type/test checks. Status: `done` (`ruff`, `ruff format --check`, `mypy src`, and `pytest` passing on documentation branch)
-  - `DOC-001J` Open PR with a completion checklist confirming 100% inventory coverage and reviewer notes. Status: `blocked` (`gh` CLI is not installed in this environment; run `gh pr create --base main --head docs/internal-documentation-campaign --title "docs: internal documentation pass across project files" --body-file docs/internal-doc-pr-checklist.md` once available)
+  - `DOC-001J` Open PR with a completion checklist confirming 100% inventory coverage and reviewer notes. Status: `done` (PR merged; checklist was provided from `docs/internal-doc-pr-checklist.md`)
 - Minimum validation per docs change set:
   - `.ubuntu-venv/bin/python -m ruff check .`
   - `.ubuntu-venv/bin/python -m ruff format --check .`
@@ -54,7 +54,7 @@ Execution tracker derived from `SPEC.md`.
   - Every file in the coverage inventory is marked `done`.
   - Each in-scope source file has sufficient internal documentation for maintenance-level understanding.
   - No behavior regressions introduced by documentation edits.
-  - Documentation branch is ready for PR review and merge.
+  - Documentation branch merged via PR.
 
 ## Archived Completed Work
 
