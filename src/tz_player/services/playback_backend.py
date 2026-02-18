@@ -1,4 +1,9 @@
-"""Playback backend interface and event types."""
+"""Playback backend contracts and event payloads.
+
+`PlayerService` depends on this protocol to stay backend-agnostic. Concrete
+implementations (fake/VLC) translate engine-specific behavior into these shared
+commands and events.
+"""
 
 from __future__ import annotations
 
@@ -11,42 +16,58 @@ BackendStatus = Literal["idle", "loading", "playing", "paused", "stopped", "erro
 
 @dataclass(frozen=True)
 class BackendEvent:
+    """Marker base type for backend-originated events."""
+
     pass
 
 
 @dataclass(frozen=True)
 class PositionUpdated(BackendEvent):
+    """Periodic transport position update in milliseconds."""
+
     position_ms: int
     duration_ms: int
 
 
 @dataclass(frozen=True)
 class StateChanged(BackendEvent):
+    """Backend playback state transition."""
+
     status: BackendStatus
 
 
 @dataclass(frozen=True)
 class MediaChanged(BackendEvent):
+    """Loaded media metadata update (currently duration only)."""
+
     duration_ms: int
 
 
 @dataclass(frozen=True)
 class BackendError(BackendEvent):
+    """Backend-reported non-recoverable runtime error."""
+
     message: str
 
 
 @dataclass(frozen=True)
 class LevelSample:
+    """Stereo audio-level sample normalized to [0.0, 1.0]."""
+
     left: float
     right: float
 
 
 @runtime_checkable
 class PlaybackLevelProvider(Protocol):
+    """Optional capability protocol for live audio level sampling."""
+
     async def get_level_sample(self) -> LevelSample | None: ...
 
 
 class PlaybackBackend(Protocol):
+    """Playback engine protocol consumed by `PlayerService`."""
+
     def set_event_handler(
         self, handler: Callable[[BackendEvent], Awaitable[None]]
     ) -> None: ...

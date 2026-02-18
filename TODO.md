@@ -37,7 +37,7 @@ Execution tracker derived from `SPEC.md`.
 - Tasks:
   - `DOC-001A` Build coverage inventory file (for example `docs/internal-doc-coverage.md`) listing every in-scope file with status (`todo`/`in_progress`/`done`). Status: `done` (`docs/internal-doc-coverage.md`)
   - `DOC-001B` Document application entrypoint and app shell wiring (focus, actions, event routing, startup/shutdown flow). Status: `in_progress` (`src/tz_player/app.py`, `src/tz_player/gui.py`, `src/tz_player/cli.py`, `src/tz_player/__init__.py` documented; remaining app-shell files pending)
-  - `DOC-001C` Document playback, queue, and transport layers with lifecycle and error-handling notes.
+  - `DOC-001C` Document playback, queue, and transport layers with lifecycle and error-handling notes. Status: `in_progress` (`player_service`, `playback_backend`, `fake_backend`, `vlc_backend` documented; queue/store files pending)
   - `DOC-001D` Document persistence/state/config services including schema assumptions and migration-sensitive behavior.
   - `DOC-001E` Document visualizer/plugin architecture, registry/fallback decisions, and service dependencies.
   - `DOC-001F` Document shared utilities/helpers and cross-cutting abstractions.

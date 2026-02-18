@@ -1,4 +1,9 @@
-"""VLC playback backend using python-vlc."""
+"""VLC-backed playback implementation bridged through a worker thread.
+
+python-vlc APIs are synchronous and not event-loop friendly, so this backend
+isolates VLC calls on a dedicated thread and marshals commands/events between
+that thread and the asyncio loop.
+"""
 
 from __future__ import annotations
 
@@ -22,13 +27,15 @@ from .playback_backend import (
 
 @dataclass
 class _Command:
+    """Command envelope sent from asyncio loop to VLC worker thread."""
+
     name: str
     args: tuple[Any, ...]
     future: asyncio.Future[Any] | None
 
 
 class VLCPlaybackBackend:
-    """Playback backend backed by a dedicated VLC thread."""
+    """Playback backend backed by a dedicated VLC worker thread."""
 
     def __init__(self, *, poll_interval_ms: int = 200) -> None:
         self._poll_interval = poll_interval_ms / 1000
@@ -108,6 +115,7 @@ class VLCPlaybackBackend:
         return None
 
     async def _submit(self, name: str, *args: Any) -> Any:
+        """Submit a command to VLC thread and await its completion."""
         if self._loop is None or self._thread is None or not self._thread.is_alive():
             raise RuntimeError("VLC backend not started.")
         future: asyncio.Future[Any] = self._loop.create_future()
@@ -115,6 +123,7 @@ class VLCPlaybackBackend:
         return await future
 
     def _thread_main(self, ready_future: asyncio.Future[None]) -> None:
+        """Own VLC objects and process commands/events on the worker thread."""
         try:
             import vlc
 
@@ -172,6 +181,7 @@ class VLCPlaybackBackend:
         player.stop()
 
     def _handle_command(self, cmd: _Command, instance: Any, player: Any) -> Any:
+        """Execute one serialized command against the VLC media player."""
         name = cmd.name
         if name == "play":
             track_path, start_ms, _duration_ms = cmd.args
@@ -208,6 +218,7 @@ class VLCPlaybackBackend:
         raise ValueError(f"Unknown command {name}")
 
     def _emit_event(self, event: BackendEvent) -> None:
+        """Bridge backend event callbacks from thread -> asyncio loop."""
         if self._handler is None or self._loop is None:
             return
         coro = self._handler(event)
@@ -245,6 +256,7 @@ class VLCPlaybackBackend:
 
 
 def _map_state(player: Any) -> BackendStatus:
+    """Translate VLC engine state into normalized backend status values."""
     try:
         state = player.get_state()
     except Exception:

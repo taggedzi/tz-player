@@ -35,12 +35,12 @@ Status values:
 - [ ] `todo` `src/tz_player/services/audio_envelope_store.py`
 - [ ] `todo` `src/tz_player/services/audio_level_service.py`
 - [ ] `todo` `src/tz_player/services/audio_tags.py`
-- [ ] `todo` `src/tz_player/services/fake_backend.py`
+- [x] `done` `src/tz_player/services/fake_backend.py`
 - [ ] `todo` `src/tz_player/services/metadata_service.py`
-- [ ] `todo` `src/tz_player/services/playback_backend.py`
-- [ ] `todo` `src/tz_player/services/player_service.py`
+- [x] `done` `src/tz_player/services/playback_backend.py`
+- [x] `done` `src/tz_player/services/player_service.py`
 - [ ] `todo` `src/tz_player/services/playlist_store.py`
-- [ ] `todo` `src/tz_player/services/vlc_backend.py`
+- [x] `done` `src/tz_player/services/vlc_backend.py`
 - [ ] `todo` `src/tz_player/ui/__init__.py`
 - [ ] `todo` `src/tz_player/ui/actions_menu.py`
 - [ ] `todo` `src/tz_player/ui/playlist_pane.py`

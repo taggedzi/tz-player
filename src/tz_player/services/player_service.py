@@ -1,4 +1,9 @@
-"""Async player service delegating playback to a backend."""
+"""Playback orchestration service between UI intent and backend engines.
+
+`PlayerService` is the transport/queue authority. It normalizes backend events,
+applies repeat/shuffle rules, emits UI-facing domain events, and combines live or
+precomputed audio-level sampling for visualizers.
+"""
 
 from __future__ import annotations
 
@@ -47,6 +52,8 @@ def _format_user_error(
 
 @dataclass(frozen=True)
 class TrackInfo:
+    """Playback metadata for the currently selected queue item."""
+
     title: str | None
     artist: str | None
     album: str | None
@@ -59,6 +66,8 @@ class TrackInfo:
 
 @dataclass(frozen=True)
 class PlayerState:
+    """Serializable snapshot of transport state exposed to the UI."""
+
     status: STATUS = "idle"
     playlist_id: int | None = None
     item_id: int | None = None
@@ -126,6 +135,7 @@ class PlayerService:
         return self._state
 
     async def start(self) -> None:
+        """Start backend and background polling with persisted engine settings."""
         await self._backend.start()
         # Keep backend engine state aligned with persisted/app state before any play action.
         await self._backend.set_volume(self._state.volume)
@@ -134,6 +144,7 @@ class PlayerService:
             self._poll_task = asyncio.create_task(self._poll_position())
 
     async def shutdown(self) -> None:
+        """Stop polling loop and perform best-effort backend shutdown."""
         if self._poll_task is not None:
             self._poll_task.cancel()
             with suppress(asyncio.CancelledError):
@@ -143,6 +154,7 @@ class PlayerService:
             await self._backend.shutdown()
 
     async def play_item(self, playlist_id: int, item_id: int) -> None:
+        """Start playback for a specific playlist item and emit state transitions."""
         async with self._lock:
             self._state = replace(
                 self._state,
@@ -323,6 +335,7 @@ class PlayerService:
         await self._emit_state()
 
     async def toggle_shuffle(self, *, anchor_item_id: int | None = None) -> None:
+        """Toggle shuffle mode and build/clear deterministic traversal order."""
         async with self._lock:
             self._state = replace(self._state, shuffle=not self._state.shuffle)
             shuffle_enabled = self._state.shuffle
@@ -341,6 +354,7 @@ class PlayerService:
         self._shuffle_playlist_id = None
 
     async def next_track(self) -> None:
+        """Advance to next track using shuffle/repeat policy when configured."""
         if (
             self._next_track_provider is None
             and self._playlist_item_ids_provider is None
@@ -370,6 +384,7 @@ class PlayerService:
         await self.play_item(playlist_id, next_id)
 
     async def previous_track(self) -> None:
+        """Go to previous track or restart current track when position > 3s."""
         if (
             self._prev_track_provider is None
             and self._playlist_item_ids_provider is None
@@ -431,6 +446,7 @@ class PlayerService:
         )
 
     async def _handle_backend_event(self, event: BackendEvent) -> None:
+        """Normalize backend events into player state and track-end decisions."""
         emit = False
         handle_end = False
         async with self._lock:
@@ -502,6 +518,7 @@ class PlayerService:
             await self._handle_track_end()
 
     async def _handle_track_end(self) -> None:
+        """Apply repeat/shuffle policy after a natural track completion event."""
         async with self._lock:
             playlist_id = self._state.playlist_id
             item_id = self._state.item_id
@@ -628,6 +645,7 @@ class PlayerService:
         *,
         item_ids: list[int] | None = None,
     ) -> bool:
+        """Rebuild shuffle order anchored to current item for stable navigation."""
         if self._playlist_item_ids_provider is None:
             self._clear_shuffle_order()
             return False
@@ -652,6 +670,12 @@ class PlayerService:
         await self._emit_event(PlayerStateChanged(self._state))
 
     async def _poll_position(self) -> None:
+        """Poll backend transport/levels and infer end-of-track in edge cases.
+
+        Some backends emit stop/idle transitions too early or inconsistently.
+        Polling applies grace-window heuristics to avoid false track-end handling
+        while still progressing naturally when playback truly finishes.
+        """
         try:
             while True:
                 await asyncio.sleep(self._poll_interval)
