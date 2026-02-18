@@ -23,6 +23,8 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class FileStat:
+    """Reduced file-stat snapshot used for metadata freshness checks."""
+
     mtime_ns: int
     size_bytes: int
 
@@ -45,6 +47,7 @@ class MetadataService:
         self._on_metadata_updated = on_metadata_updated
 
     async def ensure_metadata(self, track_ids: list[int]) -> None:
+        """Ensure metadata is loaded for given tracks with bounded concurrency."""
         unique_ids = _unique_ids(track_ids)
         if not unique_ids:
             return
@@ -67,6 +70,7 @@ class MetadataService:
             await self._on_metadata_updated(updated_ids)
 
     async def invalidate_if_changed(self, track_id: int) -> bool:
+        """Invalidate cached metadata if file fingerprint differs from stored state."""
         records = await self._store.get_tracks_basic([track_id])
         if not records:
             return False
@@ -94,6 +98,7 @@ class MetadataService:
         return True
 
     async def _load_one(self, track: TrackRecord) -> tuple[int, bool]:
+        """Load metadata for one track and persist result payload."""
         semaphore = self._ensure_semaphore()
         async with semaphore:
             stat = await _safe_stat(track.path)
@@ -133,6 +138,7 @@ class MetadataService:
             return track.track_id, meta.meta_valid
 
     def _ensure_semaphore(self) -> asyncio.Semaphore:
+        """Lazily create per-service semaphore controlling concurrent metadata reads."""
         semaphore = self._semaphore
         if semaphore is None:
             semaphore = asyncio.Semaphore(self._concurrency)
@@ -142,6 +148,8 @@ class MetadataService:
 
 @dataclass(frozen=True)
 class MetadataPayload:
+    """Internal metadata extraction payload before persistence mapping."""
+
     title: str | None = None
     artist: str | None = None
     album: str | None = None
@@ -151,6 +159,7 @@ class MetadataPayload:
 
 
 def _read_metadata(path: Path) -> MetadataPayload:
+    """Read metadata from audio file and map into internal payload shape."""
     tags = read_audio_tags(path)
     return MetadataPayload(
         title=tags.title,
@@ -163,12 +172,14 @@ def _read_metadata(path: Path) -> MetadataPayload:
 
 
 def _meta_is_fresh(snapshot: TrackMetaSnapshot | None) -> bool:
+    """Return whether snapshot indicates metadata is already valid."""
     if snapshot is None:
         return False
     return snapshot.meta_valid
 
 
 def _unique_ids(track_ids: list[int]) -> list[int]:
+    """Return order-preserving deduplicated track id list."""
     seen: set[int] = set()
     ordered: list[int] = []
     for track_id in track_ids:
@@ -180,6 +191,7 @@ def _unique_ids(track_ids: list[int]) -> list[int]:
 
 
 async def _safe_stat(path: Path) -> FileStat | None:
+    """Async-safe stat wrapper returning `None` when file is unavailable."""
     try:
         stat = await run_blocking(path.stat)
     except OSError:

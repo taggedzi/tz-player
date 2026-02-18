@@ -15,6 +15,8 @@ MEDIA_SETUP_URL = "docs/media-setup.md"
 
 @dataclass(frozen=True)
 class DoctorCheck:
+    """One environment/tooling readiness check result."""
+
     name: str
     status: DoctorStatus
     required: bool
@@ -24,11 +26,14 @@ class DoctorCheck:
 
 @dataclass(frozen=True)
 class DoctorReport:
+    """Collection of doctor checks and derived process exit contract."""
+
     backend: str
     checks: list[DoctorCheck]
 
     @property
     def exit_code(self) -> int:
+        """Return non-zero when any required check failed or is missing."""
         for check in self.checks:
             if check.required and check.status != "ok":
                 return 2
@@ -36,6 +41,7 @@ class DoctorReport:
 
 
 def run_doctor(backend: str) -> DoctorReport:
+    """Run configured diagnostics for selected backend mode."""
     checks = [
         probe_tinytag(),
         probe_vlc(required=backend == "vlc"),
@@ -45,6 +51,7 @@ def run_doctor(backend: str) -> DoctorReport:
 
 
 def render_report(report: DoctorReport) -> str:
+    """Render terminal-friendly diagnostics report text."""
     lines = [f"tz-player doctor (backend={report.backend})", ""]
     for check in report.checks:
         state = _status_token(check.status)
@@ -62,6 +69,7 @@ def render_report(report: DoctorReport) -> str:
 
 
 def probe_tinytag() -> DoctorCheck:
+    """Verify TinyTag dependency importability."""
     try:
         module = importlib.import_module("tinytag")
     except Exception as exc:
@@ -78,6 +86,7 @@ def probe_tinytag() -> DoctorCheck:
 
 
 def probe_vlc(*, required: bool) -> DoctorCheck:
+    """Verify python-vlc import and libVLC runtime usability."""
     try:
         vlc = importlib.import_module("vlc")
     except Exception as exc:
@@ -120,6 +129,7 @@ def probe_vlc(*, required: bool) -> DoctorCheck:
 
 
 def probe_ffmpeg(*, required: bool) -> DoctorCheck:
+    """Verify ffmpeg binary presence and basic executable health."""
     ffmpeg = shutil.which("ffmpeg")
     if ffmpeg is None:
         return DoctorCheck(
@@ -167,6 +177,7 @@ def probe_ffmpeg(*, required: bool) -> DoctorCheck:
 
 
 def _status_token(status: DoctorStatus) -> str:
+    """Map doctor status to compact display token."""
     if status == "ok":
         return "[OK]"
     if status == "missing":
@@ -175,6 +186,7 @@ def _status_token(status: DoctorStatus) -> str:
 
 
 def _libvlc_version(vlc: object, instance: object) -> str:
+    """Best-effort extraction of libVLC runtime version string."""
     candidates = (
         getattr(vlc, "libvlc_get_version", None),
         getattr(instance, "libvlc_get_version", None),

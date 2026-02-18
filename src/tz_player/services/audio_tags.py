@@ -12,6 +12,8 @@ from pathlib import Path
 
 @dataclass(frozen=True)
 class AudioTags:
+    """Normalized metadata payload returned by tag-reading helpers."""
+
     title: str | None = None
     artist: str | None = None
     album: str | None = None
@@ -36,6 +38,7 @@ def read_audio_tags(path: Path) -> AudioTags:
 
 
 def _read_with_tinytag(path: Path) -> AudioTags | None:
+    """Best-effort metadata read path via TinyTag dependency."""
     try:
         tinytag_module = import_module("tinytag")
         TinyTag = tinytag_module.TinyTag
@@ -59,6 +62,7 @@ def _read_with_tinytag(path: Path) -> AudioTags | None:
 
 
 def _read_wave_fallback(path: Path) -> AudioTags | None:
+    """Fallback duration/bitrate derivation for WAV files."""
     try:
         with wave.open(str(path), "rb") as handle:
             channels = int(handle.getnchannels())
@@ -75,6 +79,7 @@ def _read_wave_fallback(path: Path) -> AudioTags | None:
 
 
 def _clean_text(value: object) -> str | None:
+    """Normalize textual metadata fields into trimmed optional strings."""
     if value is None:
         return None
     text = str(value).strip()

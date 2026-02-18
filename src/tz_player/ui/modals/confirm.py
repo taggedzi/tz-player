@@ -44,7 +44,9 @@ class ConfirmModal(ModalScreen[bool]):
             self.action_cancel()
 
     def action_confirm(self) -> None:
+        """Dismiss modal with affirmative result."""
         self.dismiss(True)
 
     def action_cancel(self) -> None:
+        """Dismiss modal with negative result."""
         self.dismiss(False)

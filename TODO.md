@@ -36,15 +36,15 @@ Execution tracker derived from `SPEC.md`.
   - Keep comments/docstrings synchronized with actual behavior; avoid stale narrative text.
 - Tasks:
   - `DOC-001A` Build coverage inventory file (for example `docs/internal-doc-coverage.md`) listing every in-scope file with status (`todo`/`in_progress`/`done`). Status: `done` (`docs/internal-doc-coverage.md`)
-  - `DOC-001B` Document application entrypoint and app shell wiring (focus, actions, event routing, startup/shutdown flow). Status: `in_progress` (`src/tz_player/app.py`, `src/tz_player/gui.py`, `src/tz_player/cli.py`, `src/tz_player/__init__.py` documented; remaining app-shell files pending)
+  - `DOC-001B` Document application entrypoint and app shell wiring (focus, actions, event routing, startup/shutdown flow). Status: `done` (`src/tz_player/app.py`, `src/tz_player/gui.py`, `src/tz_player/cli.py`, `src/tz_player/__init__.py`, `src/tz_player/doctor.py`)
   - `DOC-001C` Document playback, queue, and transport layers with lifecycle and error-handling notes. Status: `done` (`player_service`, `playback_backend`, `fake_backend`, `vlc_backend`, `playlist_store`, `playlist_pane`, `playlist_viewport`, `transport_controls`)
   - `DOC-001D` Document persistence/state/config services including schema assumptions and migration-sensitive behavior. Status: `done` (`state_store`, `db/schema`, `db/__init__`, `paths`, `runtime_config`, `logging_utils`)
   - `DOC-001E` Document visualizer/plugin architecture, registry/fallback decisions, and service dependencies. Status: `done` (`visualizers/__init__`, `base`, `registry`, `host`, `basic`, `matrix`, `hackscope`, `vu`, `cover_ascii`)
   - `DOC-001F` Document shared utilities/helpers and cross-cutting abstractions. Status: `done` (`events`, `media_formats`, `version`, `utils/*`, `services/__init__`, `ui/__init__`)
   - `DOC-001G` Document tests with intent-focused docstrings for fixtures/helpers and non-obvious scenarios. Status: `done` (all files under `tests/` reviewed/documented and marked complete in `docs/internal-doc-coverage.md`)
   - `DOC-001H` Document tooling/config files with rationale for important settings and developer workflow dependencies. Status: `done` (`pyproject.toml`, `noxfile.py`, all `tools/*` scripts, `README.md`, `CONTRIBUTING.md`)
-  - `DOC-001I` Run required quality gates and fix docstring/comment style issues discovered by lint/type/test checks. Status: `in_progress`
-  - `DOC-001J` Open PR with a completion checklist confirming 100% inventory coverage and reviewer notes.
+  - `DOC-001I` Run required quality gates and fix docstring/comment style issues discovered by lint/type/test checks. Status: `done` (`ruff`, `ruff format --check`, `mypy src`, and `pytest` passing on documentation branch)
+  - `DOC-001J` Open PR with a completion checklist confirming 100% inventory coverage and reviewer notes. Status: `in_progress` (checklist prepared in `docs/internal-doc-pr-checklist.md`; branch ready for PR opening)
 - Minimum validation per docs change set:
   - `.ubuntu-venv/bin/python -m ruff check .`
   - `.ubuntu-venv/bin/python -m ruff format --check .`

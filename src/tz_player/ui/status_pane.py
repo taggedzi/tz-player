@@ -20,6 +20,8 @@ SPEED_STEP = 0.25
 
 
 class StatusPane(Widget):
+    """Status widget combining transport sliders and runtime status text."""
+
     DEFAULT_CSS = """
     #time-row {
         height: 1;
@@ -78,9 +80,11 @@ class StatusPane(Widget):
         yield self._status_line
 
     def set_player_service(self, player_service: PlayerService | None) -> None:
+        """Attach player service used by interactive slider callbacks."""
         self._player_service = player_service
 
     def update_state(self, state: PlayerState) -> None:
+        """Refresh slider values and status text from latest player state."""
         self._state = state
         self._update_status_text()
         pos_text, dur_text = format_time_pair_ms(state.position_ms, state.duration_ms)
@@ -96,11 +100,13 @@ class StatusPane(Widget):
             self._speed_bar.set_value_text(f"{state.speed:.2f}x")
 
     def set_runtime_notice(self, notice: str | None) -> None:
+        """Set one-line runtime notice shown ahead of status indicators."""
         self._runtime_notice = notice.strip() if notice else None
         if self._state is not None:
             self._update_status_text()
 
     def _update_status_text(self) -> None:
+        """Rebuild styled status-line text from state and optional notice."""
         if self._state is None:
             return
         state = self._state
@@ -121,6 +127,7 @@ class StatusPane(Widget):
         self._status_line.update(status_text)
 
     async def on_slider_changed(self, event: SliderChanged) -> None:
+        """Handle slider interaction by issuing seek/volume/speed actions."""
         if self._player_service is None or self._state is None:
             return
         if event.name == "time":
@@ -145,12 +152,14 @@ class StatusPane(Widget):
 
 
 def time_fraction(position_ms: int, duration_ms: int) -> float:
+    """Return clamped playback progress fraction for time slider."""
     if duration_ms <= 0:
         return 0.0
     return clamp_float(position_ms / duration_ms, 0.0, 1.0)
 
 
 def volume_fraction(volume: int) -> float:
+    """Convert integer volume [0,100] to normalized slider fraction."""
     return clamp_float(volume / 100.0, 0.0, 1.0)
 
 
@@ -159,6 +168,7 @@ def volume_from_fraction(fraction: float) -> int:
 
 
 def speed_fraction(speed: float) -> float:
+    """Convert speed value into normalized slider fraction."""
     return clamp_float((speed - SPEED_MIN) / (SPEED_MAX - SPEED_MIN), 0.0, 1.0)
 
 

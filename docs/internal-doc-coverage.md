@@ -19,7 +19,7 @@ Status values:
 - [x] `done` `src/tz_player/__init__.py`
 - [x] `done` `src/tz_player/app.py`
 - [x] `done` `src/tz_player/cli.py`
-- [ ] `todo` `src/tz_player/doctor.py`
+- [x] `done` `src/tz_player/doctor.py`
 - [x] `done` `src/tz_player/events.py`
 - [x] `done` `src/tz_player/gui.py`
 - [x] `done` `src/tz_player/logging_utils.py`
@@ -31,29 +31,29 @@ Status values:
 - [x] `done` `src/tz_player/db/__init__.py`
 - [x] `done` `src/tz_player/db/schema.py`
 - [x] `done` `src/tz_player/services/__init__.py`
-- [ ] `todo` `src/tz_player/services/audio_envelope_analysis.py`
-- [ ] `todo` `src/tz_player/services/audio_envelope_store.py`
-- [ ] `todo` `src/tz_player/services/audio_level_service.py`
-- [ ] `todo` `src/tz_player/services/audio_tags.py`
+- [x] `done` `src/tz_player/services/audio_envelope_analysis.py`
+- [x] `done` `src/tz_player/services/audio_envelope_store.py`
+- [x] `done` `src/tz_player/services/audio_level_service.py`
+- [x] `done` `src/tz_player/services/audio_tags.py`
 - [x] `done` `src/tz_player/services/fake_backend.py`
-- [ ] `todo` `src/tz_player/services/metadata_service.py`
+- [x] `done` `src/tz_player/services/metadata_service.py`
 - [x] `done` `src/tz_player/services/playback_backend.py`
 - [x] `done` `src/tz_player/services/player_service.py`
 - [x] `done` `src/tz_player/services/playlist_store.py`
 - [x] `done` `src/tz_player/services/vlc_backend.py`
 - [x] `done` `src/tz_player/ui/__init__.py`
-- [ ] `todo` `src/tz_player/ui/actions_menu.py`
+- [x] `done` `src/tz_player/ui/actions_menu.py`
 - [x] `done` `src/tz_player/ui/playlist_pane.py`
 - [x] `done` `src/tz_player/ui/playlist_viewport.py`
-- [ ] `todo` `src/tz_player/ui/slider_bar.py`
-- [ ] `todo` `src/tz_player/ui/status_pane.py`
-- [ ] `todo` `src/tz_player/ui/text_button.py`
+- [x] `done` `src/tz_player/ui/slider_bar.py`
+- [x] `done` `src/tz_player/ui/status_pane.py`
+- [x] `done` `src/tz_player/ui/text_button.py`
 - [x] `done` `src/tz_player/ui/transport_controls.py`
-- [ ] `todo` `src/tz_player/ui/modals/__init__.py`
-- [ ] `todo` `src/tz_player/ui/modals/confirm.py`
-- [ ] `todo` `src/tz_player/ui/modals/error.py`
-- [ ] `todo` `src/tz_player/ui/modals/file_tree_picker.py`
-- [ ] `todo` `src/tz_player/ui/modals/path_input.py`
+- [x] `done` `src/tz_player/ui/modals/__init__.py`
+- [x] `done` `src/tz_player/ui/modals/confirm.py`
+- [x] `done` `src/tz_player/ui/modals/error.py`
+- [x] `done` `src/tz_player/ui/modals/file_tree_picker.py`
+- [x] `done` `src/tz_player/ui/modals/path_input.py`
 - [x] `done` `src/tz_player/utils/__init__.py`
 - [x] `done` `src/tz_player/utils/async_utils.py`
 - [x] `done` `src/tz_player/utils/time_format.py`
