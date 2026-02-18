@@ -24,12 +24,12 @@ Status values:
 - [x] `done` `src/tz_player/gui.py`
 - [ ] `todo` `src/tz_player/logging_utils.py`
 - [ ] `todo` `src/tz_player/media_formats.py`
-- [ ] `todo` `src/tz_player/paths.py`
+- [x] `done` `src/tz_player/paths.py`
 - [ ] `todo` `src/tz_player/runtime_config.py`
-- [ ] `todo` `src/tz_player/state_store.py`
+- [x] `done` `src/tz_player/state_store.py`
 - [ ] `todo` `src/tz_player/version.py`
 - [ ] `todo` `src/tz_player/db/__init__.py`
-- [ ] `todo` `src/tz_player/db/schema.py`
+- [x] `done` `src/tz_player/db/schema.py`
 - [ ] `todo` `src/tz_player/services/__init__.py`
 - [ ] `todo` `src/tz_player/services/audio_envelope_analysis.py`
 - [ ] `todo` `src/tz_player/services/audio_envelope_store.py`
@@ -39,16 +39,16 @@ Status values:
 - [ ] `todo` `src/tz_player/services/metadata_service.py`
 - [x] `done` `src/tz_player/services/playback_backend.py`
 - [x] `done` `src/tz_player/services/player_service.py`
-- [ ] `todo` `src/tz_player/services/playlist_store.py`
+- [x] `done` `src/tz_player/services/playlist_store.py`
 - [x] `done` `src/tz_player/services/vlc_backend.py`
 - [ ] `todo` `src/tz_player/ui/__init__.py`
 - [ ] `todo` `src/tz_player/ui/actions_menu.py`
-- [ ] `todo` `src/tz_player/ui/playlist_pane.py`
-- [ ] `todo` `src/tz_player/ui/playlist_viewport.py`
+- [x] `done` `src/tz_player/ui/playlist_pane.py`
+- [x] `done` `src/tz_player/ui/playlist_viewport.py`
 - [ ] `todo` `src/tz_player/ui/slider_bar.py`
 - [ ] `todo` `src/tz_player/ui/status_pane.py`
 - [ ] `todo` `src/tz_player/ui/text_button.py`
-- [ ] `todo` `src/tz_player/ui/transport_controls.py`
+- [x] `done` `src/tz_player/ui/transport_controls.py`
 - [ ] `todo` `src/tz_player/ui/modals/__init__.py`
 - [ ] `todo` `src/tz_player/ui/modals/confirm.py`
 - [ ] `todo` `src/tz_player/ui/modals/error.py`

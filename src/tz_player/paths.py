@@ -1,4 +1,8 @@
-"""Path helpers for per-user app data."""
+"""Path helpers for platform-specific user data/config/log locations.
+
+All helpers are deterministic and create required directories lazily so callers
+can treat returned paths as ready-to-use.
+"""
 
 from __future__ import annotations
 
@@ -17,6 +21,7 @@ def get_app_dirs(app_name: str = DEFAULT_APP_NAME) -> AppDirs:
 
 
 def _ensure_dir(path: Path) -> Path:
+    """Ensure directory exists and return the same path for chaining."""
     path.mkdir(parents=True, exist_ok=True)
     return path
 

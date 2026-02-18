@@ -1,4 +1,8 @@
-"""SQLite schema definitions."""
+"""SQLite schema creation and in-place migration steps.
+
+`PRAGMA user_version` is the source of truth for migration state. Migrations are
+applied sequentially and are written to be idempotent within their version step.
+"""
 
 from __future__ import annotations
 
@@ -61,7 +65,7 @@ SCHEMA_V1_STATEMENTS = [
 
 
 def create_schema(conn: sqlite3.Connection) -> None:
-    """Create all schema objects in the supplied connection."""
+    """Create or migrate schema to `SCHEMA_VERSION` in the supplied connection."""
     version = conn.execute("PRAGMA user_version").fetchone()[0]
     if version > SCHEMA_VERSION:
         raise RuntimeError(
@@ -83,11 +87,13 @@ def create_schema(conn: sqlite3.Connection) -> None:
 
 
 def _create_schema_v1(conn: sqlite3.Connection) -> None:
+    """Create base v1 tables/indexes in a fresh database."""
     for statement in SCHEMA_V1_STATEMENTS:
         conn.execute(statement)
 
 
 def _migrate_v1_to_v2(conn: sqlite3.Connection) -> None:
+    """Migrate playlist items to include a stable item primary key column."""
     _begin_immediate(conn)
     conn.execute(
         """
@@ -120,6 +126,7 @@ def _migrate_v1_to_v2(conn: sqlite3.Connection) -> None:
 
 
 def _migrate_v2_to_v3(conn: sqlite3.Connection) -> None:
+    """Add envelope-analysis cache tables used by audio level services."""
     _begin_immediate(conn)
     conn.execute(
         """
@@ -155,5 +162,6 @@ def _migrate_v2_to_v3(conn: sqlite3.Connection) -> None:
 
 
 def _begin_immediate(conn: sqlite3.Connection) -> None:
+    """Start immediate transaction only when one is not already active."""
     if not conn.in_transaction:
         conn.execute("BEGIN IMMEDIATE")

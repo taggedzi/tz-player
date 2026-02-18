@@ -1,4 +1,8 @@
-"""Custom viewport widget for rendering playlist rows."""
+"""Render-only playlist viewport with pointer-driven scrolling interactions.
+
+`PlaylistPane` owns data/state decisions; this widget renders the supplied model
+and emits row/jump/scroll intents based on keyboard/mouse input.
+"""
 
 from __future__ import annotations
 
@@ -27,6 +31,8 @@ from tz_player.services.playlist_store import PlaylistRow
 
 @dataclass
 class ViewportModel:
+    """Immutable-ish render model pushed in by `PlaylistPane`."""
+
     rows: list[PlaylistRow]
     total_count: int
     offset: int
@@ -54,6 +60,7 @@ class PlaylistViewport(Widget):
         self._dragging_scrollbar = False
 
     def update_model(self, **kwargs) -> None:
+        """Patch render model fields and trigger a repaint."""
         for key, value in kwargs.items():
             setattr(self._model, key, value)
         self.refresh()
@@ -150,6 +157,7 @@ class PlaylistViewport(Widget):
         return True
 
     def _emit_scroll_jump(self, y: int) -> None:
+        """Translate scrollbar y-position into playlist offset jump intent."""
         height = max(1, self.size.height)
         max_offset = max(0, self._model.total_count - self._model.limit)
         if max_offset == 0:
@@ -165,6 +173,7 @@ def _marker_for(
     selected_item_ids: set[int],
     playing_item_id: int | None,
 ) -> str:
+    """Build compact row marker from playback/cursor/selection state."""
     marker = ""
     if item_id == playing_item_id:
         marker += "▶"
@@ -194,6 +203,7 @@ def _truncate(value: str, width: int) -> str:
 def _render_scrollbar(
     height: int, total_count: int, limit: int, offset: int
 ) -> list[str]:
+    """Render a text scrollbar where thumb size tracks visible window ratio."""
     if height <= 0:
         return []
     max_offset = max(0, total_count - limit)

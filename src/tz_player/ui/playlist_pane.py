@@ -1,4 +1,9 @@
-"""Playlist pane with virtualized view."""
+"""Playlist pane orchestrating viewport, actions, search, and transport controls.
+
+This widget is the queue-management hub between app-level playback actions and
+store-backed playlist state. It keeps the viewport virtualized, debounces search,
+and routes transport/button intents to `TzPlayerApp` actions.
+"""
 
 from __future__ import annotations
 
@@ -50,6 +55,8 @@ DEBUG_VIEWPORT = False
 
 
 class FindInput(Input):
+    """Find box variant that emits a dedicated message on escape."""
+
     class EscapePressed(Message):
         def __init__(self, input_widget: FindInput) -> None:
             super().__init__()
@@ -247,6 +254,7 @@ class PlaylistPane(Static):
         event.stop()
 
     async def _refresh_transport_controls(self) -> None:
+        """Sync footer controls with current playback/cursor/search context."""
         if self._last_player_state is None:
             return
         if self.store is None or self.playlist_id is None:
@@ -286,6 +294,7 @@ class PlaylistPane(Static):
         )
 
     async def refresh_view(self) -> None:
+        """Refresh visible rows/counters from store for normal (non-search) mode."""
         if self.store is None or self.playlist_id is None:
             return
         if self.search_active:
@@ -397,6 +406,7 @@ class PlaylistPane(Static):
             await self._show_error("Failed to refresh playlist. See log file.")
 
     def _schedule_search(self, query: str) -> None:
+        """Debounce search updates and cancel stale in-flight search tasks."""
         self.search_query = query
         self._search_gen += 1
         gen = self._search_gen
@@ -420,6 +430,7 @@ class PlaylistPane(Static):
                 self._search_task = None
 
     async def _apply_search_query(self, gen: int, query: str) -> None:
+        """Apply search query guarded by generation token against stale updates."""
         try:
             if self.store is None or self.playlist_id is None:
                 return
@@ -484,6 +495,7 @@ class PlaylistPane(Static):
         await self._refresh_transport_controls()
 
     async def _refresh_search_window(self) -> None:
+        """Refresh only the visible slice of the active search result set."""
         if self.store is None or self.playlist_id is None:
             return
         try:
@@ -513,6 +525,7 @@ class PlaylistPane(Static):
             await self._show_error("Failed to search playlist. See log file.")
 
     async def _exit_search_mode(self) -> None:
+        """Restore normal playlist view and recover pre-search cursor context."""
         was_active = self.search_active
         self.search_active = False
         self.search_query = ""
@@ -586,6 +599,7 @@ class PlaylistPane(Static):
         self.run_worker(app.action_play_selected(), exclusive=True)
 
     async def _move_cursor(self, delta: int) -> None:
+        """Move cursor by one row while preserving viewport-relative position."""
         if not self._rows:
             return
 
@@ -626,6 +640,7 @@ class PlaylistPane(Static):
             await self._refresh_transport_controls()
 
     async def _move_cursor_by_page(self, direction: Literal[-1, 1]) -> None:
+        """Page cursor/window up or down with clamped viewport behavior."""
         if not self._rows:
             return
         step = max(1, self.limit)
@@ -674,6 +689,7 @@ class PlaylistPane(Static):
         self.run_worker(self._remove_selected(), exclusive=True)
 
     async def _move_selection(self, direction: Literal["up", "down"]) -> None:
+        """Request store-level reorder for selected rows or current cursor row."""
         if self.store is None or self.playlist_id is None:
             return
         try:
@@ -858,6 +874,7 @@ class PlaylistPane(Static):
             )
 
     async def _run_store_action(self, label: str, func, *args) -> None:
+        """Run playlist mutation action with refresh-gen bump and shared errors."""
         if self.store is None or self.playlist_id is None:
             return
         try:
@@ -900,6 +917,7 @@ class PlaylistPane(Static):
         self.app.push_screen(ErrorModal(message))
 
     def _request_visible_metadata(self) -> None:
+        """Schedule metadata hydration for visible rows that still need it."""
         if self.metadata_service is None:
             return
         needed = [row.track_id for row in self._rows if _needs_metadata(row)]
@@ -924,6 +942,7 @@ class PlaylistPane(Static):
 
 
 def _scan_media_files(folder: Path) -> list[Path]:
+    """Recursively collect supported audio files from a selected folder."""
     if not folder.exists():
         return []
     files: list[Path] = []
@@ -934,6 +953,7 @@ def _scan_media_files(folder: Path) -> list[Path]:
 
 
 def _needs_metadata(row: PlaylistRow) -> bool:
+    """Return whether a row still requires metadata hydration/retry."""
     if row.meta_valid is None:
         return True
     if row.meta_valid is False:
