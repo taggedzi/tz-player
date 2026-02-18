@@ -1,4 +1,4 @@
-"""Matrix rain visualizer variants."""
+"""Deterministic matrix-rain visualizer family (green/blue/red themes)."""
 
 from __future__ import annotations
 
@@ -12,6 +12,8 @@ _GLYPHS = "0123456789ABCDEF$#@%&*+=-"
 
 @dataclass
 class _MatrixRainBase:
+    """Shared matrix-rain renderer parametrized by theme colors."""
+
     plugin_id: str
     display_name: str
     _head_rgb: tuple[int, int, int]
@@ -25,6 +27,7 @@ class _MatrixRainBase:
         return None
 
     def render(self, frame: VisualizerFrameInput) -> str:
+        """Render time-driven falling glyph columns for the current viewport."""
         width = max(1, frame.width)
         height = max(1, frame.height)
         monotonic_s = frame.monotonic_s if math.isfinite(frame.monotonic_s) else 0.0
@@ -85,6 +88,7 @@ class MatrixRedVisualizer(_MatrixRainBase):
 def _trail_rgb(
     base_rgb: tuple[int, int, int], distance: float, trail: int
 ) -> tuple[int, int, int]:
+    """Fade trail color intensity as distance from glyph head increases."""
     if trail <= 1:
         return base_rgb
     ratio = min(max(distance / (trail - 1), 0.0), 1.0)
@@ -99,5 +103,6 @@ def _trail_rgb(
 
 
 def _rgb_code(rgb: tuple[int, int, int]) -> str:
+    """Build ANSI truecolor foreground code fragment for an RGB tuple."""
     r, g, b = rgb
     return f"38;2;{r};{g};{b}"

@@ -59,13 +59,13 @@ Status values:
 - [ ] `todo` `src/tz_player/utils/time_format.py`
 - [x] `done` `src/tz_player/visualizers/__init__.py`
 - [x] `done` `src/tz_player/visualizers/base.py`
-- [ ] `todo` `src/tz_player/visualizers/basic.py`
-- [ ] `todo` `src/tz_player/visualizers/cover_ascii.py`
-- [ ] `todo` `src/tz_player/visualizers/hackscope.py`
+- [x] `done` `src/tz_player/visualizers/basic.py`
+- [x] `done` `src/tz_player/visualizers/cover_ascii.py`
+- [x] `done` `src/tz_player/visualizers/hackscope.py`
 - [x] `done` `src/tz_player/visualizers/host.py`
-- [ ] `todo` `src/tz_player/visualizers/matrix.py`
+- [x] `done` `src/tz_player/visualizers/matrix.py`
 - [x] `done` `src/tz_player/visualizers/registry.py`
-- [ ] `todo` `src/tz_player/visualizers/vu.py`
+- [x] `done` `src/tz_player/visualizers/vu.py`
 
 ## Test Files (`tests/`)
 

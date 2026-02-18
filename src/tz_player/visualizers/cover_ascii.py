@@ -1,4 +1,4 @@
-"""Embedded-cover ASCII visualizers with non-blocking artwork loading."""
+"""Embedded/sidecar artwork-to-ASCII visualizers with background processing."""
 
 from __future__ import annotations
 
@@ -25,6 +25,8 @@ def _shutdown_artwork_executor() -> None:
 
 @dataclass(frozen=True)
 class ArtworkFingerprint:
+    """File identity tuple used to invalidate cached artwork render output."""
+
     track_path: str
     mtime_ns: int
     size_bytes: int
@@ -32,6 +34,8 @@ class ArtworkFingerprint:
 
 @dataclass(frozen=True)
 class AsciiArtFrame:
+    """Color-aware ASCII frame laid out in row-major order."""
+
     width: int
     height: int
     chars: tuple[str, ...]
@@ -40,6 +44,8 @@ class AsciiArtFrame:
 
 @dataclass(frozen=True)
 class ArtworkPayload:
+    """Pipeline output containing either renderable art or placeholder message."""
+
     art: AsciiArtFrame | None
     message: str
     source: str | None = None
@@ -96,6 +102,7 @@ class ArtworkAsciiPipeline:
         width: int,
         height: int,
     ) -> ArtworkPayload:
+        """Return cached/pending/built payload for a track and viewport size."""
         if not track_path:
             return _placeholder("No track loaded", width, height)
         norm_path = _normalize_path(track_path)
@@ -148,6 +155,8 @@ _PIPELINE = ArtworkAsciiPipeline()
 
 @dataclass
 class CoverAsciiStaticVisualizer:
+    """Static artwork visualizer rendering cached ASCII cover frames."""
+
     plugin_id: str = "cover.ascii.static"
     display_name: str = "Cover ASCII (Static)"
     _ansi_enabled: bool = True
@@ -159,6 +168,7 @@ class CoverAsciiStaticVisualizer:
         return None
 
     def render(self, frame: VisualizerFrameInput) -> str:
+        """Render centered static ASCII artwork or placeholder status text."""
         payload = _PIPELINE.get_payload(
             track_path=frame.track_path,
             width=max(1, frame.width),
@@ -175,6 +185,8 @@ class CoverAsciiStaticVisualizer:
 
 @dataclass
 class CoverAsciiMotionVisualizer:
+    """Motion variant applying deterministic wipe/slide transforms per frame."""
+
     plugin_id: str = "cover.ascii.motion"
     display_name: str = "Cover ASCII (Motion)"
     _ansi_enabled: bool = True
@@ -186,6 +198,7 @@ class CoverAsciiMotionVisualizer:
         return None
 
     def render(self, frame: VisualizerFrameInput) -> str:
+        """Render animated artwork only while playing; otherwise render static."""
         payload = _PIPELINE.get_payload(
             track_path=frame.track_path,
             width=max(1, frame.width),
@@ -208,6 +221,7 @@ class CoverAsciiMotionVisualizer:
 
 
 def _build_ascii_payload(*, path: Path, width: int, height: int) -> _BuildResult:
+    """Build ASCII payload from embedded art, then sidecar art as fallback."""
     fingerprint = _fingerprint(path)
     if fingerprint is None:
         return _BuildResult(
@@ -237,6 +251,7 @@ def _build_ascii_payload(*, path: Path, width: int, height: int) -> _BuildResult
 
 
 def _extract_embedded_art_bytes(path: Path) -> bytes | None:
+    """Best-effort extraction of embedded artwork bytes via TinyTag."""
     try:
         tinytag_module = import_module("tinytag")
         TinyTag = tinytag_module.TinyTag
@@ -286,6 +301,7 @@ def _as_bytes(value: object) -> bytes | None:
 
 
 def _extract_sidecar_art_bytes(track_path: Path) -> bytes | None:
+    """Find and load nearby cover-art sidecar files in priority order."""
     directory = track_path.parent
     if not directory.exists() or not directory.is_dir():
         return None
@@ -334,6 +350,7 @@ def _image_bytes_to_ascii_frame(
     width: int,
     height: int,
 ) -> AsciiArtFrame | None:
+    """Decode image bytes and map pixels into a centered ASCII color frame."""
     try:
         image_module = import_module("PIL.Image")
         resample = getattr(image_module, "Resampling", None)
@@ -434,6 +451,7 @@ def _center_ascii_frame(
 
 
 def _render_art(art: AsciiArtFrame, *, ansi_enabled: bool, source: str | None) -> str:
+    """Render ASCII frame, optionally with per-cell ANSI truecolor escapes."""
     del source
     lines: list[str] = []
     width = art.width
@@ -453,6 +471,7 @@ def _render_art(art: AsciiArtFrame, *, ansi_enabled: bool, source: str | None) -
 
 
 def _animate_art(art: AsciiArtFrame, frame_index: int) -> AsciiArtFrame:
+    """Alternate between wipe and slide effects on a deterministic schedule."""
     mode = (frame_index // 30) % 2
     if mode == 0:
         return _wipe_effect(art, frame_index=frame_index)
@@ -504,6 +523,7 @@ def _slide_effect(art: AsciiArtFrame, *, frame_index: int) -> AsciiArtFrame:
 
 
 def _placeholder(message: str, width: int, height: int) -> ArtworkPayload:
+    """Create centered placeholder text block for unavailable/loading artwork."""
     lines = [" " * max(1, width) for _ in range(max(1, height))]
     row = max(0, min(len(lines) - 1, height // 2))
     text = message[: max(1, width)]

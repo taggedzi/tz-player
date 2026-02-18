@@ -39,8 +39,8 @@ Execution tracker derived from `SPEC.md`.
   - `DOC-001B` Document application entrypoint and app shell wiring (focus, actions, event routing, startup/shutdown flow). Status: `in_progress` (`src/tz_player/app.py`, `src/tz_player/gui.py`, `src/tz_player/cli.py`, `src/tz_player/__init__.py` documented; remaining app-shell files pending)
   - `DOC-001C` Document playback, queue, and transport layers with lifecycle and error-handling notes. Status: `done` (`player_service`, `playback_backend`, `fake_backend`, `vlc_backend`, `playlist_store`, `playlist_pane`, `playlist_viewport`, `transport_controls`)
   - `DOC-001D` Document persistence/state/config services including schema assumptions and migration-sensitive behavior. Status: `done` (`state_store`, `db/schema`, `db/__init__`, `paths`, `runtime_config`, `logging_utils`)
-  - `DOC-001E` Document visualizer/plugin architecture, registry/fallback decisions, and service dependencies. Status: `in_progress` (`visualizers/base`, `visualizers/registry`, `visualizers/host`, and `visualizers/__init__` documented; plugin implementations pending)
-  - `DOC-001F` Document shared utilities/helpers and cross-cutting abstractions.
+  - `DOC-001E` Document visualizer/plugin architecture, registry/fallback decisions, and service dependencies. Status: `done` (`visualizers/__init__`, `base`, `registry`, `host`, `basic`, `matrix`, `hackscope`, `vu`, `cover_ascii`)
+  - `DOC-001F` Document shared utilities/helpers and cross-cutting abstractions. Status: `in_progress`
   - `DOC-001G` Document tests with intent-focused docstrings for fixtures/helpers and non-obvious scenarios.
   - `DOC-001H` Document tooling/config files with rationale for important settings and developer workflow dependencies.
   - `DOC-001I` Run required quality gates and fix docstring/comment style issues discovered by lint/type/test checks.
