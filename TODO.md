@@ -40,8 +40,8 @@ Execution tracker derived from `SPEC.md`.
   - `DOC-001C` Document playback, queue, and transport layers with lifecycle and error-handling notes. Status: `done` (`player_service`, `playback_backend`, `fake_backend`, `vlc_backend`, `playlist_store`, `playlist_pane`, `playlist_viewport`, `transport_controls`)
   - `DOC-001D` Document persistence/state/config services including schema assumptions and migration-sensitive behavior. Status: `done` (`state_store`, `db/schema`, `db/__init__`, `paths`, `runtime_config`, `logging_utils`)
   - `DOC-001E` Document visualizer/plugin architecture, registry/fallback decisions, and service dependencies. Status: `done` (`visualizers/__init__`, `base`, `registry`, `host`, `basic`, `matrix`, `hackscope`, `vu`, `cover_ascii`)
-  - `DOC-001F` Document shared utilities/helpers and cross-cutting abstractions. Status: `in_progress`
-  - `DOC-001G` Document tests with intent-focused docstrings for fixtures/helpers and non-obvious scenarios.
+  - `DOC-001F` Document shared utilities/helpers and cross-cutting abstractions. Status: `done` (`events`, `media_formats`, `version`, `utils/*`, `services/__init__`, `ui/__init__`)
+  - `DOC-001G` Document tests with intent-focused docstrings for fixtures/helpers and non-obvious scenarios. Status: `in_progress`
   - `DOC-001H` Document tooling/config files with rationale for important settings and developer workflow dependencies.
   - `DOC-001I` Run required quality gates and fix docstring/comment style issues discovered by lint/type/test checks.
   - `DOC-001J` Open PR with a completion checklist confirming 100% inventory coverage and reviewer notes.

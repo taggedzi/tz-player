@@ -1,1 +1,1 @@
-"""Utility helpers for tz-player."""
+"""Namespace package for reusable utility helpers."""

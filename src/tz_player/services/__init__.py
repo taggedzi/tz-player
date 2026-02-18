@@ -1,1 +1,1 @@
-"""Service layer modules."""
+"""Namespace package for service-layer orchestration modules."""

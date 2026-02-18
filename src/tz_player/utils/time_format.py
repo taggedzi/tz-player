@@ -1,4 +1,4 @@
-"""Time formatting helpers for the UI."""
+"""Time formatting helpers shared by transport/status UI surfaces."""
 
 from __future__ import annotations
 
@@ -22,10 +22,12 @@ def format_time_pair_ms(position_ms: int, duration_ms: int) -> tuple[str, str]:
 
 
 def _needs_hours(ms: int) -> bool:
+    """Return whether value requires an hour field when displayed."""
     return _coerce_ms(ms) >= 3_600_000
 
 
 def _format_time_ms(ms: int, *, force_hours: bool) -> str:
+    """Format coerced milliseconds into `MM:SS` or `H:MM:SS`."""
     total_seconds = _coerce_ms(ms) // 1000
     hours = total_seconds // 3600
     if hours > 0 or force_hours:
@@ -38,6 +40,7 @@ def _format_time_ms(ms: int, *, force_hours: bool) -> str:
 
 
 def _coerce_ms(value: int) -> int:
+    """Coerce user/backend time value to finite non-negative millisecond int."""
     try:
         numeric = float(value)
     except (TypeError, ValueError):

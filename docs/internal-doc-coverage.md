@@ -20,17 +20,17 @@ Status values:
 - [x] `done` `src/tz_player/app.py`
 - [x] `done` `src/tz_player/cli.py`
 - [ ] `todo` `src/tz_player/doctor.py`
-- [ ] `todo` `src/tz_player/events.py`
+- [x] `done` `src/tz_player/events.py`
 - [x] `done` `src/tz_player/gui.py`
 - [x] `done` `src/tz_player/logging_utils.py`
-- [ ] `todo` `src/tz_player/media_formats.py`
+- [x] `done` `src/tz_player/media_formats.py`
 - [x] `done` `src/tz_player/paths.py`
 - [x] `done` `src/tz_player/runtime_config.py`
 - [x] `done` `src/tz_player/state_store.py`
-- [ ] `todo` `src/tz_player/version.py`
+- [x] `done` `src/tz_player/version.py`
 - [x] `done` `src/tz_player/db/__init__.py`
 - [x] `done` `src/tz_player/db/schema.py`
-- [ ] `todo` `src/tz_player/services/__init__.py`
+- [x] `done` `src/tz_player/services/__init__.py`
 - [ ] `todo` `src/tz_player/services/audio_envelope_analysis.py`
 - [ ] `todo` `src/tz_player/services/audio_envelope_store.py`
 - [ ] `todo` `src/tz_player/services/audio_level_service.py`
@@ -41,7 +41,7 @@ Status values:
 - [x] `done` `src/tz_player/services/player_service.py`
 - [x] `done` `src/tz_player/services/playlist_store.py`
 - [x] `done` `src/tz_player/services/vlc_backend.py`
-- [ ] `todo` `src/tz_player/ui/__init__.py`
+- [x] `done` `src/tz_player/ui/__init__.py`
 - [ ] `todo` `src/tz_player/ui/actions_menu.py`
 - [x] `done` `src/tz_player/ui/playlist_pane.py`
 - [x] `done` `src/tz_player/ui/playlist_viewport.py`
@@ -54,9 +54,9 @@ Status values:
 - [ ] `todo` `src/tz_player/ui/modals/error.py`
 - [ ] `todo` `src/tz_player/ui/modals/file_tree_picker.py`
 - [ ] `todo` `src/tz_player/ui/modals/path_input.py`
-- [ ] `todo` `src/tz_player/utils/__init__.py`
-- [ ] `todo` `src/tz_player/utils/async_utils.py`
-- [ ] `todo` `src/tz_player/utils/time_format.py`
+- [x] `done` `src/tz_player/utils/__init__.py`
+- [x] `done` `src/tz_player/utils/async_utils.py`
+- [x] `done` `src/tz_player/utils/time_format.py`
 - [x] `done` `src/tz_player/visualizers/__init__.py`
 - [x] `done` `src/tz_player/visualizers/base.py`
 - [x] `done` `src/tz_player/visualizers/basic.py`

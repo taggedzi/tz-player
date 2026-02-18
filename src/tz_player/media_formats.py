@@ -1,4 +1,4 @@
-"""Shared media format helpers."""
+"""Shared media format helpers used by picker/import workflows."""
 
 from __future__ import annotations
 
@@ -24,6 +24,7 @@ VLC_AUDIO_EXTENSIONS = frozenset(
         ".wma",
     }
 )
+"""Recognized audio suffixes aligned with intended VLC backend support."""
 
 
 def is_supported_audio_file(path: Path) -> bool:
