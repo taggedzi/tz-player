@@ -35,12 +35,16 @@ from tz_player.ui.transport_controls import TransportControls
 
 
 class FakeAppDirs:
+    """Simple stand-in for `platformdirs.AppDirs` used by path monkeypatching."""
+
     def __init__(self, data_dir: Path, config_dir: Path) -> None:
         self.user_data_dir = str(data_dir)
         self.user_config_dir = str(config_dir)
 
 
 class _FakeScreenMouseEvent:
+    """Minimal mouse event stub for app-level outside-click dismissal tests."""
+
     def __init__(self, *, screen_x: int, screen_y: int) -> None:
         self.screen_x = screen_x
         self.screen_y = screen_y
@@ -51,10 +55,12 @@ class _FakeScreenMouseEvent:
 
 
 def _run(coro):
+    """Run async test scenario from sync pytest tests."""
     return asyncio.run(coro)
 
 
 def _setup_dirs(tmp_path, monkeypatch) -> None:
+    """Redirect app data/config paths to test-local temporary directories."""
     data_dir = tmp_path / "data"
     config_dir = tmp_path / "config"
 

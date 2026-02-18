@@ -20,10 +20,12 @@ from tz_player.services.player_service import PlayerService, PlayerState, TrackI
 
 
 def _run(coro):
+    """Run async service scenario from sync test functions."""
     return asyncio.run(coro)
 
 
 async def _track_info_provider(_playlist_id: int, _item_id: int) -> TrackInfo:
+    """Return deterministic track metadata for generic service tests."""
     return TrackInfo(
         title="Song",
         artist="Artist",
@@ -35,6 +37,8 @@ async def _track_info_provider(_playlist_id: int, _item_id: int) -> TrackInfo:
 
 
 def _playlist_item_ids_provider(item_ids: list[int]):
+    """Build async item-id provider returning a stable copy per invocation."""
+
     async def provider(_playlist_id: int) -> list[int]:
         return list(item_ids)
 

@@ -69,11 +69,11 @@ Status values:
 
 ## Test Files (`tests/`)
 
-- [ ] `todo` `tests/conftest.py`
+- [x] `done` `tests/conftest.py`
 - [ ] `todo` `tests/test_app_envelope_analysis.py`
 - [ ] `todo` `tests/test_app_parser.py`
 - [ ] `todo` `tests/test_app_speed_limits.py`
-- [ ] `todo` `tests/test_audio_envelope_analysis.py`
+- [x] `done` `tests/test_audio_envelope_analysis.py`
 - [ ] `todo` `tests/test_audio_envelope_store.py`
 - [ ] `todo` `tests/test_audio_level_service.py`
 - [ ] `todo` `tests/test_audio_tags.py`
@@ -85,14 +85,14 @@ Status values:
 - [ ] `todo` `tests/test_gui_parser.py`
 - [ ] `todo` `tests/test_logging_config.py`
 - [ ] `todo` `tests/test_metadata_debounce.py`
-- [ ] `todo` `tests/test_metadata_service.py`
+- [x] `done` `tests/test_metadata_service.py`
 - [ ] `todo` `tests/test_non_blocking_paths.py`
 - [ ] `todo` `tests/test_paths.py`
 - [ ] `todo` `tests/test_performance_opt_in.py`
-- [ ] `todo` `tests/test_player_service.py`
+- [x] `done` `tests/test_player_service.py`
 - [ ] `todo` `tests/test_playlist_editing_integration.py`
-- [ ] `todo` `tests/test_playlist_store.py`
-- [ ] `todo` `tests/test_playlist_viewport.py`
+- [x] `done` `tests/test_playlist_store.py`
+- [x] `done` `tests/test_playlist_viewport.py`
 - [ ] `todo` `tests/test_release_prepare.py`
 - [ ] `todo` `tests/test_runtime_config.py`
 - [ ] `todo` `tests/test_slider_bar.py`
@@ -103,13 +103,13 @@ Status values:
 - [ ] `todo` `tests/test_time_format.py`
 - [ ] `todo` `tests/test_track_info_panel.py`
 - [ ] `todo` `tests/test_transport_controls.py`
-- [ ] `todo` `tests/test_ui.py`
+- [x] `done` `tests/test_ui.py`
 - [ ] `todo` `tests/test_visualizer_basic.py`
-- [ ] `todo` `tests/test_visualizer_cover_ascii.py`
+- [x] `done` `tests/test_visualizer_cover_ascii.py`
 - [ ] `todo` `tests/test_visualizer_hackscope.py`
-- [ ] `todo` `tests/test_visualizer_host.py`
+- [x] `done` `tests/test_visualizer_host.py`
 - [ ] `todo` `tests/test_visualizer_matrix.py`
-- [ ] `todo` `tests/test_visualizer_registry.py`
+- [x] `done` `tests/test_visualizer_registry.py`
 - [ ] `todo` `tests/test_visualizer_selection_integration.py`
 - [ ] `todo` `tests/test_visualizer_vu.py`
 - [ ] `todo` `tests/test_vlc_backend.py`

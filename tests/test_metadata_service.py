@@ -13,10 +13,12 @@ from tz_player.services.playlist_store import PlaylistStore
 
 
 def _run(coro):
+    """Run async metadata workflow from sync test."""
     return asyncio.run(coro)
 
 
 def _write_wave(path: Path, duration_sec: float = 0.5, framerate: int = 44100) -> None:
+    """Create small deterministic WAV fixture for metadata-duration tests."""
     frames = int(duration_sec * framerate)
     with wave.open(str(path), "wb") as wave_file:
         wave_file.setnchannels(1)

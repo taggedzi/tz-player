@@ -14,6 +14,8 @@ from tz_player.visualizers.registry import VisualizerRegistry, _build_factory_ma
 
 @dataclass
 class FirstPlugin:
+    """Duplicate-id plugin candidate used to assert first-registration wins."""
+
     plugin_id: str = "dup"
     display_name: str = "first"
 
@@ -29,6 +31,8 @@ class FirstPlugin:
 
 @dataclass
 class SecondPlugin:
+    """Second duplicate-id candidate expected to be ignored by registry."""
+
     plugin_id: str = "dup"
     display_name: str = "second"
 
