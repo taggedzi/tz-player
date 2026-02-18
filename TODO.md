@@ -12,7 +12,49 @@ Execution tracker derived from `SPEC.md`.
 
 ## Active Backlog
 
-- No active tasks. Add new `todo` items here.
+### DOC-001 Internal Documentation Campaign (All Project Files)
+- Status: `todo`
+- Goal:
+  - Add maintainable internal documentation so a contributor can open any project file and quickly understand purpose, relationships, dependencies, and non-obvious logic.
+  - Execute this work on a dedicated branch and merge by PR after full validation.
+- Branch / PR workflow:
+  - Working branch: `docs/internal-documentation-campaign`
+  - Commit format:
+    - `docs(<area>): add internal documentation for <module-or-path>`
+  - PR title format:
+    - `docs: internal documentation pass across project files`
+- Scope:
+  - Python source files in `src/`
+  - Tests in `tests/`
+  - Python-supporting project files (`pyproject.toml`, `noxfile.py`, tooling scripts)
+  - Key contributor docs where relationship/dependency notes are needed
+- Documentation standards:
+  - Add/update module docstrings describing file role and major collaborators.
+  - Add/update class/function/method docstrings where behavior or contracts are not obvious.
+  - Add concise inline comments only where logic is non-trivial or decision-heavy.
+  - Prefer dependency and relationship notes near integration boundaries (UI/app/service/storage/playback/plugin).
+  - Keep comments/docstrings synchronized with actual behavior; avoid stale narrative text.
+- Tasks:
+  - `DOC-001A` Build coverage inventory file (for example `docs/internal-doc-coverage.md`) listing every in-scope file with status (`todo`/`in_progress`/`done`).
+  - `DOC-001B` Document application entrypoint and app shell wiring (focus, actions, event routing, startup/shutdown flow).
+  - `DOC-001C` Document playback, queue, and transport layers with lifecycle and error-handling notes.
+  - `DOC-001D` Document persistence/state/config services including schema assumptions and migration-sensitive behavior.
+  - `DOC-001E` Document visualizer/plugin architecture, registry/fallback decisions, and service dependencies.
+  - `DOC-001F` Document shared utilities/helpers and cross-cutting abstractions.
+  - `DOC-001G` Document tests with intent-focused docstrings for fixtures/helpers and non-obvious scenarios.
+  - `DOC-001H` Document tooling/config files with rationale for important settings and developer workflow dependencies.
+  - `DOC-001I` Run required quality gates and fix docstring/comment style issues discovered by lint/type/test checks.
+  - `DOC-001J` Open PR with a completion checklist confirming 100% inventory coverage and reviewer notes.
+- Minimum validation per docs change set:
+  - `.ubuntu-venv/bin/python -m ruff check .`
+  - `.ubuntu-venv/bin/python -m ruff format --check .`
+  - `.ubuntu-venv/bin/python -m mypy src`
+  - `.ubuntu-venv/bin/python -m pytest`
+- Acceptance:
+  - Every file in the coverage inventory is marked `done`.
+  - Each in-scope source file has sufficient internal documentation for maintenance-level understanding.
+  - No behavior regressions introduced by documentation edits.
+  - Documentation branch is ready for PR review and merge.
 
 ## Archived Completed Work
 
