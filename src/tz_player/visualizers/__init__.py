@@ -1,4 +1,4 @@
-"""Visualizer plugin subsystem."""
+"""Public exports for the visualizer plugin subsystem."""
 
 from .base import VisualizerContext, VisualizerFrameInput, VisualizerPlugin
 from .host import VisualizerHost

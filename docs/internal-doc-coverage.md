@@ -22,13 +22,13 @@ Status values:
 - [ ] `todo` `src/tz_player/doctor.py`
 - [ ] `todo` `src/tz_player/events.py`
 - [x] `done` `src/tz_player/gui.py`
-- [ ] `todo` `src/tz_player/logging_utils.py`
+- [x] `done` `src/tz_player/logging_utils.py`
 - [ ] `todo` `src/tz_player/media_formats.py`
 - [x] `done` `src/tz_player/paths.py`
-- [ ] `todo` `src/tz_player/runtime_config.py`
+- [x] `done` `src/tz_player/runtime_config.py`
 - [x] `done` `src/tz_player/state_store.py`
 - [ ] `todo` `src/tz_player/version.py`
-- [ ] `todo` `src/tz_player/db/__init__.py`
+- [x] `done` `src/tz_player/db/__init__.py`
 - [x] `done` `src/tz_player/db/schema.py`
 - [ ] `todo` `src/tz_player/services/__init__.py`
 - [ ] `todo` `src/tz_player/services/audio_envelope_analysis.py`
@@ -57,14 +57,14 @@ Status values:
 - [ ] `todo` `src/tz_player/utils/__init__.py`
 - [ ] `todo` `src/tz_player/utils/async_utils.py`
 - [ ] `todo` `src/tz_player/utils/time_format.py`
-- [ ] `todo` `src/tz_player/visualizers/__init__.py`
-- [ ] `todo` `src/tz_player/visualizers/base.py`
+- [x] `done` `src/tz_player/visualizers/__init__.py`
+- [x] `done` `src/tz_player/visualizers/base.py`
 - [ ] `todo` `src/tz_player/visualizers/basic.py`
 - [ ] `todo` `src/tz_player/visualizers/cover_ascii.py`
 - [ ] `todo` `src/tz_player/visualizers/hackscope.py`
-- [ ] `todo` `src/tz_player/visualizers/host.py`
+- [x] `done` `src/tz_player/visualizers/host.py`
 - [ ] `todo` `src/tz_player/visualizers/matrix.py`
-- [ ] `todo` `src/tz_player/visualizers/registry.py`
+- [x] `done` `src/tz_player/visualizers/registry.py`
 - [ ] `todo` `src/tz_player/visualizers/vu.py`
 
 ## Test Files (`tests/`)
