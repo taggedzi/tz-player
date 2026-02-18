@@ -39,12 +39,14 @@ class SqliteEnvelopeStore(EnvelopeLevelProvider):
         return self._has_envelope_sync(Path(track_path))
 
     def _connect(self) -> sqlite3.Connection:
+        """Create SQLite connection configured for envelope lookups/writes."""
         conn = sqlite3.connect(self._db_path, timeout=30)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys=ON")
         return conn
 
     def _initialize_sync(self) -> None:
+        """Create envelope cache tables/indexes when missing."""
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as conn:
             conn.execute(
@@ -85,6 +87,7 @@ class SqliteEnvelopeStore(EnvelopeLevelProvider):
         points: list[tuple[int, float, float]],
         duration_ms: int,
     ) -> None:
+        """Replace cached envelope and points for track fingerprint."""
         if not points:
             return
         path_norm = _normalize_path(track_path)
@@ -142,6 +145,7 @@ class SqliteEnvelopeStore(EnvelopeLevelProvider):
     def _get_level_at_sync(
         self, track_path: Path, position_ms: int
     ) -> LevelSample | None:
+        """Lookup and interpolate envelope level at requested playback position."""
         path_norm = _normalize_path(track_path)
         mtime_ns, size_bytes = _stat_path(track_path)
         with self._connect() as conn:
@@ -208,6 +212,7 @@ class SqliteEnvelopeStore(EnvelopeLevelProvider):
             )
 
     def _has_envelope_sync(self, track_path: Path) -> bool:
+        """Return whether valid envelope cache exists for current file fingerprint."""
         path_norm = _normalize_path(track_path)
         mtime_ns, size_bytes = _stat_path(track_path)
         with self._connect() as conn:
@@ -232,6 +237,7 @@ class SqliteEnvelopeStore(EnvelopeLevelProvider):
 
 
 def _normalize_path(path: Path) -> str:
+    """Normalize path key with case folding on Windows for stable lookups."""
     raw = str(path)
     if os.name == "nt":
         return raw.lower()
@@ -239,6 +245,7 @@ def _normalize_path(path: Path) -> str:
 
 
 def _stat_path(path: Path) -> tuple[int | None, int | None]:
+    """Return file fingerprint tuple used for cache invalidation checks."""
     try:
         stats = path.stat()
     except OSError:

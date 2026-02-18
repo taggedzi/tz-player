@@ -242,6 +242,30 @@ This section is for contributors and future maintainers.
 
 ---
 
+## Maintainer Code Map
+
+The repository is organized by responsibility:
+
+* `src/tz_player/app.py`: Textual app shell that wires UI, services, persistence, and visualizers.
+* `src/tz_player/services/`: playback, metadata, envelope analysis/cache, and playlist DB access.
+* `src/tz_player/ui/`: panes/widgets/modals that emit and consume Textual messages.
+* `src/tz_player/visualizers/`: plugin contract, registry/host, and built-in visualizer implementations.
+* `src/tz_player/db/schema.py`: SQLite schema and migrations (via `PRAGMA user_version`).
+* `src/tz_player/state_store.py`: persisted JSON runtime state and coercion/backward-compat handling.
+* `tests/`: behavior and integration coverage aligned to workflows and resilience contracts.
+
+Core runtime dependency flow is:
+
+* UI intent (`ui/*`) -> app actions (`app.py`) -> service calls (`services/*`)
+* service events (`events.py`) -> app state updates -> UI refresh
+* persisted state (`state_store.py`) and playlist DB (`playlist_store.py`) are loaded at startup and saved during runtime/shutdown
+
+Non-blocking rule:
+
+* Blocking file/DB/media operations should run through `run_blocking(...)` (`src/tz_player/utils/async_utils.py`) to avoid stalling the Textual event loop.
+
+---
+
 ## Development Setup
 
 ```bash

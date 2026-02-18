@@ -18,6 +18,7 @@ def _frame(
     frame_index: int = 0,
     monotonic_s: float = 0.0,
 ) -> VisualizerFrameInput:
+    """Build deterministic frame payload for matrix visualizer variants."""
     return VisualizerFrameInput(
         frame_index=frame_index,
         monotonic_s=monotonic_s,

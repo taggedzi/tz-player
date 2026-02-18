@@ -1,4 +1,8 @@
-"""Async SQLite-backed playlist store."""
+"""SQLite-backed playlist/query layer for playlist and metadata state.
+
+The public API is async but all DB work is synchronous and dispatched through
+`run_blocking(...)` to keep the Textual event loop non-blocking.
+"""
 
 from __future__ import annotations
 
@@ -19,6 +23,8 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class PlaylistRow:
+    """Joined playlist row including optional cached metadata fields."""
+
     item_id: int
     track_id: int
     pos_key: int
@@ -34,6 +40,8 @@ class PlaylistRow:
 
 @dataclass(frozen=True)
 class TrackRecord:
+    """Minimal immutable track record used for metadata refresh workflows."""
+
     track_id: int
     path: Path
     mtime_ns: int | None
@@ -42,6 +50,8 @@ class TrackRecord:
 
 @dataclass(frozen=True)
 class TrackMeta:
+    """Metadata payload persisted into `track_meta` and mirrored into `tracks`."""
+
     title: str | None
     artist: str | None
     album: str | None
@@ -55,6 +65,8 @@ class TrackMeta:
 
 @dataclass(frozen=True)
 class TrackMetaSnapshot:
+    """Read-only metadata snapshot used for change detection."""
+
     track_id: int
     title: str | None
     artist: str | None
@@ -188,6 +200,7 @@ class PlaylistStore:
         await run_blocking(self._mark_meta_invalid_sync, track_id, error)
 
     def _connect(self) -> sqlite3.Connection:
+        """Create a fresh SQLite connection configured for concurrent app usage."""
         conn = sqlite3.connect(self._db_path, timeout=30)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode=WAL")
@@ -235,6 +248,7 @@ class PlaylistStore:
             )
 
     def _add_tracks_sync(self, playlist_id: int, paths: list[Path]) -> int:
+        """Insert track references and append playlist items in stable order."""
         if not paths:
             return 0
 
@@ -246,6 +260,7 @@ class PlaylistStore:
                 (playlist_id,),
             )
             next_pos = int(cursor.fetchone()[0]) + POS_STEP
+            # `pos_key` spacing allows cheap local reorders without global renumber.
             for path in paths:
                 path_value = str(path)
                 path_norm = _normalize_path(path)
@@ -482,6 +497,7 @@ class PlaylistStore:
     def _search_item_ids_sync(
         self, playlist_id: int, query: str, limit: int
     ) -> list[int]:
+        """Search playlist rows by tokenized AND matching across metadata/path."""
         tokens = [token.strip().lower() for token in query.split() if token.strip()]
         if not tokens:
             return []
@@ -611,6 +627,7 @@ class PlaylistStore:
         selection: list[int],
         cursor: int | None,
     ) -> None:
+        """Reorder selected items one step while preserving relative block order."""
         if not selection and cursor is None:
             return
         selection_ids = set(selection or ([cursor] if cursor is not None else []))
@@ -634,6 +651,7 @@ class PlaylistStore:
             pos_keys = [int(row["pos_key"]) for row in rows]
 
             if direction == "up":
+                # Scan top->bottom so each selected row swaps at most once.
                 for index in range(1, len(item_ids)):
                     if (
                         item_ids[index] in selection_ids
@@ -644,6 +662,7 @@ class PlaylistStore:
                             item_ids[index - 1],
                         )
             else:
+                # Scan bottom->top for symmetric one-step downward moves.
                 for index in range(len(item_ids) - 2, -1, -1):
                     if (
                         item_ids[index] in selection_ids
@@ -764,6 +783,7 @@ class PlaylistStore:
             )
 
     def _renumber_playlist_sync(self, playlist_id: int) -> None:
+        """Compact `pos_key` values back to evenly spaced increments."""
         with self._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
             rows = conn.execute(
@@ -918,6 +938,7 @@ class PlaylistStore:
 
 
 def _normalize_path(path: Path) -> str:
+    """Normalize paths for uniqueness checks across case/relative variants."""
     return os.path.normcase(str(path.expanduser().resolve(strict=False)))
 
 

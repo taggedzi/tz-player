@@ -1,4 +1,4 @@
-"""Nox sessions."""
+"""Nox session definitions mirroring repository quality gates."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ nox.options.sessions = ["lint", "typecheck", "tests"]
 
 @nox.session
 def lint(session: nox.Session) -> None:
+    """Run lint and formatting checks without mutating files."""
     session.install("ruff")
     session.run("ruff", "check", ".")
     session.run("ruff", "format", "--check", ".")
@@ -24,6 +25,7 @@ def lint_fix(session: nox.Session) -> None:
 
 @nox.session
 def typecheck(session: nox.Session) -> None:
+    """Run mypy on source package with project dependencies installed."""
     session.install("mypy")
     session.install("-e", ".")
     session.run("mypy", "src")
@@ -31,6 +33,7 @@ def typecheck(session: nox.Session) -> None:
 
 @nox.session
 def tests(session: nox.Session) -> None:
+    """Run pytest against repository test suite."""
     session.install("pytest")
     session.install("-e", ".")
     session.run("pytest")
@@ -38,6 +41,7 @@ def tests(session: nox.Session) -> None:
 
 @nox.session(python=False)
 def local(session: nox.Session) -> None:
+    """Run local toolchain directly from current environment (no virtualenv)."""
     session.run("ruff", "check", "--fix", ".", external=True)
     session.run("ruff", "format", ".", external=True)
 

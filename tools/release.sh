@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Wrapper selecting preferred interpreter for `tools/release.py`.
 set -euo pipefail
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"

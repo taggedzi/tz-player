@@ -18,10 +18,13 @@ NEXT_PATH_STR = str(NEXT_PATH)
 
 
 def _run(coro):
+    """Run async envelope workflow from sync pytest test."""
     return asyncio.run(coro)
 
 
 class _StoreStub:
+    """Envelope-store stub controlling cache-hit and upsert capture behavior."""
+
     def __init__(self, *, has_hit: bool) -> None:
         self.has_hit = has_hit
         self.upserts: list[tuple[str, int, int]] = []
@@ -37,6 +40,7 @@ class _StoreStub:
 
 
 def _track() -> TrackInfo:
+    """Build canonical track fixture used across envelope-analysis tests."""
     return TrackInfo(
         title="Song",
         artist="Artist",
@@ -48,12 +52,15 @@ def _track() -> TrackInfo:
 
 
 class _FakeAppDirs:
+    """Path-dir stub isolating data/config paths for app tests."""
+
     def __init__(self, data_dir: Path, config_dir: Path) -> None:
         self.user_data_dir = str(data_dir)
         self.user_config_dir = str(config_dir)
 
 
 def _setup_dirs(tmp_path, monkeypatch) -> None:
+    """Patch AppDirs path resolution to temporary test locations."""
     data_dir = tmp_path / "data"
     config_dir = tmp_path / "config"
 

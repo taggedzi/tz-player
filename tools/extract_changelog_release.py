@@ -8,6 +8,7 @@ from pathlib import Path
 
 
 def extract_release_section(*, changelog_text: str, version: str) -> str:
+    """Extract one release heading block from changelog text by version."""
     version = version.strip()
     if version.startswith(("v", "V")):
         version = version[1:]
@@ -23,6 +24,7 @@ def extract_release_section(*, changelog_text: str, version: str) -> str:
 
 
 def main() -> int:
+    """CLI entrypoint for writing extracted release section to output file."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--version", required=True, help="Version to extract.")
     parser.add_argument(

@@ -23,16 +23,20 @@ INTERACTION_BUDGET_S = 0.1
 
 
 class FakeAppDirs:
+    """Path-dir stub routing app dirs into temp directories for perf tests."""
+
     def __init__(self, data_dir: Path, config_dir: Path) -> None:
         self.user_data_dir = str(data_dir)
         self.user_config_dir = str(config_dir)
 
 
 def _run(coro):
+    """Run async performance scenario from sync test body."""
     return asyncio.run(coro)
 
 
 def _setup_dirs(tmp_path, monkeypatch) -> None:
+    """Patch AppDirs to avoid touching real user data/config locations."""
     data_dir = tmp_path / "data"
     config_dir = tmp_path / "config"
 

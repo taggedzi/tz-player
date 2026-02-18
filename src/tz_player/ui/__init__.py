@@ -1,1 +1,1 @@
-"""Textual UI components."""
+"""Namespace package for Textual widgets, panes, and modal components."""

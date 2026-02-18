@@ -15,16 +15,20 @@ from tz_player.visualizers.registry import VisualizerRegistry
 
 
 class FakeAppDirs:
+    """Path-dir stub for routing state/db paths into temporary test dirs."""
+
     def __init__(self, data_dir: Path, config_dir: Path) -> None:
         self.user_data_dir = str(data_dir)
         self.user_config_dir = str(config_dir)
 
 
 def _run(coro):
+    """Run async app scenario from sync test case."""
     return asyncio.run(coro)
 
 
 def _setup_dirs(tmp_path, monkeypatch) -> None:
+    """Patch `AppDirs` usage so persisted state is test-local."""
     data_dir = tmp_path / "data"
     config_dir = tmp_path / "config"
 
@@ -37,6 +41,8 @@ def _setup_dirs(tmp_path, monkeypatch) -> None:
 
 @dataclass
 class VizOne:
+    """Visualizer stub representing first selectable plugin."""
+
     plugin_id: str = "viz.one"
     display_name: str = "Viz One"
 
@@ -52,6 +58,8 @@ class VizOne:
 
 @dataclass
 class VizTwo:
+    """Visualizer stub representing second selectable plugin."""
+
     plugin_id: str = "viz.two"
     display_name: str = "Viz Two"
 
@@ -67,6 +75,8 @@ class VizTwo:
 
 @dataclass
 class VizDefault:
+    """Visualizer stub used as deterministic registry default."""
+
     plugin_id: str = "viz.default"
     display_name: str = "Viz Default"
 
@@ -82,6 +92,8 @@ class VizDefault:
 
 @dataclass
 class VizAnsi:
+    """Visualizer stub returning ANSI output for markup-safety regression."""
+
     plugin_id: str = "viz.ansi"
     display_name: str = "Viz ANSI"
 

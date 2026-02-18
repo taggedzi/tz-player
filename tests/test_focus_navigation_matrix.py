@@ -15,16 +15,20 @@ from tz_player.ui.text_button import TextButton
 
 
 class FakeAppDirs:
+    """Path-dir stub for isolating app data/config in temp folders."""
+
     def __init__(self, data_dir: Path, config_dir: Path) -> None:
         self.user_data_dir = str(data_dir)
         self.user_config_dir = str(config_dir)
 
 
 def _run(coro):
+    """Run async scenario from sync pytest test body."""
     return asyncio.run(coro)
 
 
 def _setup_dirs(tmp_path, monkeypatch) -> None:
+    """Patch AppDirs resolution to test-local directories."""
     data_dir = tmp_path / "data"
     config_dir = tmp_path / "config"
 
@@ -36,6 +40,8 @@ def _setup_dirs(tmp_path, monkeypatch) -> None:
 
 
 class KeyCaptureApp(TzPlayerApp):
+    """App subclass capturing routed key-action calls for matrix assertions."""
+
     def __init__(self) -> None:
         super().__init__(auto_init=False)
         self.calls: list[str] = []
@@ -99,6 +105,7 @@ class KeyCaptureApp(TzPlayerApp):
 
 
 async def _configure_app(app: KeyCaptureApp, tmp_path: Path) -> PlaylistPane:
+    """Initialize app with small playlist and ready transport controls."""
     await app.store.initialize()
     playlist_id = await app.store.ensure_playlist("Default")
     files = [tmp_path / "track1.mp3", tmp_path / "track2.mp3", tmp_path / "track3.mp3"]

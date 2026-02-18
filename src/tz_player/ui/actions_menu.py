@@ -17,11 +17,15 @@ logger = logging.getLogger(__name__)
 
 
 class ActionsMenuButton(TextButton):
+    """Playlist-header button opening contextual actions popup."""
+
     def __init__(self, **kwargs) -> None:
         super().__init__("Actions ▾", action="actions_menu", **kwargs)
 
 
 class ActionsMenuSelected(Message):
+    """Message emitted when user selects an action from popup."""
+
     bubble = True
 
     def __init__(self, action: str) -> None:
@@ -30,10 +34,14 @@ class ActionsMenuSelected(Message):
 
 
 class ActionsMenuDismissed(Message):
+    """Message emitted when popup is dismissed without selection."""
+
     bubble = True
 
 
 class ActionsMenuPopup(Widget):
+    """Overlay option-list popup anchored to the actions button region."""
+
     DEFAULT_CSS = """
     ActionsMenuPopup {
         position: absolute;
@@ -85,6 +93,7 @@ class ActionsMenuPopup(Widget):
         yield self._menu
 
     def on_mount(self) -> None:
+        """Place popup near anchor and focus options list for keyboard use."""
         self._place_menu()
         self._menu.focus()
 
@@ -101,6 +110,7 @@ class ActionsMenuPopup(Widget):
             event.stop()
 
     def dismiss(self) -> None:
+        """Idempotently dismiss popup and emit dismissal message."""
         if self._dismissed:
             return
         self._dismissed = True
@@ -109,6 +119,7 @@ class ActionsMenuPopup(Widget):
             self.remove()
 
     def _place_menu(self) -> None:
+        """Compute popup size/position within current screen bounds."""
         labels = [option.prompt for option in self._menu.options]
         max_label = max((len(str(label)) for label in labels), default=10)
         menu_width = min(max_label + 4, max(12, self.app.size.width - 2))
@@ -139,6 +150,7 @@ class ActionsMenuPopup(Widget):
         self._menu_region = Region(x, y, menu_width, menu_height)
 
     def contains_point(self, x: int, y: int) -> bool:
+        """Return whether screen-space point intersects menu bounds."""
         return (
             self._menu_region.x <= x < self._menu_region.right
             and self._menu_region.y <= y < self._menu_region.bottom

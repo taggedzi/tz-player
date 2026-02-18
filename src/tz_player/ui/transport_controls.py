@@ -1,4 +1,8 @@
-"""Transport controls widget for playlist footer."""
+"""Transport footer controls and state summary for playlist pane.
+
+This widget is render/event focused: it reflects `PlayerState` and emits high
+level transport/repeat/shuffle intents that bubble to `PlaylistPane`.
+"""
 
 from __future__ import annotations
 
@@ -15,6 +19,8 @@ from tz_player.ui.text_button import TextButton, TextButtonPressed
 
 
 class TransportAction(Message):
+    """Transport command intent emitted by button interactions."""
+
     bubble = True
 
     def __init__(self, action: Literal["prev", "toggle_play", "stop", "next"]) -> None:
@@ -23,14 +29,20 @@ class TransportAction(Message):
 
 
 class ToggleRepeat(Message):
+    """Repeat mode toggle intent emitted by the repeat indicator."""
+
     bubble = True
 
 
 class ToggleShuffle(Message):
+    """Shuffle mode toggle intent emitted by the shuffle indicator."""
+
     bubble = True
 
 
 class TransportControls(Widget):
+    """Two-line footer widget with counter, mode indicators, and transport keys."""
+
     DEFAULT_CSS = """
     TransportControls {
         height: 2;
@@ -119,6 +131,7 @@ class TransportControls(Widget):
         cursor_index: int | None,
         playing_index: int | None,
     ) -> None:
+        """Refresh visible transport labels/counter from current player context."""
         current = playing_index if playing_index is not None else cursor_index or 0
         width = max(4, len(str(total_count)))
         if total_count <= 0:
@@ -148,5 +161,6 @@ class TransportControls(Widget):
 
 
 def _styled_track_counter_markup(counter: str) -> str:
+    """Apply highlight styling to the track-counter label prefix."""
     label, _, value = counter.partition(" ")
     return f"[bold #F2C94C]{label}[/] {value}"

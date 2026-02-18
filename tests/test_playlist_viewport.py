@@ -21,6 +21,8 @@ from tz_player.ui.playlist_viewport import PlaylistViewport
 
 
 class _FakeScrollEvent:
+    """Scroll event stub that tracks whether propagation was stopped."""
+
     def __init__(self) -> None:
         self.stopped = False
 
@@ -29,6 +31,8 @@ class _FakeScrollEvent:
 
 
 class _FakeClickEvent:
+    """Click event stub exposing fixed content offset and click-chain count."""
+
     def __init__(self, offset: Offset, chain: int = 1) -> None:
         self._offset = offset
         self.chain = chain
@@ -38,6 +42,8 @@ class _FakeClickEvent:
 
 
 class _FakeMouseDownEvent:
+    """Mouse-down stub used for scrollbar interaction tests."""
+
     def __init__(self, offset: Offset) -> None:
         self._offset = offset
         self.stopped = False
@@ -50,6 +56,8 @@ class _FakeMouseDownEvent:
 
 
 class _FakeMouseMoveEvent:
+    """Mouse-move stub returning captured offset for drag tests."""
+
     def __init__(self, offset: Offset) -> None:
         self._offset = offset
         self.stopped = False
@@ -62,6 +70,8 @@ class _FakeMouseMoveEvent:
 
 
 class _FakeMouseMoveNoneEvent:
+    """Mouse-move stub that simulates missing capture offset."""
+
     def __init__(self) -> None:
         self.stopped = False
 
@@ -73,6 +83,8 @@ class _FakeMouseMoveNoneEvent:
 
 
 class _SizedViewport(PlaylistViewport):
+    """Viewport test double with deterministic fixed size."""
+
     @property
     def size(self) -> Size:  # type: ignore[override]
         return Size(10, 5)

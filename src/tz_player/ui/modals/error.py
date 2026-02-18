@@ -38,4 +38,5 @@ class ErrorModal(ModalScreen[None]):
         self.action_close()
 
     def action_close(self) -> None:
+        """Dismiss error modal."""
         self.dismiss(None)

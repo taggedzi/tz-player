@@ -7,6 +7,7 @@ from tz_player.visualizers.basic import BasicVisualizer
 
 
 def _frame(*, status: str) -> VisualizerFrameInput:
+    """Build minimal frame payload for basic-visualizer assertions."""
     return VisualizerFrameInput(
         frame_index=0,
         monotonic_s=0.0,

@@ -1,4 +1,4 @@
-"""Project version source of truth."""
+"""Version and project metadata surfaced in CLI help and diagnostics."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ PROJECT_URL = "https://github.com/taggedzi/tz-player"
 
 
 def build_help_epilog() -> str:
+    """Build a consistent metadata footer for argparse help output."""
     return (
         f"Project URL: {PROJECT_URL}\n"
         f"Platform: {platform.platform()}\n"

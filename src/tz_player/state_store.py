@@ -1,4 +1,8 @@
-"""Persistent state storage."""
+"""JSON persistence for user-facing app runtime state.
+
+The store is intentionally tolerant of invalid/missing values so upgrades and
+partial/corrupt writes degrade to safe defaults instead of aborting startup.
+"""
 
 from __future__ import annotations
 
@@ -14,6 +18,8 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class AppState:
+    """Persisted application state loaded at startup and updated during runtime."""
+
     playlist_id: int | None = None
     current_item_id: int | None = None
     volume: float = 1.0
@@ -29,6 +35,12 @@ class AppState:
 
 
 def _coerce_state(data: dict[str, Any]) -> AppState:
+    """Coerce untyped JSON object into validated `AppState` with safe defaults.
+
+    This doubles as lightweight schema evolution handling for older keys
+    (for example `current_track_id` -> `current_item_id`).
+    """
+
     def _int_or_none(value: Any) -> int | None:
         if isinstance(value, bool):
             return None
@@ -133,7 +145,7 @@ def load_state(path: Path) -> AppState:
 
 
 def save_state(path: Path, state: AppState) -> None:
-    """Persist state atomically to disk."""
+    """Persist state atomically to disk via write-then-replace."""
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = path.with_suffix(path.suffix + ".tmp")
     payload = json.dumps(asdict(state), indent=2, sort_keys=True)

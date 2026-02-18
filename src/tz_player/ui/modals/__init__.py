@@ -1,1 +1,1 @@
-"""Modal screens for the UI."""
+"""Namespace package for modal UI screens."""

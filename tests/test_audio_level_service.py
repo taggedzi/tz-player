@@ -9,16 +9,22 @@ from tz_player.services.playback_backend import LevelSample
 
 
 class _LiveProvider:
+    """Live-level provider stub returning finite sample values."""
+
     async def get_level_sample(self) -> LevelSample | None:
         return LevelSample(left=0.9, right=0.6)
 
 
 class _NoLiveProvider:
+    """Live-level provider stub that simulates unavailable samples."""
+
     async def get_level_sample(self) -> LevelSample | None:
         return None
 
 
 class _EnvelopeProvider:
+    """Envelope provider stub returning deterministic cached levels."""
+
     async def get_level_at(
         self, track_path: str, position_ms: int
     ) -> LevelSample | None:
@@ -27,11 +33,14 @@ class _EnvelopeProvider:
 
 
 class _NonFiniteLiveProvider:
+    """Live provider stub returning non-finite levels for sanitization tests."""
+
     async def get_level_sample(self) -> LevelSample | None:
         return LevelSample(left=float("nan"), right=float("inf"))
 
 
 def _run(coro):
+    """Run async level-service scenario from sync test function."""
     return asyncio.run(coro)
 
 

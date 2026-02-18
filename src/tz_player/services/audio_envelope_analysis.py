@@ -51,14 +51,17 @@ def analyze_track_envelope(
 
 
 def ffmpeg_available() -> bool:
+    """Return whether `ffmpeg` binary is available on PATH."""
     return shutil.which("ffmpeg") is not None
 
 
 def requires_ffmpeg_for_envelope(path: Path | str) -> bool:
+    """Return whether file type requires ffmpeg-based decoding path."""
     return Path(path).suffix.lower() not in _WAVE_SUFFIXES
 
 
 def _analyze_wave(path: Path, *, bucket_ms: int) -> EnvelopeAnalysisResult | None:
+    """Analyze PCM levels directly from wave-readable files."""
     try:
         with wave.open(str(path), "rb") as handle:
             channels = int(handle.getnchannels())
@@ -94,6 +97,7 @@ def _analyze_wave(path: Path, *, bucket_ms: int) -> EnvelopeAnalysisResult | Non
 
 
 def _analyze_ffmpeg(path: Path, *, bucket_ms: int) -> EnvelopeAnalysisResult | None:
+    """Decode non-wave media via ffmpeg and bucket levels from raw PCM stream."""
     ffmpeg_bin = shutil.which("ffmpeg")
     if ffmpeg_bin is None:
         return None
@@ -185,6 +189,7 @@ def _analyze_ffmpeg(path: Path, *, bucket_ms: int) -> EnvelopeAnalysisResult | N
 def _levels_from_pcm(
     raw: bytes, *, channels: int, sample_width: int
 ) -> tuple[tuple[float, float], int]:
+    """Compute normalized stereo averages from raw PCM frame chunk."""
     bytes_per_frame = channels * sample_width
     frames = len(raw) // bytes_per_frame
     if frames <= 0:
@@ -206,6 +211,7 @@ def _levels_from_pcm(
 
 
 def _read_sample(raw: bytes, offset: int, sample_width: int) -> int:
+    """Decode one PCM sample for supported byte widths (8/16/24/32-bit)."""
     if sample_width == 1:
         return raw[offset] - 128
     if sample_width == 2:
@@ -221,6 +227,7 @@ def _read_sample(raw: bytes, offset: int, sample_width: int) -> int:
 
 
 def _sample_max(sample_width: int) -> float:
+    """Return max absolute sample value for sample width normalization."""
     if sample_width == 1:
         return 128.0
     if sample_width == 2:
@@ -235,6 +242,7 @@ def _sample_max(sample_width: int) -> float:
 def _limit_points(
     result: EnvelopeAnalysisResult, *, max_points: int
 ) -> EnvelopeAnalysisResult:
+    """Downsample envelope points while preserving final timestamp sample."""
     if max_points <= 0 or len(result.points) <= max_points:
         return result
     stride = max(1, len(result.points) // max_points)

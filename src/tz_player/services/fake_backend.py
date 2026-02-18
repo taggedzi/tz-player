@@ -1,4 +1,8 @@
-"""Fake playback backend for deterministic testing."""
+"""Deterministic in-memory playback backend used by tests and diagnostics.
+
+The fake backend simulates transport progression and emits the same event types
+as real backends so `PlayerService` behavior can be tested without VLC.
+"""
 
 from __future__ import annotations
 
@@ -19,6 +23,8 @@ from .playback_backend import (
 
 @dataclass
 class _PlaybackState:
+    """Mutable transport state for the fake backend ticker loop."""
+
     status: BackendStatus = "idle"
     position_ms: int = 0
     duration_ms: int = 0
@@ -27,7 +33,7 @@ class _PlaybackState:
 
 
 class FakePlaybackBackend:
-    """In-memory backend that simulates playback progress."""
+    """In-memory backend that simulates playback progress and state events."""
 
     def __init__(
         self,
@@ -146,6 +152,7 @@ class FakePlaybackBackend:
         return LevelSample(left=left, right=right)
 
     async def _ticker_loop(self) -> None:
+        """Drive periodic position updates while the backend is running."""
         try:
             while not self._stop_event.is_set():
                 await asyncio.sleep(self._tick_interval_ms / 1000)
@@ -154,6 +161,7 @@ class FakePlaybackBackend:
             pass
 
     async def _tick(self) -> None:
+        """Advance playback position and emit stop event at synthetic track end."""
         async with self._lock:
             if self._state.status != "playing":
                 return

@@ -1,4 +1,8 @@
-"""Command-line interface for tz-player."""
+"""Minimal CLI entrypoint used for smokeable non-UI startup.
+
+This module keeps parser/logging behavior aligned with the GUI/TUI entrypoints
+while exposing a lightweight command surface for process-level checks.
+"""
 
 from __future__ import annotations
 
@@ -15,6 +19,7 @@ from .version import build_help_epilog
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """Build parser for shared process options (logging/backend/version)."""
     parser = argparse.ArgumentParser(
         prog="tz-player",
         description="TaggedZ's command line music player.",
@@ -39,6 +44,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
+    """Run the CLI entrypoint and return a process exit code."""
     parser = build_parser()
     args = parser.parse_args()
     logger = logging.getLogger(__name__)

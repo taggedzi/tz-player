@@ -49,8 +49,10 @@ class PathInputModal(ModalScreen):
         self.action_submit()
 
     def action_submit(self) -> None:
+        """Dismiss with trimmed input value or `None` when empty."""
         value = self._input.value if self._input is not None else ""
         self.dismiss(value.strip() or None)
 
     def action_cancel(self) -> None:
+        """Dismiss without returning a value."""
         self.dismiss(None)

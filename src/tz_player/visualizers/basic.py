@@ -1,4 +1,4 @@
-"""Basic built-in visualizer."""
+"""Minimal progress-bar visualizer used as baseline/fallback plugin."""
 
 from __future__ import annotations
 
@@ -9,6 +9,8 @@ from .base import VisualizerContext, VisualizerFrameInput
 
 @dataclass
 class BasicVisualizer:
+    """Simple status/progress renderer with deterministic output."""
+
     plugin_id: str = "basic"
     display_name: str = "Basic"
     _ansi_enabled: bool = True
@@ -20,6 +22,7 @@ class BasicVisualizer:
         return None
 
     def render(self, frame: VisualizerFrameInput) -> str:
+        """Render coarse transport status and track progress."""
         width = max(1, frame.width)
         if frame.status not in {"playing", "paused"}:
             if frame.status == "error":

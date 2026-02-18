@@ -13,6 +13,8 @@ PlaybackStatus = Literal["idle", "loading", "playing", "paused", "stopped", "err
 
 
 class EnvelopeLevelProvider(Protocol):
+    """Protocol for envelope-backed level sampling by track position."""
+
     async def get_level_at(
         self, track_path: str, position_ms: int
     ) -> LevelSample | None: ...
@@ -20,6 +22,8 @@ class EnvelopeLevelProvider(Protocol):
 
 @dataclass(frozen=True)
 class AudioLevelReading:
+    """Normalized stereo reading with source attribution."""
+
     left: float
     right: float
     source: LevelSource
@@ -103,6 +107,7 @@ def _fallback_levels(
     volume: int,
     speed: float,
 ) -> tuple[float, float]:
+    """Generate deterministic pseudo-reactive fallback levels."""
     if status == "paused" or volume <= 0:
         return (0.0, 0.0)
     base_t = max(0.0, position_ms / 1000.0)

@@ -1,4 +1,8 @@
-"""HackScope-style fictional terminal visualizer."""
+"""Fictional terminal-ops visualizer with staged deterministic animations.
+
+Output is intentionally cinematic/non-operational and uses track metadata as
+themed display content only.
+"""
 
 from __future__ import annotations
 
@@ -35,6 +39,8 @@ _TOTAL_PHASE_FRAMES = sum(count for _name, count in _PHASES)
 
 @dataclass
 class HackScopeVisualizer:
+    """Stage-driven visualizer cycling through themed fictional operation phases."""
+
     plugin_id: str = "ops.hackscope"
     display_name: str = "HackScope (Fictional)"
     _ansi_enabled: bool = True
@@ -46,6 +52,7 @@ class HackScopeVisualizer:
         return None
 
     def render(self, frame: VisualizerFrameInput) -> str:
+        """Render current phase frame based on deterministic frame-index mapping."""
         width = max(1, frame.width)
         height = max(1, frame.height)
         track_path = frame.track_path or ""
@@ -162,11 +169,13 @@ class HackScopeVisualizer:
 
 
 def _stable_seed(value: str) -> int:
+    """Generate deterministic seed from track identity string."""
     digest = sha256(value.encode("utf-8")).hexdigest()
     return int(digest[:8], 16)
 
 
 def _locate_phase(global_frame: int) -> tuple[str, int, int]:
+    """Map global frame index to `(phase_name, local_phase_frame, phase_len)`."""
     remaining = max(0, int(global_frame))
     for name, count in _PHASES:
         if remaining < count:
@@ -177,6 +186,7 @@ def _locate_phase(global_frame: int) -> tuple[str, int, int]:
 
 
 def _duration_text(seconds: float | None) -> str:
+    """Format seconds as `MM:SS` with graceful unknown fallback."""
     if seconds is None or not math.isfinite(seconds):
         return "Unknown"
     value = max(0, int(seconds))

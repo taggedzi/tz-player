@@ -1,4 +1,4 @@
-"""Test configuration."""
+"""Shared pytest configuration and safety fixtures for the test suite."""
 
 from __future__ import annotations
 
@@ -34,7 +34,11 @@ def run_blocking_inline(monkeypatch: pytest.MonkeyPatch):
 
 @pytest.fixture(autouse=True)
 def ensure_current_event_loop():
-    """Provide a current event loop for sync tests (required on Python 3.9)."""
+    """Provide a current event loop for sync tests.
+
+    Some tests call `asyncio.run` from sync contexts and rely on a current loop
+    existing across Python/runtime variants.
+    """
     loop = asyncio.new_event_loop()
     try:
         asyncio.set_event_loop(loop)

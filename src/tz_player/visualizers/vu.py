@@ -1,4 +1,4 @@
-"""Audio-reactive VU meter visualizer."""
+"""Audio-reactive VU meter with live/envelope/fallback level sourcing."""
 
 from __future__ import annotations
 
@@ -13,6 +13,8 @@ _SGR_PATTERN = re.compile(r"\x1b\[[0-9;]*m")
 
 @dataclass
 class VuReactiveVisualizer:
+    """Stereo VU renderer with smoothing, normalization, and history trail."""
+
     plugin_id: str = "vu.reactive"
     display_name: str = "VU Meter (Reactive)"
     _ansi_enabled: bool = True
@@ -32,6 +34,7 @@ class VuReactiveVisualizer:
         return None
 
     def render(self, frame: VisualizerFrameInput) -> str:
+        """Render one frame from sampled levels and current transport state."""
         width = max(1, frame.width)
         height = max(1, frame.height)
 
@@ -66,6 +69,7 @@ class VuReactiveVisualizer:
         return _fit_lines(lines, width, height)
 
     def _normalize_levels(self, left: float, right: float) -> tuple[float, float]:
+        """Apply adaptive gain so quiet tracks remain readable."""
         left = _clamp(left)
         right = _clamp(right)
         peak_in = max(left, right)
@@ -76,6 +80,7 @@ class VuReactiveVisualizer:
 
 
 def _extract_live_levels(frame: VisualizerFrameInput) -> tuple[float, float] | None:
+    """Return validated live levels from frame payload when available."""
     if frame.level_left is None or frame.level_right is None:
         return None
     if not math.isfinite(frame.level_left) or not math.isfinite(frame.level_right):
@@ -84,6 +89,7 @@ def _extract_live_levels(frame: VisualizerFrameInput) -> tuple[float, float] | N
 
 
 def _fallback_levels(frame: VisualizerFrameInput) -> tuple[float, float]:
+    """Generate deterministic pseudo-levels when backend sampling is unavailable."""
     if frame.status not in {"playing", "paused"}:
         return (0.0, 0.0)
     if frame.status == "paused":
@@ -174,6 +180,7 @@ def _source_token(level_source: str | None) -> str:
 def _history_block(
     history: list[float], width: int, ansi_enabled: bool, *, rows: int = 4
 ) -> list[str]:
+    """Render compact recent-level history graph across a fixed row budget."""
     rows = max(1, rows)
     span = max(8, min(width - 3, 64))
     recent = history[-span:] if history else []

@@ -8,6 +8,8 @@ import tz_player.paths as paths
 
 
 class FakeAppDirs:
+    """Minimal AppDirs stand-in used to control path roots during tests."""
+
     def __init__(self, data_dir: Path, config_dir: Path) -> None:
         self.user_data_dir = str(data_dir)
         self.user_config_dir = str(config_dir)

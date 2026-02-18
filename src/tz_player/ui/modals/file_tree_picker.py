@@ -19,6 +19,8 @@ from tz_player.utils.async_utils import run_blocking
 
 @dataclass(frozen=True)
 class TreeEntry:
+    """One renderable node in picker list (directory or file)."""
+
     path: Path
     label: str
     is_dir: bool
@@ -128,12 +130,14 @@ class FileTreePickerModal(ModalScreen):
             self.action_cancel()
 
     async def _show_roots(self) -> None:
+        """Switch list to root-drive/root-directory mode."""
         self._current_dir = None
         self._entries = await run_blocking(_list_roots)
         self._refresh_options()
         self._update_labels()
 
     async def _load_dir(self, directory: Path) -> None:
+        """Load and display entries for the selected directory."""
         self._current_dir = directory
         self._entries = await run_blocking(
             _list_directory_entries, directory, self._mode
@@ -142,6 +146,7 @@ class FileTreePickerModal(ModalScreen):
         self._update_labels()
 
     def _refresh_options(self) -> None:
+        """Rebuild option list prompts from current entries/selection state."""
         options = [
             Option(
                 _entry_prompt(entry, selected=entry.path in self._selected_paths),
@@ -153,6 +158,7 @@ class FileTreePickerModal(ModalScreen):
         self._add_button.disabled = not self._selected_paths
 
     def _update_labels(self) -> None:
+        """Update location and interaction-hint labels."""
         location = (
             "Drives / roots" if self._current_dir is None else str(self._current_dir)
         )
@@ -165,6 +171,7 @@ class FileTreePickerModal(ModalScreen):
         self._hint_label.update(hint.format(selected=selected))
 
     def _toggle_path(self, path: Path) -> None:
+        """Toggle path selection respecting mode-specific selection semantics."""
         if self._mode == "folders":
             self._selected_paths = {path} if path not in self._selected_paths else set()
         elif path in self._selected_paths:
@@ -175,6 +182,7 @@ class FileTreePickerModal(ModalScreen):
         self._update_labels()
 
     def _highlighted_entry(self) -> TreeEntry | None:
+        """Return currently highlighted entry or `None` if invalid."""
         index = self._list.highlighted
         if index is None:
             return None
@@ -184,6 +192,7 @@ class FileTreePickerModal(ModalScreen):
 
 
 def _entry_prompt(entry: TreeEntry, *, selected: bool) -> str:
+    """Render one option-list prompt with selection and type markers."""
     if entry.is_dir:
         marker = "[x]" if selected else "[ ]"
         return f"{marker} [DIR] {entry.label}"
@@ -192,6 +201,7 @@ def _entry_prompt(entry: TreeEntry, *, selected: bool) -> str:
 
 
 def _list_roots() -> list[TreeEntry]:
+    """Return root entries for current platform (drives or `/`)."""
     roots: list[Path]
     if os.name == "nt":
         roots = [Path(f"{drive}:\\") for drive in "ABCDEFGHIJKLMNOPQRSTUVWXYZ"]
@@ -208,6 +218,7 @@ def _list_roots() -> list[TreeEntry]:
 def _list_directory_entries(
     directory: Path, mode: Literal["files", "folders"] = "files"
 ) -> list[TreeEntry]:
+    """List directory entries filtered by picker mode and supported media types."""
     entries: list[TreeEntry] = []
     if not directory.exists() or not directory.is_dir():
         return entries
@@ -250,5 +261,6 @@ def _list_directory_entries(
 
 
 def _display_name(path: Path, *, is_dir: bool) -> str:
+    """Return display-friendly entry label with trailing slash for directories."""
     name = path.name or str(path)
     return f"{name}/" if is_dir and name != ".." else name

@@ -1,4 +1,7 @@
-"""Runtime configuration helpers."""
+"""Runtime configuration normalization helpers.
+
+These helpers keep CLI flag interpretation deterministic across entrypoints.
+"""
 
 from __future__ import annotations
 

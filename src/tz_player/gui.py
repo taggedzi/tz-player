@@ -1,4 +1,9 @@
-"""GUI entry point for tz-player."""
+"""GUI process entrypoint for the Textual application.
+
+Responsibilities here are intentionally narrow: parse runtime options, set up
+logging, instantiate `TzPlayerApp`, and return an exit-code contract that
+distinguishes successful startup from fatal initialization failure.
+"""
 
 from __future__ import annotations
 
@@ -16,6 +21,7 @@ from .version import build_help_epilog
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """Build parser for GUI launch and visualizer runtime overrides."""
     parser = argparse.ArgumentParser(
         prog="tz-player",
         description="TaggedZ's command line music player.",
@@ -51,6 +57,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
+    """Run GUI entrypoint and translate startup outcome to exit code."""
     parser = build_parser()
     args = parser.parse_args()
     try:

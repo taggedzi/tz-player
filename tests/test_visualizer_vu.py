@@ -21,6 +21,7 @@ def _frame(
     level_right: float | None = None,
     level_source: str | None = None,
 ) -> VisualizerFrameInput:
+    """Build frame payload for VU render/source-selection test scenarios."""
     return VisualizerFrameInput(
         frame_index=frame_index,
         monotonic_s=0.0,

@@ -14,6 +14,7 @@ from tz_player.logging_utils import setup_logging
 
 
 def _flush_root_handlers() -> None:
+    """Flush all active root handlers to force buffered test log writes to disk."""
     for handler in logging.getLogger().handlers:
         flush = getattr(handler, "flush", None)
         if callable(flush):

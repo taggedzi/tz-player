@@ -1,4 +1,8 @@
-"""Visualizer plugin registry."""
+"""Visualizer plugin discovery and factory registry.
+
+The registry is responsible for collecting built-in plugins and optional local
+plugins, validating IDs, and exposing stable construction by `plugin_id`.
+"""
 
 from __future__ import annotations
 
@@ -90,6 +94,7 @@ class VisualizerRegistry:
 def _discover_local_plugin_types(
     import_paths: list[str],
 ) -> list[type[VisualizerPlugin]]:
+    """Discover plugin classes from configured file/module import entries."""
     plugin_types: list[type[VisualizerPlugin]] = []
     seen: set[type[VisualizerPlugin]] = set()
     for entry in import_paths:
@@ -103,6 +108,7 @@ def _discover_local_plugin_types(
 
 
 def _load_modules_from_entry(entry: str) -> list[ModuleType]:
+    """Load modules from filesystem path or import path entry."""
     path = Path(entry)
     modules: list[ModuleType] = []
     if path.exists():
@@ -139,6 +145,7 @@ def _load_modules_from_entry(entry: str) -> list[ModuleType]:
 
 
 def _load_module_from_import(module_name: str) -> ModuleType | None:
+    """Import a module path and return `None` on failure with logged context."""
     try:
         return importlib.import_module(module_name)
     except Exception as exc:
@@ -149,6 +156,7 @@ def _load_module_from_import(module_name: str) -> ModuleType | None:
 
 
 def _load_module_from_file(path: Path) -> ModuleType | None:
+    """Load a Python file as an isolated runtime module for plugin discovery."""
     module_name = f"tz_player.user_visualizer_{abs(hash(str(path)))}"
     try:
         spec = importlib.util.spec_from_file_location(module_name, path)
@@ -165,6 +173,7 @@ def _load_module_from_file(path: Path) -> ModuleType | None:
 
 
 def _extract_plugin_types(module: ModuleType) -> list[type[VisualizerPlugin]]:
+    """Extract candidate plugin classes from a loaded module namespace."""
     plugin_types: list[type[VisualizerPlugin]] = []
     for value in vars(module).values():
         if not inspect.isclass(value):
@@ -175,6 +184,7 @@ def _extract_plugin_types(module: ModuleType) -> list[type[VisualizerPlugin]]:
 
 
 def _looks_like_plugin_type(candidate: type[object]) -> bool:
+    """Heuristic check for classes matching the visualizer plugin contract."""
     if getattr(candidate, "__module__", "").startswith("typing"):
         return False
     if not hasattr(candidate, "plugin_id"):
@@ -188,6 +198,7 @@ def _looks_like_plugin_type(candidate: type[object]) -> bool:
 def _build_factory_map(
     plugin_types: list[type[VisualizerPlugin]],
 ) -> dict[str, PluginFactory]:
+    """Instantiate plugin classes once to validate and index by stable ID."""
     factories: dict[str, PluginFactory] = {}
     for plugin_type in plugin_types:
         try:

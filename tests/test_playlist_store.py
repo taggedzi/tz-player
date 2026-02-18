@@ -13,10 +13,12 @@ from tz_player.services.playlist_store import PlaylistStore
 
 
 def _run(coro):
+    """Run async store call from sync pytest test."""
     return asyncio.run(coro)
 
 
 def _touch(path: Path) -> None:
+    """Create empty file used as a fake media track path."""
     path.write_bytes(b"")
 
 

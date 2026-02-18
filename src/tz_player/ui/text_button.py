@@ -8,6 +8,8 @@ from textual.widgets import Static
 
 
 class TextButtonPressed(Message):
+    """Message emitted when text button is activated."""
+
     def __init__(self, action: str) -> None:
         super().__init__()
         self.action = action
@@ -55,4 +57,5 @@ class TextButton(Static):
         event.stop()
 
     def _emit(self) -> None:
+        """Emit activation message with configured action identifier."""
         self.post_message(TextButtonPressed(self.action))

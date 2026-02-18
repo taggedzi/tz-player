@@ -14,6 +14,8 @@ from tz_player.visualizers.registry import VisualizerRegistry
 
 @dataclass
 class GoodPlugin:
+    """Healthy plugin double used for baseline host behavior assertions."""
+
     plugin_id: str = "good"
     display_name: str = "good"
 
@@ -29,6 +31,8 @@ class GoodPlugin:
 
 @dataclass
 class BadRenderPlugin:
+    """Plugin double that fails during render to test fallback path."""
+
     plugin_id: str = "bad"
     display_name: str = "bad"
 
@@ -44,6 +48,8 @@ class BadRenderPlugin:
 
 @dataclass
 class BadActivatePlugin:
+    """Plugin double that fails during activation to test hard failure path."""
+
     plugin_id: str = "bad-activate"
     display_name: str = "bad-activate"
 
@@ -58,6 +64,7 @@ class BadActivatePlugin:
 
 
 def _frame() -> VisualizerFrameInput:
+    """Build minimal frame payload for host-render tests."""
     return VisualizerFrameInput(
         frame_index=0,
         monotonic_s=0.0,

@@ -1,4 +1,8 @@
-"""Logging helpers."""
+"""Structured logging setup used by CLI, GUI, and app entrypoints.
+
+This module centralizes root-logger configuration so every process mode uses the
+same rotating JSON file output and optional human-readable console output.
+"""
 
 from __future__ import annotations
 
@@ -59,6 +63,7 @@ class JsonLogFormatter(logging.Formatter):
 
 
 def _json_safe(value: object) -> object:
+    """Recursively coerce context values into JSON-serializable primitives."""
     if isinstance(value, (str, int, float, bool)) or value is None:
         return value
     if isinstance(value, (list, tuple)):
@@ -77,7 +82,11 @@ def setup_logging(
     *,
     console: bool = True,
 ) -> None:
-    """Configure rotating file and console logging."""
+    """Configure root logger with rotating JSON file + optional console handler.
+
+    Existing root handlers are removed/closed before reconfiguration so repeated
+    startup paths do not duplicate log streams.
+    """
     if isinstance(level, str):
         numeric = logging.getLevelName(level.upper())
         if isinstance(numeric, str):

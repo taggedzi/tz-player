@@ -1,3 +1,5 @@
+"""Tests for `tools/release_prepare.py` end-to-end release file updates."""
+
 from __future__ import annotations
 
 import subprocess
@@ -8,6 +10,7 @@ import pytest
 
 
 def _run(cmd: list[str], cwd: Path) -> None:
+    """Run subprocess command in repo fixture and fail loudly on non-zero exit."""
     subprocess.run(cmd, cwd=cwd, check=True)
 
 

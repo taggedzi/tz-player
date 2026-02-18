@@ -32,6 +32,7 @@ def _frame(
     status: str = "playing",
     track_path: str | None = "/tmp/song.mp3",
 ) -> VisualizerFrameInput:
+    """Build standard frame payload for cover-ascii plugin tests."""
     return VisualizerFrameInput(
         frame_index=frame_index,
         monotonic_s=0.0,
@@ -54,6 +55,8 @@ def _frame(
 
 @dataclass
 class _FakePipeline:
+    """Pipeline stub returning preconfigured payload without background work."""
+
     payload: ArtworkPayload
 
     def get_payload(
@@ -68,6 +71,8 @@ class _FakePipeline:
 
 
 class _PendingExecutor:
+    """Executor stub that returns a caller-supplied incomplete future."""
+
     def __init__(self, future: Future[_BuildResult]) -> None:
         self.future = future
         self.calls = 0
@@ -79,6 +84,7 @@ class _PendingExecutor:
 
 
 def _art(width: int = 6, height: int = 3) -> AsciiArtFrame:
+    """Construct deterministic checkerboard-style ASCII art sample."""
     chars: list[str] = []
     colors: list[tuple[int, int, int] | None] = []
     for y in range(height):

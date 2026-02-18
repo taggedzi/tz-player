@@ -12,6 +12,8 @@ from textual.widget import Widget
 
 
 class SliderChanged(Message):
+    """Emitted when slider fraction changes via mouse/keyboard interaction."""
+
     def __init__(self, name: str, fraction: float, is_final: bool) -> None:
         super().__init__()
         self.name = name
@@ -139,6 +141,7 @@ class SliderBar(Widget):
         event.stop()
 
     def _compute_layout(self, width: int) -> tuple[str, str, int, int]:
+        """Compute text/bar layout for current width constraints."""
         label_text = f"{self.label:<4}"
         value_text = self.value_text
         bar_length = width - len(label_text) - 2 - len(value_text)
@@ -164,11 +167,13 @@ class SliderBar(Widget):
         return "".join(chars)
 
     def _point_in_bar(self, x: int) -> bool:
+        """Return whether x-coordinate falls inside active bar region."""
         if self._bar_length <= 0:
             return False
         return self._bar_start <= x < self._bar_start + self._bar_length
 
     def _set_from_x(self, x: int, *, is_final: bool) -> None:
+        """Convert pointer x-coordinate to normalized slider fraction."""
         if self._bar_length <= 0:
             return
         relative = x - self._bar_start
@@ -176,6 +181,7 @@ class SliderBar(Widget):
         self._set_fraction(fraction, is_final=is_final)
 
     def _set_fraction(self, fraction: float, *, is_final: bool) -> None:
+        """Set fraction and emit throttled/final slider-changed message."""
         fraction = _clamp_fraction(fraction)
         self.fraction = fraction
         now = monotonic()
@@ -191,6 +197,7 @@ class SliderBar(Widget):
         self.refresh()
 
     def _maybe_end_stale_drag(self) -> None:
+        """Release stale drag state when no interaction occurred recently."""
         if not self._dragging or self._last_interaction <= 0:
             return
         if monotonic() - self._last_interaction <= self.drag_timeout:

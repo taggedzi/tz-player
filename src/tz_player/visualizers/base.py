@@ -1,4 +1,8 @@
-"""Core visualizer plugin interfaces and frame payloads."""
+"""Core visualizer plugin contracts and frame/context payloads.
+
+These dataclasses/protocols define the host-plugin boundary used by built-in and
+user-discovered visualizers.
+"""
 
 from __future__ import annotations
 
@@ -8,12 +12,16 @@ from typing import Protocol
 
 @dataclass(frozen=True)
 class VisualizerContext:
+    """Runtime rendering context shared across plugin activation/render calls."""
+
     ansi_enabled: bool
     unicode_enabled: bool
 
 
 @dataclass(frozen=True)
 class VisualizerFrameInput:
+    """Per-frame playback snapshot supplied to visualizer render functions."""
+
     frame_index: int
     monotonic_s: float
     width: int
@@ -36,6 +44,8 @@ class VisualizerFrameInput:
 
 
 class VisualizerPlugin(Protocol):
+    """Protocol each visualizer plugin implementation must satisfy."""
+
     plugin_id: str
     display_name: str
 

@@ -1,4 +1,4 @@
-"""Runtime visualizer host with safe fallback behavior."""
+"""Runtime visualizer host with activation, fallback, and throttling policies."""
 
 from __future__ import annotations
 
@@ -39,6 +39,7 @@ class VisualizerHost:
         return self._active_id
 
     def activate(self, plugin_id: str | None, context: VisualizerContext) -> str:
+        """Activate requested plugin, falling back to default on failure/missing."""
         requested = plugin_id or self._registry.default_id
         if not self._registry.has_plugin(requested):
             self._notice = f"Visualizer '{requested}' unavailable; using '{self._registry.default_id}'."
@@ -106,11 +107,13 @@ class VisualizerHost:
         return self._active_id
 
     def shutdown(self) -> None:
+        """Deactivate active plugin and release host-managed plugin state."""
         if self._active_plugin is not None:
             self._safe_deactivate(self._active_plugin)
         self._active_plugin = None
 
     def consume_notice(self) -> str | None:
+        """Return and clear one-shot user-facing notice text, if present."""
         notice = self._notice
         self._notice = None
         return notice
@@ -118,6 +121,7 @@ class VisualizerHost:
     def render_frame(
         self, frame: VisualizerFrameInput, context: VisualizerContext
     ) -> str:
+        """Render one frame with fallback safety and budget-based throttling."""
         if self._active_plugin is None:
             self.activate(self._registry.default_id, context)
 
@@ -172,6 +176,7 @@ class VisualizerHost:
         return self._frame_index
 
     def _safe_deactivate(self, plugin: VisualizerPlugin) -> None:
+        """Best-effort plugin deactivation that never propagates exceptions."""
         try:
             plugin.on_deactivate()
         except Exception as exc:

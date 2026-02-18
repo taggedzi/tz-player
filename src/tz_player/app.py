@@ -1,4 +1,14 @@
-"""Textual TUI app for tz-player."""
+"""Textual application shell for tz-player.
+
+This module wires the UI layer to core services:
+- persistence (`PlaylistStore`, `AppState`, envelope cache),
+- playback control (`PlayerService` + selected backend),
+- metadata and waveform/envelope enrichment,
+- visualizer host/registry lifecycle.
+
+Most blocking file/DB/media operations are intentionally routed through
+`run_blocking(...)` to keep the Textual event loop responsive.
+"""
 
 from __future__ import annotations
 
@@ -76,6 +86,8 @@ CYBERPUNK_THEME = Theme(
 
 
 class TzPlayerApp(App):
+    """Main Textual application coordinating UI and player/service lifecycles."""
+
     TITLE = "tz-player"
     CSS = """
     Screen {
@@ -260,6 +272,12 @@ class TzPlayerApp(App):
         visualizer_fps_override: int | None = None,
         visualizer_plugin_paths_override: list[str] | None = None,
     ) -> None:
+        """Initialize app state and deferred service dependencies.
+
+        Startup side-effects are deferred to `_initialize_state` so tests can
+        construct the app with `auto_init=False` and drive initialization
+        explicitly.
+        """
         super().__init__()
         self.register_theme(CYBERPUNK_THEME)
         self.theme = CYBERPUNK_THEME.name
@@ -313,6 +331,11 @@ class TzPlayerApp(App):
             asyncio.create_task(self._initialize_state())
 
     async def _initialize_state(self) -> None:
+        """Bootstrap persisted state, storage services, playback, and UI bindings.
+
+        This is the primary startup sequence. It also normalizes CLI/runtime
+        overrides back into persisted state so future launches are deterministic.
+        """
         try:
             self.state, state_notice = await run_blocking(
                 load_state_with_notice, state_path()
@@ -394,6 +417,7 @@ class TzPlayerApp(App):
             await self.push_screen(ErrorModal(_startup_failure_message(exc, db_path())))
 
     async def on_unmount(self) -> None:
+        """Best-effort shutdown for timers, tasks, persisted state, and backend."""
         self._stop_visualizer()
         if self._state_save_task is not None:
             self._state_save_task.cancel()
@@ -623,6 +647,11 @@ class TzPlayerApp(App):
         self._metadata_pending_ids.clear()
 
     async def _handle_player_event(self, event: object) -> None:
+        """Route service events to UI refresh and async side-work.
+
+        `PlayerStateChanged` updates controls/status and debounced persistence.
+        `TrackChanged` updates track details and starts metadata/envelope work.
+        """
         if isinstance(event, PlayerStateChanged):
             self.player_state = event.state
             if event.state.error:
@@ -675,6 +704,11 @@ class TzPlayerApp(App):
         task.add_done_callback(self._make_envelope_task_cleanup(key))
 
     def _schedule_next_track_prewarm(self, *, force: bool = False) -> None:
+        """Prewarm envelope data for the predicted next track while playing.
+
+        Context tracking avoids redundant analysis churn when frequent state emits
+        happen with no meaningful playback-context change.
+        """
         if self.player_service is None or self.audio_envelope_store is None:
             self._cancel_next_track_prewarm()
             return
@@ -753,6 +787,7 @@ class TzPlayerApp(App):
         return _cleanup
 
     async def _ensure_envelope_for_track(self, track: TrackInfo) -> None:
+        """Ensure cached envelope data exists for a track, with graceful fallback."""
         if self.audio_envelope_store is None:
             return
         path = Path(track.path)
@@ -848,6 +883,7 @@ class TzPlayerApp(App):
         pane.update(_format_track_info_panel(self.current_track))
 
     async def _start_visualizer(self) -> None:
+        """Create registry/host, activate plugin, and start frame timer loop."""
         local_plugin_paths = list(self.state.visualizer_plugin_paths)
         if local_plugin_paths:
             self.visualizer_registry = VisualizerRegistry.built_in(
@@ -882,6 +918,7 @@ class TzPlayerApp(App):
             self.visualizer_host = None
 
     def _render_visualizer_frame(self) -> None:
+        """Render one visualizer frame from current player and track state."""
         if self.visualizer_host is None:
             return
         pane = self.query_one("#visualizer-pane", Static)
@@ -1027,6 +1064,7 @@ class TzPlayerApp(App):
         )
 
     async def _schedule_state_save(self) -> None:
+        """Debounce persistence so frequent state updates do not thrash disk IO."""
         if self._state_save_task is not None:
             self._state_save_task.cancel()
         self._state_save_task = asyncio.create_task(self._save_state_debounced())
@@ -1041,6 +1079,7 @@ class TzPlayerApp(App):
             self._state_save_task = None
 
     async def _persist_state_now(self) -> None:
+        """Persist the currently effective player state into app state storage."""
         self.state = replace(
             self.state,
             playlist_id=self.player_state.playlist_id,
@@ -1150,6 +1189,8 @@ def _read_track_extras(path: Path) -> tuple[str | None, int | None]:
 
 
 def _resolve_backend_name(cli_backend: str | None, state_backend: str | None) -> str:
+    """Resolve backend with precedence `CLI > persisted state > default(vlc)`."""
+
     def _normalize(value: str | None) -> str | None:
         if value is None:
             return None
@@ -1185,6 +1226,7 @@ def _clamp_int(value: int, min_value: int, max_value: int) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """Build CLI parser for `run` and `doctor` entry modes."""
     parser = argparse.ArgumentParser(
         prog="tz-player",
         description="TaggedZ's command line music player.",
@@ -1227,6 +1269,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
+    """Application entrypoint returning process exit code."""
     parser = build_parser()
     args = parser.parse_args()
     try:
@@ -1274,6 +1317,7 @@ def main() -> int:
 
 
 def _startup_failure_message(exc: Exception, db_file: Path) -> str:
+    """Return user-facing startup guidance based on known failure classes."""
     db_failure_message = _classify_db_startup_failure(exc, db_file)
     if db_failure_message is not None:
         return db_failure_message
@@ -1288,6 +1332,7 @@ def _startup_failure_message(exc: Exception, db_file: Path) -> str:
 
 
 def _classify_backend_startup_failure(exc: Exception) -> str | None:
+    """Detect backend startup failures from the exception cause chain."""
     chain: list[BaseException] = []
     current: BaseException | None = exc
     while current is not None and current not in chain:
@@ -1306,6 +1351,7 @@ def _classify_backend_startup_failure(exc: Exception) -> str | None:
 
 
 def _classify_db_startup_failure(exc: Exception, db_file: Path) -> str | None:
+    """Classify DB startup failures into actionable user remediation text."""
     chain: list[BaseException] = []
     current: BaseException | None = exc
     while current is not None and current not in chain:

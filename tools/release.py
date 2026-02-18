@@ -11,10 +11,12 @@ import time
 
 
 def _log(message: str) -> None:
+    """Emit release-script progress line with stable prefix."""
     print(f"[release] {message}")
 
 
 def _run(cmd: list[str], *, capture: bool = False) -> str:
+    """Run subprocess command and optionally return stdout text."""
     result = subprocess.run(
         cmd,
         check=True,
@@ -25,19 +27,23 @@ def _run(cmd: list[str], *, capture: bool = False) -> str:
 
 
 def _require_command(cmd: str) -> None:
+    """Raise if required external command is unavailable on PATH."""
     if shutil.which(cmd) is None:
         raise RuntimeError(f"Missing required command: {cmd}")
 
 
 def _python_cmd() -> list[str]:
+    """Return interpreter command used for child Python invocations."""
     return [sys.executable]
 
 
 def _release_prepare(version: str) -> None:
+    """Invoke release-prepare helper script for target version."""
     _run([*_python_cmd(), "tools/release_prepare.py", "--version", version])
 
 
 def _quality_gates() -> None:
+    """Run required lint/format/type/test gates before release branch commit."""
     _run([*_python_cmd(), "-m", "ruff", "check", "."])
     _run([*_python_cmd(), "-m", "ruff", "format", "--check", "."])
     _run([*_python_cmd(), "-m", "mypy", "src"])
@@ -45,12 +51,14 @@ def _quality_gates() -> None:
 
 
 def _ensure_clean_tree() -> None:
+    """Require clean git working tree before release automation proceeds."""
     status = _run(["git", "status", "--porcelain"], capture=True)
     if status:
         raise RuntimeError("Working tree is not clean. Commit or stash changes first.")
 
 
 def _ref_exists_locally(ref: str) -> bool:
+    """Return whether git reference exists in local repository."""
     try:
         _run(["git", "rev-parse", ref], capture=True)
     except subprocess.CalledProcessError:
@@ -59,11 +67,13 @@ def _ref_exists_locally(ref: str) -> bool:
 
 
 def _ref_exists_remote(*, kind: str, name: str) -> bool:
+    """Return whether branch/tag exists on origin remote."""
     out = _run(["git", "ls-remote", f"--{kind}", "origin", name], capture=True)
     return bool(out.strip())
 
 
 def _parse_version(raw: str) -> str:
+    """Normalize input version allowing optional leading `v` prefix."""
     version = raw.strip()
     if version.startswith(("v", "V")):
         version = version[1:]
@@ -105,6 +115,7 @@ def _wait_for_merge(
 
 
 def run_release(raw_version: str) -> None:
+    """End-to-end release workflow from prep branch to pushed tag."""
     version = _parse_version(raw_version)
     tag = f"v{version}"
     branch = f"release/{tag}"

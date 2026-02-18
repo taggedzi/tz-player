@@ -1,4 +1,8 @@
-"""Helpers for running blocking work from async code."""
+"""Async utility helpers for safely offloading blocking callables.
+
+This module provides the project-wide thread-pool bridge used to keep the
+Textual event loop responsive during file/DB/metadata operations.
+"""
 
 from __future__ import annotations
 
@@ -19,7 +23,7 @@ def _shutdown_io_executor() -> None:
 
 
 async def run_blocking(func: Callable[..., T], /, *args: Any, **kwargs: Any) -> T:
-    """Run blocking callables on a dedicated IO executor."""
+    """Run blocking callable on dedicated IO executor and await its result."""
     if not callable(func):
         raise TypeError("func must be callable")
     loop = asyncio.get_running_loop()

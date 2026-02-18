@@ -12,6 +12,8 @@ from tz_player.ui.slider_bar import SliderBar, SliderChanged
 
 
 class _FakeMouseEvent:
+    """Mouse-event stub carrying x-position/button and stop-tracking flag."""
+
     def __init__(self, *, x: int, button: int = 1) -> None:
         self.x = x
         self.button = button
@@ -22,6 +24,8 @@ class _FakeMouseEvent:
 
 
 class _SizedSliderBar(SliderBar):
+    """Slider test double with deterministic fixed render width."""
+
     @property
     def size(self) -> Size:  # type: ignore[override]
         return Size(30, 1)

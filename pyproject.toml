@@ -1,4 +1,5 @@
 [build-system]
+# Standard setuptools backend for editable installs and packaging.
 requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
@@ -29,29 +30,36 @@ classifiers = [
 
 
 dependencies = [
+  # Textual terminal UI framework.
   "textual>=0.59",
+  # Cross-platform user data/config directory resolution.
   "platformdirs>=4.2",
+  # Lightweight audio metadata extraction.
   "tinytag>=2.0",
+  # Cover-art decode/resize for ASCII visualizer plugins.
   "Pillow>=10.0",
+  # Real playback backend.
   "python-vlc>=3.0.0",
 ]
 
 
 [project.optional-dependencies]
 dev = [
+  # Test runner.
   "pytest>=7.4",
+  # Lint + formatter.
   "ruff>=0.5",
 
+  # Static type checking.
   "mypy>=1.6",
 
-
+  # Optional local automation runner.
   "nox>=2024.3.2",
-
-
 ]
 
 
 [project.scripts]
+# Primary user-facing entrypoint.
 tz-player = "tz_player.app:main"
 
 

@@ -14,6 +14,7 @@ def _frame(
     frame_index: int = 0,
     status: str = "playing",
 ) -> VisualizerFrameInput:
+    """Build deterministic frame payload for HackScope render tests."""
     return VisualizerFrameInput(
         frame_index=frame_index,
         monotonic_s=0.0,

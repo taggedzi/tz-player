@@ -14,6 +14,7 @@ from tz_player.services.audio_envelope_analysis import (
 
 
 def _write_wave(path: Path, *, seconds: float = 0.5, sample_rate: int = 8000) -> None:
+    """Write stereo sine-wave fixture used by envelope analysis tests."""
     frame_count = int(seconds * sample_rate)
     with wave.open(str(path), "wb") as handle:
         handle.setnchannels(2)
