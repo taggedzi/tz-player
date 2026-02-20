@@ -62,6 +62,7 @@ ADVANCED_VIZ_IDS = (
     "viz.spectrum.radial",
     "viz.typography.glitch",
     "viz.waveform.proxy",
+    "viz.waveform.neon",
 )
 
 

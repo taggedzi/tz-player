@@ -136,6 +136,7 @@ Notes:
 - `viz.spectrum.radial` (`requires_spectrum = True`, `requires_beat = True`)
 - `viz.typography.glitch` (`requires_beat = True`)
 - `viz.waveform.proxy` (`requires_waveform = True`)
+- `viz.waveform.neon` (`requires_waveform = True`)
 
 Fallback/capability semantics:
 - Missing analysis data is expected during warmup and must render safely using state text such as `LOADING`, `MISSING`, or `ERROR`.

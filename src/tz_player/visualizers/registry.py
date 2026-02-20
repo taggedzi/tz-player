@@ -32,6 +32,7 @@ from .terrain import AudioTerrainVisualizer
 from .typography import TypographyGlitchVisualizer
 from .vu import VuReactiveVisualizer
 from .waterfall import SpectrogramWaterfallVisualizer
+from .waveform_neon import WaveformNeonVisualizer
 from .waveproxy import WaveformProxyVisualizer
 
 logger = logging.getLogger(__name__)
@@ -167,6 +168,7 @@ class VisualizerRegistry:
             ParticleReactorVisualizer,
             RadialSpectrumVisualizer,
             WaveformProxyVisualizer,
+            WaveformNeonVisualizer,
             CoverAsciiStaticVisualizer,
             CoverAsciiMotionVisualizer,
         ]
