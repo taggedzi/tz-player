@@ -133,6 +133,7 @@ Notes:
 - `viz.spectrogram.waterfall` (`requires_spectrum = True`)
 - `viz.spectrum.terrain` (`requires_spectrum = True`)
 - `viz.reactor.particles` (`requires_spectrum = True`, `requires_beat = True`)
+- `viz.particle.gravity_well` (`requires_spectrum = True`, `requires_beat = True`)
 - `viz.spectrum.radial` (`requires_spectrum = True`, `requires_beat = True`)
 - `viz.typography.glitch` (`requires_beat = True`)
 - `viz.waveform.proxy` (`requires_waveform = True`)

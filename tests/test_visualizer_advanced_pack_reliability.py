@@ -10,6 +10,7 @@ ADVANCED_VIZ_IDS = (
     "viz.spectrogram.waterfall",
     "viz.spectrum.terrain",
     "viz.reactor.particles",
+    "viz.particle.gravity_well",
     "viz.spectrum.radial",
     "viz.typography.glitch",
     "viz.waveform.neon",

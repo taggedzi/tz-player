@@ -23,6 +23,7 @@ from types import ModuleType
 from .base import VisualizerPlugin
 from .basic import BasicVisualizer
 from .cover_ascii import CoverAsciiMotionVisualizer, CoverAsciiStaticVisualizer
+from .gravity_well import GravityWellVisualizer
 from .hackscope import HackScopeVisualizer
 from .isolated_runner import IsolatedPluginProxy, PluginSourceSpec
 from .matrix import MatrixBlueVisualizer, MatrixGreenVisualizer, MatrixRedVisualizer
@@ -166,6 +167,7 @@ class VisualizerRegistry:
             AudioTerrainVisualizer,
             TypographyGlitchVisualizer,
             ParticleReactorVisualizer,
+            GravityWellVisualizer,
             RadialSpectrumVisualizer,
             WaveformProxyVisualizer,
             WaveformNeonVisualizer,

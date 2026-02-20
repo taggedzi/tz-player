@@ -119,6 +119,7 @@ Built-in visualizer IDs include:
 - `viz.spectrogram.waterfall`
 - `viz.spectrum.terrain`
 - `viz.reactor.particles`
+- `viz.particle.gravity_well`
 - `viz.spectrum.radial`
 - `viz.typography.glitch`
 - `viz.waveform.proxy`
