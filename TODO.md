@@ -30,8 +30,8 @@ Execution tracker derived from `SPEC.md`.
   - `T-048B` `viz.particle.shockwave_rings` (Audio Shockwave Rings). Status: `done`
   - `T-048C` `viz.particle.rain_reactive` (Particle Rain / reverse-matrix reactive). Status: `done`
   - `T-048D` `viz.particle.orbital_system` (Audio Solar System). Status: `done`
-  - `T-048E` `viz.particle.ember_field` (Ember Field). Status: `in_progress`
-  - `T-048F` `viz.particle.magnetic_grid` (Magnetic Grid Distortion). Status: `todo`
+  - `T-048E` `viz.particle.ember_field` (Ember Field). Status: `done`
+  - `T-048F` `viz.particle.magnetic_grid` (Magnetic Grid Distortion). Status: `in_progress`
   - `T-048G` `viz.particle.audio_tornado` (Audio Tornado). Status: `todo`
   - `T-048H` `viz.particle.constellation` (Constellation Mode). Status: `todo`
   - `T-048I` `viz.particle.data_core_frag` (Data Core Fragmentation). Status: `todo`

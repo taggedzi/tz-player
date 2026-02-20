@@ -23,6 +23,7 @@ from types import ModuleType
 from .base import VisualizerPlugin
 from .basic import BasicVisualizer
 from .cover_ascii import CoverAsciiMotionVisualizer, CoverAsciiStaticVisualizer
+from .ember_field import EmberFieldVisualizer
 from .gravity_well import GravityWellVisualizer
 from .hackscope import HackScopeVisualizer
 from .isolated_runner import IsolatedPluginProxy, PluginSourceSpec
@@ -174,6 +175,7 @@ class VisualizerRegistry:
             ShockwaveRingsVisualizer,
             ReactiveRainVisualizer,
             OrbitalSystemVisualizer,
+            EmberFieldVisualizer,
             RadialSpectrumVisualizer,
             WaveformProxyVisualizer,
             WaveformNeonVisualizer,

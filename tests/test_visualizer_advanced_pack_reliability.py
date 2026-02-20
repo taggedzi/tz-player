@@ -14,6 +14,7 @@ ADVANCED_VIZ_IDS = (
     "viz.particle.shockwave_rings",
     "viz.particle.rain_reactive",
     "viz.particle.orbital_system",
+    "viz.particle.ember_field",
     "viz.spectrum.radial",
     "viz.typography.glitch",
     "viz.waveform.neon",
