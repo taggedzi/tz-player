@@ -2,6 +2,12 @@
 
 Thanks for considering a contribution.
 
+## Maintainer Capacity and Review Cadence
+
+- This project is maintained by one person with limited and variable availability.
+- Reviews, triage, and releases are best-effort and may be delayed for weeks or months.
+- PRs that are small, test-backed, and documentation-complete are easier to review during limited availability.
+
 ## Maintainer Orientation
 
 - `SPEC.md` is the behavior source of truth; `TODO.md` tracks execution state.

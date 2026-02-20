@@ -1,15 +1,36 @@
 # Security Policy
 
+## Scope and Maintainer Availability
+
+`tz-player` is maintained by a single developer.
+
+Security triage and remediation are handled on a best-effort basis. Due to disability-related capacity constraints and other obligations, response and fix timelines may vary widely and can be delayed for extended periods (including months).
+
+If you need guaranteed response timelines, this project may not meet that requirement.
+
 ## Reporting a Vulnerability
 
-Please open a private security advisory or email the maintainer at 15974146+taggedzi@users.noreply.github.com.
-Include a clear description, steps to reproduce, and any impact assessment.
+Please open a private GitHub security advisory or email the maintainer at 15974146+taggedzi@users.noreply.github.com.
+Include:
+
+- a clear description of the issue
+- steps to reproduce
+- affected versions/commit
+- impact assessment and potential exploitability
+
+Please avoid public disclosure until the issue has been assessed.
+
+## Response Expectations
+
+- Receipt acknowledgements are best-effort and not guaranteed within a fixed timeframe.
+- Triage priority is based on impact, exploitability, and maintainer capacity.
+- Fixes may be released quickly for critical issues, or delayed when capacity is constrained.
 
 ## Dependency Strategy
 
 - Keep direct dependencies minimal and review new additions.
 - Prefer version ranges with upper bounds for production deployments.
-- Use `pip install --require-hashes` or a lockfile (e.g., `pip-tools`) for releases.
+- Use `pip install --require-hashes` or a lockfile (for example `pip-tools`) for releases.
 
 ## Secrets and Sensitive Data
 

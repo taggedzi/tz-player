@@ -17,6 +17,11 @@ No accounts.
 No background services.
 Just your music, in your terminal.
 
+## Support and Security
+
+Support expectations are documented in `SUPPORT.md`.
+Security reporting and response expectations are documented in `SECURITY.md`.
+
 ## Screenshots
 
 ![Cover Art Screenshot](/docs/images/tz-player_cover-ascii-art_screenshot.png)
