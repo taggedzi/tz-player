@@ -224,7 +224,7 @@ def test_migration_adds_item_id(tmp_path) -> None:
         columns = [row[1] for row in conn.execute("PRAGMA table_info(playlist_items)")]
         assert "id" in columns
         version = conn.execute("PRAGMA user_version").fetchone()[0]
-        assert version == 5
+        assert version == 6
 
 
 def test_initialize_fails_on_newer_schema_version(tmp_path) -> None:

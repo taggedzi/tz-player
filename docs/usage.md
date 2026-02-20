@@ -105,7 +105,7 @@ Built-in visualizer IDs include:
   - Fallback lookup is local-only and also checks sidecar files in the same directory (`cover.*`, `folder.*`, `front.*`, `album.*`, `artwork.*`, `<track-stem>.*`).
 
 Lazy analysis cache notes:
-- Scalar level and FFT/spectrum analysis are computed only when requested by visualizer flows.
+- Scalar level, FFT/spectrum, and beat analysis are computed only when requested by visualizer flows.
 - Computed analysis is persisted in SQLite cache and reused across restarts.
 - Visualizers may expose analysis state labels such as `READY`, `LOADING`, or `MISSING` while cache fills.
 

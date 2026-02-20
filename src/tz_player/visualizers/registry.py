@@ -95,6 +95,7 @@ class _PluginMetadata:
     plugin_id: str
     display_name: str
     requires_spectrum: bool
+    requires_beat: bool
 
 
 class VisualizerRegistry:
@@ -622,6 +623,7 @@ def _make_isolated_factory(
             display_name=metadata.display_name,
             plugin_api_version=PLUGIN_API_VERSION,
             requires_spectrum=metadata.requires_spectrum,
+            requires_beat=metadata.requires_beat,
             source=source,
         )
 
@@ -658,10 +660,12 @@ def _validate_plugin_type(
         return None
 
     requires_spectrum = bool(getattr(sample, "requires_spectrum", False))
+    requires_beat = bool(getattr(sample, "requires_beat", False))
     return _PluginMetadata(
         plugin_id=plugin_id,
         display_name=display_name,
         requires_spectrum=requires_spectrum,
+        requires_beat=requires_beat,
     )
 
 

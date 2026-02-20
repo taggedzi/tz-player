@@ -8,6 +8,8 @@ import random
 import time
 from dataclasses import replace
 
+from tz_player.services.beat_service import BeatReading
+from tz_player.services.beat_store import BeatParams
 from tz_player.services.fake_backend import FakePlaybackBackend
 from tz_player.services.playback_backend import (
     BackendError,
@@ -323,6 +325,112 @@ def test_player_service_skips_spectrum_sampling_when_disabled() -> None:
         assert service.state.spectrum_source is None
         assert service.state.spectrum_status is None
         assert spectrum.calls == 0
+        await service.shutdown()
+
+    _run(run())
+
+
+def test_player_service_sets_beat_state_when_enabled() -> None:
+    class NoLiveFakeBackend(FakePlaybackBackend):
+        async def get_level_sample(self) -> LevelSample | None:
+            return None
+
+    class BeatServiceStub:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str | None, int, BeatParams]] = []
+
+        async def sample(
+            self,
+            *,
+            track_path: str | None,
+            position_ms: int,
+            params: BeatParams,
+        ) -> BeatReading:
+            self.calls.append((track_path, position_ms, params))
+            return BeatReading(
+                strength=0.75,
+                is_beat=True,
+                bpm=128.0,
+                source="cache",
+                status="ready",
+            )
+
+    async def emit_event(_event: object) -> None:
+        return None
+
+    async def run() -> None:
+        beat = BeatServiceStub()
+        service = PlayerService(
+            emit_event=emit_event,
+            track_info_provider=_track_info_provider,
+            backend=NoLiveFakeBackend(tick_interval_ms=50),
+            beat_service=beat,  # type: ignore[arg-type]
+            beat_params=BeatParams(hop_ms=40),
+            should_sample_beat=lambda: True,
+        )
+        await service.start()
+        await service.play_item(1, 1)
+        await asyncio.sleep(0.35)
+        assert service.state.beat_strength == 0.75
+        assert service.state.beat_is_onset is True
+        assert service.state.beat_bpm == 128.0
+        assert service.state.beat_source == "cache"
+        assert service.state.beat_status == "ready"
+        assert beat.calls
+        assert beat.calls[-1][0] == "/tmp/song.mp3"
+        await service.shutdown()
+
+    _run(run())
+
+
+def test_player_service_skips_beat_sampling_when_disabled() -> None:
+    class NoLiveFakeBackend(FakePlaybackBackend):
+        async def get_level_sample(self) -> LevelSample | None:
+            return None
+
+    class BeatServiceStub:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def sample(
+            self,
+            *,
+            track_path: str | None,
+            position_ms: int,
+            params: BeatParams,
+        ) -> BeatReading:
+            del track_path, position_ms, params
+            self.calls += 1
+            return BeatReading(
+                strength=0.5,
+                is_beat=False,
+                bpm=120.0,
+                source="cache",
+                status="ready",
+            )
+
+    async def emit_event(_event: object) -> None:
+        return None
+
+    async def run() -> None:
+        beat = BeatServiceStub()
+        service = PlayerService(
+            emit_event=emit_event,
+            track_info_provider=_track_info_provider,
+            backend=NoLiveFakeBackend(tick_interval_ms=50),
+            beat_service=beat,  # type: ignore[arg-type]
+            beat_params=BeatParams(hop_ms=40),
+            should_sample_beat=lambda: False,
+        )
+        await service.start()
+        await service.play_item(1, 1)
+        await asyncio.sleep(0.35)
+        assert service.state.beat_strength is None
+        assert service.state.beat_is_onset is None
+        assert service.state.beat_bpm is None
+        assert service.state.beat_source is None
+        assert service.state.beat_status is None
+        assert beat.calls == 0
         await service.shutdown()
 
     _run(run())

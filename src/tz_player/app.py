@@ -39,6 +39,7 @@ from .logging_utils import setup_logging
 from .paths import db_path, log_dir, state_path, visualizer_plugin_dir
 from .runtime_config import resolve_log_level
 from .services.analysis_cache_pruner import SqliteAnalysisCachePruner
+from .services.audio_beat_analysis import analyze_track_beats
 from .services.audio_envelope_analysis import (
     analyze_track_envelope,
     ffmpeg_available,
@@ -47,6 +48,8 @@ from .services.audio_envelope_analysis import (
 from .services.audio_envelope_store import SqliteEnvelopeStore
 from .services.audio_spectrum_analysis import analyze_track_spectrum
 from .services.audio_tags import read_audio_tags
+from .services.beat_service import BeatService
+from .services.beat_store import BeatParams, SqliteBeatStore
 from .services.fake_backend import FakePlaybackBackend
 from .services.metadata_service import MetadataService
 from .services.player_service import PlayerService, PlayerState, TrackInfo
@@ -313,12 +316,16 @@ class TzPlayerApp(App):
         self.audio_envelope_store: SqliteEnvelopeStore | None = None
         self.spectrum_store: SqliteSpectrumStore | None = None
         self.spectrum_service: SpectrumService | None = None
+        self.beat_store: SqliteBeatStore | None = None
+        self.beat_service: BeatService | None = None
         self.analysis_cache_pruner: SqliteAnalysisCachePruner | None = None
         self._metadata_refresh_task: asyncio.Task[None] | None = None
         self._metadata_pending_ids: set[int] = set()
         self._envelope_analysis_tasks: dict[str, asyncio.Task[None]] = {}
         self._spectrum_analysis_tasks: dict[str, asyncio.Task[None]] = {}
+        self._beat_analysis_tasks: dict[str, asyncio.Task[None]] = {}
         self._spectrum_params = SpectrumParams(band_count=48, hop_ms=40)
+        self._beat_params = BeatParams(hop_ms=40)
         self._analysis_cache_prune_task: asyncio.Task[None] | None = None
         self._next_prewarm_task: asyncio.Task[None] | None = None
         self._next_prewarm_context: tuple[int, int, str, bool, int] | None = None
@@ -410,6 +417,12 @@ class TzPlayerApp(App):
                     cache_provider=self.spectrum_store,
                     schedule_analysis=self._schedule_spectrum_analysis_for_path,
                 )
+                self.beat_store = SqliteBeatStore(db_path())
+                await self.beat_store.initialize()
+                self.beat_service = BeatService(
+                    cache_provider=self.beat_store,
+                    schedule_analysis=self._schedule_beat_analysis_for_path,
+                )
                 self.analysis_cache_pruner = SqliteAnalysisCachePruner(db_path())
                 playlist_id = await self.store.ensure_playlist("Default")
             except Exception as exc:
@@ -432,6 +445,9 @@ class TzPlayerApp(App):
                 spectrum_service=self.spectrum_service,
                 spectrum_params=self._spectrum_params,
                 should_sample_spectrum=self._active_visualizer_requests_spectrum,
+                beat_service=self.beat_service,
+                beat_params=self._beat_params,
+                should_sample_beat=self._active_visualizer_requests_beat,
                 initial_state=self.player_state,
             )
             self.metadata_service = MetadataService(
@@ -500,6 +516,13 @@ class TzPlayerApp(App):
                 *self._spectrum_analysis_tasks.values(), return_exceptions=True
             )
             self._spectrum_analysis_tasks.clear()
+        for task in self._beat_analysis_tasks.values():
+            task.cancel()
+        if self._beat_analysis_tasks:
+            await asyncio.gather(
+                *self._beat_analysis_tasks.values(), return_exceptions=True
+            )
+            self._beat_analysis_tasks.clear()
         self._cancel_next_track_prewarm()
         if self.player_service is not None:
             await self.player_service.shutdown()
@@ -833,6 +856,48 @@ class TzPlayerApp(App):
         except Exception as exc:
             logger.debug("Spectrum analysis failed for %s: %s", path, exc)
 
+    async def _schedule_beat_analysis_for_path(
+        self, track_path: str, params: BeatParams
+    ) -> None:
+        """Schedule lazy beat analysis when a visualizer requests it."""
+        if self.beat_store is None or not track_path:
+            return
+        key = f"{track_path}|hop={params.hop_ms}"
+        existing = self._beat_analysis_tasks.get(key)
+        if existing is not None and not existing.done():
+            return
+        task = asyncio.create_task(self._ensure_beat_for_track(track_path, params))
+        self._beat_analysis_tasks[key] = task
+        task.add_done_callback(lambda _task: self._beat_analysis_tasks.pop(key, None))
+
+    async def _ensure_beat_for_track(self, track_path: str, params: BeatParams) -> None:
+        if self.beat_store is None:
+            return
+        path = Path(track_path)
+        try:
+            if await self.beat_store.has_beats(path, params=params):
+                return
+            result = await run_blocking(
+                analyze_track_beats,
+                path,
+                hop_ms=params.hop_ms,
+            )
+            if result is None or not result.frames:
+                return
+            await self.beat_store.upsert_beats(
+                path,
+                duration_ms=max(1, result.duration_ms),
+                params=params,
+                bpm=result.bpm,
+                frames=result.frames,
+            )
+            self._schedule_analysis_cache_prune(reason="post_write", delay_s=0.0)
+            logger.info(
+                "Beat analysis completed for %s (%d frames)", path, len(result.frames)
+            )
+        except Exception as exc:
+            logger.debug("Beat analysis failed for %s: %s", path, exc)
+
     def _schedule_analysis_cache_prune(
         self,
         *,
@@ -1151,6 +1216,11 @@ class TzPlayerApp(App):
             spectrum_bands=self.player_state.spectrum_bands,
             spectrum_source=self.player_state.spectrum_source,
             spectrum_status=self.player_state.spectrum_status,
+            beat_strength=self.player_state.beat_strength,
+            beat_is_onset=self.player_state.beat_is_onset,
+            beat_bpm=self.player_state.beat_bpm,
+            beat_source=self.player_state.beat_source,
+            beat_status=self.player_state.beat_status,
         )
         try:
             output = self.visualizer_host.render_frame(frame, context)
@@ -1176,6 +1246,11 @@ class TzPlayerApp(App):
         if self.visualizer_host is None:
             return False
         return self.visualizer_host.active_requires_spectrum
+
+    def _active_visualizer_requests_beat(self) -> bool:
+        if self.visualizer_host is None:
+            return False
+        return self.visualizer_host.active_requires_beat
 
     def _update_audio_level_notice(self, track_path: str) -> None:
         if self.current_track is None:
