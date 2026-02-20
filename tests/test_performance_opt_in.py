@@ -61,6 +61,7 @@ ADVANCED_VIZ_IDS = (
     "viz.reactor.particles",
     "viz.particle.gravity_well",
     "viz.particle.shockwave_rings",
+    "viz.particle.rain_reactive",
     "viz.spectrum.radial",
     "viz.typography.glitch",
     "viz.waveform.proxy",

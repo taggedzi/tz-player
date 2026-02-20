@@ -28,6 +28,7 @@ from .hackscope import HackScopeVisualizer
 from .isolated_runner import IsolatedPluginProxy, PluginSourceSpec
 from .matrix import MatrixBlueVisualizer, MatrixGreenVisualizer, MatrixRedVisualizer
 from .radial import RadialSpectrumVisualizer
+from .rain_reactive import ReactiveRainVisualizer
 from .reactor import ParticleReactorVisualizer
 from .shockwave_rings import ShockwaveRingsVisualizer
 from .terrain import AudioTerrainVisualizer
@@ -170,6 +171,7 @@ class VisualizerRegistry:
             ParticleReactorVisualizer,
             GravityWellVisualizer,
             ShockwaveRingsVisualizer,
+            ReactiveRainVisualizer,
             RadialSpectrumVisualizer,
             WaveformProxyVisualizer,
             WaveformNeonVisualizer,
