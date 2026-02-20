@@ -39,6 +39,25 @@ def _setup_dirs(tmp_path, monkeypatch) -> None:
     paths.get_app_dirs.cache_clear()
 
 
+def _stub_registry_built_in(monkeypatch, registry: VisualizerRegistry) -> None:
+    """Patch registry factory to return a deterministic test registry."""
+
+    def _built_in(
+        cls,
+        *,
+        local_plugin_paths=None,
+        plugin_security_mode="warn",
+        plugin_runtime_mode="in-process",
+    ):
+        return registry
+
+    monkeypatch.setattr(
+        app_module.VisualizerRegistry,
+        "built_in",
+        classmethod(_built_in),
+    )
+
+
 @dataclass
 class VizOne:
     """Visualizer stub representing first selectable plugin."""
@@ -113,17 +132,7 @@ def test_visualizer_selection_persists_across_restart(tmp_path, monkeypatch) -> 
         {"viz.one": VizOne, "viz.two": VizTwo},
         default_id="viz.one",
     )
-    monkeypatch.setattr(
-        app_module.VisualizerRegistry,
-        "built_in",
-        classmethod(
-            lambda cls,
-            *,
-            local_plugin_paths=None,
-            plugin_security_mode="warn",
-            plugin_runtime_mode="in-process": registry
-        ),
-    )
+    _stub_registry_built_in(monkeypatch, registry)
 
     app1 = TzPlayerApp(auto_init=False, backend_name="fake")
 
@@ -167,17 +176,7 @@ def test_unknown_persisted_visualizer_falls_back_and_repersists(
         {"viz.default": VizDefault},
         default_id="viz.default",
     )
-    monkeypatch.setattr(
-        app_module.VisualizerRegistry,
-        "built_in",
-        classmethod(
-            lambda cls,
-            *,
-            local_plugin_paths=None,
-            plugin_security_mode="warn",
-            plugin_runtime_mode="in-process": registry
-        ),
-    )
+    _stub_registry_built_in(monkeypatch, registry)
 
     save_state(
         paths.state_path(),
@@ -209,17 +208,7 @@ def test_ansi_visualizer_output_does_not_raise_markup_error(
         {"viz.default": VizDefault, "viz.ansi": VizAnsi},
         default_id="viz.default",
     )
-    monkeypatch.setattr(
-        app_module.VisualizerRegistry,
-        "built_in",
-        classmethod(
-            lambda cls,
-            *,
-            local_plugin_paths=None,
-            plugin_security_mode="warn",
-            plugin_runtime_mode="in-process": registry
-        ),
-    )
+    _stub_registry_built_in(monkeypatch, registry)
     app = TzPlayerApp(auto_init=False, backend_name="fake")
 
     async def run_app() -> None:
