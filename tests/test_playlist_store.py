@@ -224,7 +224,7 @@ def test_migration_adds_item_id(tmp_path) -> None:
         columns = [row[1] for row in conn.execute("PRAGMA table_info(playlist_items)")]
         assert "id" in columns
         version = conn.execute("PRAGMA user_version").fetchone()[0]
-        assert version == 4
+        assert version == 5
 
 
 def test_initialize_fails_on_newer_schema_version(tmp_path) -> None:
@@ -329,3 +329,42 @@ def test_get_random_item_id_honors_exclusion(tmp_path, monkeypatch) -> None:
     selected = _run(store.get_random_item_id(playlist_id, exclude_item_id=excluded))
     assert selected in {rows[1].item_id, rows[2].item_id}
     assert selected != excluded
+
+
+def test_search_item_ids_tracks_metadata_and_path_updates(tmp_path) -> None:
+    db_path = tmp_path / "library.sqlite"
+    store = PlaylistStore(db_path)
+    _run(store.initialize())
+    playlist_id = _run(store.create_playlist("SearchUpdates"))
+
+    track_path = tmp_path / "alpha_track.mp3"
+    _touch(track_path)
+    _run(store.add_tracks(playlist_id, [track_path]))
+    row = _run(store.fetch_window(playlist_id, 0, 1))[0]
+
+    assert _run(store.search_item_ids(playlist_id, "alpha")) == [row.item_id]
+
+    _run(
+        store.upsert_track_meta(
+            row.track_id,
+            playlist_store_module.TrackMeta(
+                title="Neon Pulse",
+                artist="Test Artist",
+                album="Perf Set",
+                year=2026,
+                duration_ms=180000,
+                meta_valid=True,
+                meta_error=None,
+                mtime_ns=None,
+                size_bytes=None,
+            ),
+        )
+    )
+    assert _run(store.search_item_ids(playlist_id, "neon")) == [row.item_id]
+
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            "UPDATE tracks SET path = ?, path_norm = ? WHERE id = ?",
+            ("retitled/path/new_name.mp3", "retitled/path/new_name.mp3", row.track_id),
+        )
+    assert _run(store.search_item_ids(playlist_id, "new_name")) == [row.item_id]
