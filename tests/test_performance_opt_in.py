@@ -65,6 +65,7 @@ ADVANCED_VIZ_IDS = (
     "viz.particle.orbital_system",
     "viz.particle.ember_field",
     "viz.particle.magnetic_grid",
+    "viz.particle.audio_tornado",
     "viz.spectrum.radial",
     "viz.typography.glitch",
     "viz.waveform.proxy",

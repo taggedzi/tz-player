@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
 
+from .audio_tornado import AudioTornadoVisualizer
 from .base import VisualizerPlugin
 from .basic import BasicVisualizer
 from .cover_ascii import CoverAsciiMotionVisualizer, CoverAsciiStaticVisualizer
@@ -178,6 +179,7 @@ class VisualizerRegistry:
             OrbitalSystemVisualizer,
             EmberFieldVisualizer,
             MagneticGridVisualizer,
+            AudioTornadoVisualizer,
             RadialSpectrumVisualizer,
             WaveformProxyVisualizer,
             WaveformNeonVisualizer,
