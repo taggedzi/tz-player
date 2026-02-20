@@ -214,7 +214,7 @@ Type to filter your playlist.
 * Local drop-in plugins are auto-discovered from `<user_config_dir>/visualizers/plugins`.
 * Plugin safety preflight is configurable with `--visualizer-plugin-security` (`off|warn|enforce`).
 * Local plugin runtime is configurable with `--visualizer-plugin-runtime` (`in-process|isolated`).
-* Lazy scalar/FFT analysis is only computed when requested and then reused from cache.
+* Lazy scalar/FFT/beat analysis is only computed when requested and then reused from cache.
 
 This keeps the interface stable even if a plugin misbehaves.
 

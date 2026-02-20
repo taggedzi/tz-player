@@ -254,6 +254,41 @@ Execution tracker derived from `SPEC.md`.
   - `.ubuntu-venv/bin/python -m mypy src`
   - `.ubuntu-venv/bin/python -m pytest`
 
+### T-043 Lazy Beat Detection Cache + Visualizer Contract Wiring
+- Spec Ref: Section `5` (analysis services), Section `6` (visualizer/plugin model), Section `7` (persistence/schema), Section `8` (reliability)
+- Status: `done`
+- Goal:
+  - Add lazy, cache-backed beat detection (onset strength + beat marker + tempo estimate) with the same persistence and cleanup behavior used by scalar and spectrum analysis.
+- Scope:
+  - Add beat-analysis compute service and SQLite cache model.
+  - Schedule beat analysis only when beat-capable visualizers request it.
+  - Persist beat data in shared analysis cache and prune under existing retention policy.
+  - Expose beat fields in visualizer frame contract and plugin capability signaling.
+- Non-goals:
+  - Studio-grade beat tracking accuracy.
+  - Live backend PCM beat extraction in this phase.
+- Tasks:
+  - `T-043A` Schema migration for beat cache frames. Status: `done`
+    - Add DB migration for beat frame table under shared analysis cache model.
+    - Preserve backward-compatible startup migration behavior.
+  - `T-043B` Beat analysis + store/service implementation. Status: `done`
+    - Add lazy beat analysis helper.
+    - Add SQLite beat store and cache-first beat service.
+  - `T-043C` App/PlayerService scheduling and state wiring. Status: `done`
+    - Add beat scheduling tasks and background compute path.
+    - Add beat fields to player state and visualizer frame payload.
+  - `T-043D` Visualizer capability contract update. Status: `done`
+    - Add optional `requires_beat` capability signaling.
+    - Keep legacy plugin compatibility unchanged.
+  - `T-043E` Tests/docs/ADR updates. Status: `done`
+    - Add unit/integration tests for beat analysis, store/service, and capability wiring.
+    - Update user/docs acceptance mapping and ADR record.
+- Validation (per implementation change set):
+  - `.ubuntu-venv/bin/python -m ruff check .`
+  - `.ubuntu-venv/bin/python -m ruff format --check .`
+  - `.ubuntu-venv/bin/python -m mypy src`
+  - `.ubuntu-venv/bin/python -m pytest`
+
 ### DOC-001 Internal Documentation Campaign (All Project Files)
 - Status: `done`
 - Goal:

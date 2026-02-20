@@ -68,6 +68,11 @@ class VisualizerFrameInput:
     spectrum_bands: bytes | None = None
     spectrum_source: str | None = None  # cache|fallback
     spectrum_status: str | None = None  # ready|loading|missing|error
+    beat_strength: float | None = None
+    beat_is_onset: bool | None = None
+    beat_bpm: float | None = None
+    beat_source: str | None = None  # cache|fallback
+    beat_status: str | None = None  # ready|loading|missing|error
 
 
 class VisualizerPlugin(Protocol):
@@ -75,6 +80,7 @@ class VisualizerPlugin(Protocol):
     display_name: str
     plugin_api_version: int
     requires_spectrum: bool  # optional, defaults to False when omitted
+    requires_beat: bool  # optional, defaults to False when omitted
 
     def on_activate(self, context: VisualizerContext) -> None: ...
     def on_deactivate(self) -> None: ...
@@ -92,6 +98,7 @@ Notes:
 ## Lazy Analysis Contract
 
 - Scalar levels and spectrum data are lazy and cache-backed.
+- Beat detection data is also lazy and cache-backed.
 - Analysis only computes when a visualizer path requests it.
 - Once computed, analysis is persisted in SQLite cache and reused across restarts.
 - `render` must treat `loading|missing|error` as normal states.
@@ -99,6 +106,9 @@ Notes:
 - Spectrum analysis scheduling is host-managed and keyed by plugin capability:
   - `requires_spectrum = True` opts in.
   - Omitted/False means no spectrum sampling work is triggered.
+- Beat analysis scheduling is host-managed and keyed by plugin capability:
+  - `requires_beat = True` opts in.
+  - Omitted/False means no beat sampling work is triggered.
 
 ## Local Plugin Security Modes
 
