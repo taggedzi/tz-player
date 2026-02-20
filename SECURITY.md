@@ -32,6 +32,7 @@ Visualizer plugins are Python code and execute with the same user permissions as
 
 - Only install plugins from sources you trust.
 - The app includes static plugin safety checks (`off`, `warn`, `enforce`) to detect common risky patterns.
+- The app can run local plugins in a process-isolated mode (`--visualizer-plugin-runtime isolated`) with timeout-based failover.
 - These checks reduce risk but do not provide complete sandboxing of arbitrary Python code.
 - For higher assurance, run only reviewed plugins in constrained OS environments.
 

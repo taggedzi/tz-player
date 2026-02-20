@@ -30,6 +30,12 @@ Set local plugin security policy mode:
 tz-player --visualizer-plugin-security warn
 ```
 
+Set local plugin runtime mode:
+
+```
+tz-player --visualizer-plugin-runtime isolated
+```
+
 Notes:
 - Default backend is `vlc`.
 - The VLC backend requires VLC/libVLC installed on your system.
@@ -50,6 +56,9 @@ Logging and diagnostics:
   - `warn` (default): plugin loads, warning is logged/notified when risky patterns are detected.
   - `enforce`: plugin is blocked when risky patterns are detected.
   - `off`: skip static safety preflight checks.
+- `--visualizer-plugin-runtime <in-process|isolated>` controls how local plugins execute.
+  - `in-process` (default): local plugins run in the app process.
+  - `isolated`: local plugins run in a subprocess with RPC timeouts and fail-closed fallback behavior.
 - Without `--log-file`, logs are written to the app log directory as `tz-player.log`.
   - Typical default location pattern: `<user_data_dir>/logs/tz-player.log`.
 - TUI/GUI runs write logs to file by default (console log streaming is disabled to avoid drawing over the TUI).

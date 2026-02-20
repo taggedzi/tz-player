@@ -5,7 +5,7 @@ This document maps the visualizer workflow across app startup, registry/host set
 ## 1. Scope
 
 - Included:
-  - CLI/runtime visualizer configuration (`--visualizer-fps`, `--visualizer-plugin-path`, `--visualizer-plugin-security`)
+  - CLI/runtime visualizer configuration (`--visualizer-fps`, `--visualizer-plugin-path`, `--visualizer-plugin-security`, `--visualizer-plugin-runtime`)
   - Startup initialization (`_start_visualizer`)
   - Per-frame rendering (`_render_visualizer_frame`)
   - Runtime plugin switching (`action_cycle_visualizer`, key `z`)
@@ -21,6 +21,7 @@ This document maps the visualizer workflow across app startup, registry/host set
 - `src/tz_player/app.py:1258` `--visualizer-fps` (clamped 2..30)
 - `src/tz_player/app.py:1263` `--visualizer-plugin-path` (repeatable)
 - `src/tz_player/app.py` `--visualizer-plugin-security` (`off|warn|enforce`)
+- `src/tz_player/app.py` `--visualizer-plugin-runtime` (`in-process|isolated`)
 
 2. `main()` passes overrides into `TzPlayerApp(...)`:
 - `src/tz_player/app.py:1288`
@@ -44,7 +45,7 @@ Flow:
 1. Build registry:
 - Always include default drop-in directory (`<user_config_dir>/visualizers/plugins`)
 - Add persisted/CLI-configured plugin paths after default path
-- Call `VisualizerRegistry.built_in(local_plugin_paths=..., plugin_security_mode=...)`
+- Call `VisualizerRegistry.built_in(local_plugin_paths=..., plugin_security_mode=..., plugin_runtime_mode=...)`
 - `src/tz_player/app.py:887`
 
 2. Build host:

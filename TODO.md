@@ -14,7 +14,7 @@ Execution tracker derived from `SPEC.md`.
 
 ### T-038 User Drop-In Visualizer Plugins + Security Hardening
 - Spec Ref: Section `6` (Plugin discovery/lifecycle), Section `8` (reliability/error handling), `WF-06`, `WF-07`
-- Status: `in_progress`
+- Status: `done`
 - Goal:
   - Evolve current local-plugin loading into a true user drop-in plugin system with a standard plugin directory and practical security guardrails.
   - Preserve keyboard-first UX, non-blocking render guarantees, and fallback safety.
@@ -53,7 +53,7 @@ Execution tracker derived from `SPEC.md`.
       - `enforce` mode: block load on policy violations
     - Add plugin source allowlist/denylist controls for import paths if needed.
     - Ensure policy outcome is logged and visible to users as runtime notices when relevant.
-  - `T-038E` Add process-isolated plugin runner (optional hardened mode). Status: `todo`
+  - `T-038E` Add process-isolated plugin runner (optional hardened mode). Status: `done`
     - Design/run plugins out-of-process for stronger containment (separate worker process boundary).
     - Define IPC contract for `on_activate`/`render`/`on_deactivate`.
     - Apply resource/time limits and fail-closed fallback behavior when runner is unhealthy.
