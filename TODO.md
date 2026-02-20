@@ -69,7 +69,7 @@ Execution tracker derived from `SPEC.md`.
   - `T-050A` Branch isolation and baseline snapshot. Status: `done`
     - Stable baseline branch: `feat/beat-fireworks-diagnostics` (commit `4367bb5`).
     - Child spike branch: `feat/librosa-beat-spike` (created from baseline).
-  - `T-050B` Librosa integration spike (beat path only). Status: `todo`
+  - `T-050B` Librosa integration spike (beat path only). Status: `in_progress`
     - Add optional `librosa` beat analyzer path in analysis service.
     - Keep existing analyzer as deterministic fallback.
     - Preserve non-blocking scheduling and cache semantics.

@@ -121,3 +121,41 @@ def test_beat_store_miss_when_fingerprint_changes(tmp_path) -> None:
     _touch(track, b"abcdef-ghij")
     assert _run(store.get_frame_at(track, position_ms=0, params=params)) is None
     assert _run(store.has_beats(track, params=params)) is False
+
+
+def test_beat_store_keeps_entries_distinct_by_analyzer_param(tmp_path) -> None:
+    db_path = tmp_path / "library.sqlite"
+    store = SqliteBeatStore(db_path)
+    _run(store.initialize())
+
+    track = tmp_path / "song.mp3"
+    _touch(track, b"abcdef")
+    native = BeatParams(hop_ms=40, analyzer="native")
+    librosa = BeatParams(hop_ms=40, analyzer="librosa")
+    _run(
+        store.upsert_beats(
+            track,
+            duration_ms=1000,
+            params=native,
+            bpm=110.0,
+            frames=[(0, 30, False)],
+        )
+    )
+    _run(
+        store.upsert_beats(
+            track,
+            duration_ms=1000,
+            params=librosa,
+            bpm=112.0,
+            frames=[(0, 200, True)],
+        )
+    )
+
+    native_frame = _run(store.get_frame_at(track, position_ms=0, params=native))
+    librosa_frame = _run(store.get_frame_at(track, position_ms=0, params=librosa))
+    assert native_frame is not None
+    assert librosa_frame is not None
+    assert native_frame.bpm == 110.0
+    assert native_frame.is_beat is False
+    assert librosa_frame.bpm == 112.0
+    assert librosa_frame.is_beat is True

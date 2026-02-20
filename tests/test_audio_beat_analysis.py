@@ -6,7 +6,11 @@ import math
 import wave
 from pathlib import Path
 
-from tz_player.services.audio_beat_analysis import analyze_track_beats
+from tz_player.services.audio_beat_analysis import (
+    analyze_track_beats,
+    analyze_track_beats_librosa,
+    librosa_available,
+)
 
 
 def _write_wave(path: Path, *, frames: int = 2_205, sample_rate: int = 44_100) -> None:
@@ -79,3 +83,12 @@ def test_analyze_track_beats_detects_repeating_pulses(tmp_path) -> None:
     assert beat_count >= 8
     max_strength = max(strength for _, strength, _ in result.frames)
     assert max_strength >= 160
+
+
+def test_librosa_availability_probe_returns_bool() -> None:
+    assert isinstance(librosa_available(), bool)
+
+
+def test_analyze_track_beats_librosa_returns_none_for_missing_file(tmp_path) -> None:
+    missing = tmp_path / "missing.wav"
+    assert analyze_track_beats_librosa(missing) is None
