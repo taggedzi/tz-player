@@ -314,7 +314,7 @@ Execution tracker derived from `SPEC.md`.
     - New plugin ID: `viz.spectrum.radial`.
     - Render spoke-based radial FFT approximation in terminal grid.
     - Add short peak-hold and beat ring pulse.
-  - `T-044D` Particle Reactor / Starfield Burst. Status: `todo`
+  - `T-044D` Particle Reactor / Starfield Burst. Status: `done`
     - New plugin ID: `viz.reactor.particles`.
     - Drive particle spawn/velocity from bass-mid-high aggregate + RMS + beat.
     - Keep deterministic bounded particle counts for frame-budget safety.
