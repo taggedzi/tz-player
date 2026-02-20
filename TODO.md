@@ -190,7 +190,7 @@ Execution tracker derived from `SPEC.md`.
 
 ### T-041 Observability Hardening + Large Playlist Scalability
 - Spec Ref: Section `8` (diagnostics/logging), `WF-02`, `WF-03`, `WF-05`, `WF-07`
-- Status: `in_progress`
+- Status: `done`
 - Goal:
   - Improve runtime observability for heavy playlist operations and analysis workflows.
   - Reduce query/path bottlenecks for very large playlists (target: up to 100k items).
@@ -215,6 +215,39 @@ Execution tracker derived from `SPEC.md`.
   - `T-041D` Large-playlist usage/docs guidance. Status: `done`
     - Document expected behavior and caveats for very large playlists.
     - Add troubleshooting notes for heavy metadata/search workloads.
+- Validation (per implementation change set):
+  - `.ubuntu-venv/bin/python -m ruff check .`
+  - `.ubuntu-venv/bin/python -m ruff format --check .`
+  - `.ubuntu-venv/bin/python -m mypy src`
+  - `.ubuntu-venv/bin/python -m pytest`
+
+### T-042 Large-Library Metadata/Search Scalability + Indexing
+- Spec Ref: Section `7` (persistence/state), Section `8` (reliability/diagnostics), `WF-02`, `WF-04`, `WF-07`
+- Status: `done`
+- Goal:
+  - Keep Find/search and metadata-driven list operations responsive for very large playlists/libraries (100k+ rows).
+- Scope:
+  - Introduce an indexed full-text search path for playlist search with graceful compatibility fallback.
+  - Add migration-safe schema changes and sync wiring so search index stays accurate as tracks/metadata change.
+  - Expand observability around search-path selection and slow metadata/search operations.
+  - Add opt-in scale tests and usage guidance for large-library search behavior.
+- Non-goals:
+  - Remote/cloud search systems.
+  - Relevance-ranking engines beyond deterministic local matching.
+- Tasks:
+  - `T-042A` Add SQLite FTS-backed playlist search index + migration path. Status: `done`
+    - Add a schema migration that creates playlist search FTS structures when supported.
+    - Keep migration behavior safe on SQLite builds without FTS5 support.
+  - `T-042B` Wire PlaylistStore search to FTS with deterministic fallback. Status: `done`
+    - Use FTS query path by default where available.
+    - Fall back to existing LIKE-based path when FTS is unavailable.
+    - Emit search mode in slow-query observability fields.
+  - `T-042C` Keep search index synchronized with playlist/metadata mutations. Status: `done`
+    - Ensure add/remove/reorder and metadata/path updates keep search source data accurate.
+    - Add regression tests for synchronization correctness.
+  - `T-042D` Expand high-count search perf checks and docs guidance. Status: `done`
+    - Add/extend opt-in perf tests focusing on worst-case search behavior at large scale.
+    - Document behavior/limitations/tuning notes for search on large libraries.
 - Validation (per implementation change set):
   - `.ubuntu-venv/bin/python -m ruff check .`
   - `.ubuntu-venv/bin/python -m ruff format --check .`

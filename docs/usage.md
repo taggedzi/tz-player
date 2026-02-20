@@ -112,6 +112,9 @@ Lazy analysis cache notes:
 Large-playlist guidance:
 - `tz-player` is designed to handle high-count playlists (for example ~100k rows), but behavior depends on terminal throughput and host storage performance.
 - Keep logs enabled (`INFO` default) when tuning large libraries; slow DB hotspots emit `event=playlist_store_slow_query` entries with operation and elapsed ms.
+- Find/search uses an SQLite FTS-backed path when available and falls back to LIKE matching on SQLite builds without FTS5 support.
+- FTS mode generally scales better for broad and multi-token queries; fallback mode is compatible but can be slower at very high counts.
+- Search operations include a `mode` field in slow-query logs (`fts` or `like_fallback`) to help diagnose performance behavior.
 - Find/search and metadata-heavy views are the most expensive paths; narrow search terms and allow lazy analysis to warm over time.
 - Prefer SSD-backed app data directories for best playlist/query responsiveness.
 - For benchmark-style checks, run opt-in perf tests:
