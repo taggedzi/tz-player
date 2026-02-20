@@ -27,8 +27,8 @@ Execution tracker derived from `SPEC.md`.
   - Per-frame blocking I/O or heavy CPU simulation loops.
 - Tasks:
   - `T-048A` `viz.particle.gravity_well` (Gravity Well Reactor). Status: `done`
-  - `T-048B` `viz.particle.shockwave_rings` (Audio Shockwave Rings). Status: `todo`
-  - `T-048C` `viz.particle.rain_reactive` (Particle Rain / reverse-matrix reactive). Status: `todo`
+  - `T-048B` `viz.particle.shockwave_rings` (Audio Shockwave Rings). Status: `done`
+  - `T-048C` `viz.particle.rain_reactive` (Particle Rain / reverse-matrix reactive). Status: `in_progress`
   - `T-048D` `viz.particle.orbital_system` (Audio Solar System). Status: `todo`
   - `T-048E` `viz.particle.ember_field` (Ember Field). Status: `todo`
   - `T-048F` `viz.particle.magnetic_grid` (Magnetic Grid Distortion). Status: `todo`

@@ -29,6 +29,7 @@ from .isolated_runner import IsolatedPluginProxy, PluginSourceSpec
 from .matrix import MatrixBlueVisualizer, MatrixGreenVisualizer, MatrixRedVisualizer
 from .radial import RadialSpectrumVisualizer
 from .reactor import ParticleReactorVisualizer
+from .shockwave_rings import ShockwaveRingsVisualizer
 from .terrain import AudioTerrainVisualizer
 from .typography import TypographyGlitchVisualizer
 from .vu import VuReactiveVisualizer
@@ -168,6 +169,7 @@ class VisualizerRegistry:
             TypographyGlitchVisualizer,
             ParticleReactorVisualizer,
             GravityWellVisualizer,
+            ShockwaveRingsVisualizer,
             RadialSpectrumVisualizer,
             WaveformProxyVisualizer,
             WaveformNeonVisualizer,

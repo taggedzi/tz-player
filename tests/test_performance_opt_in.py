@@ -60,6 +60,7 @@ ADVANCED_VIZ_IDS = (
     "viz.spectrum.terrain",
     "viz.reactor.particles",
     "viz.particle.gravity_well",
+    "viz.particle.shockwave_rings",
     "viz.spectrum.radial",
     "viz.typography.glitch",
     "viz.waveform.proxy",
