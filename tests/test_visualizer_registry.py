@@ -18,6 +18,7 @@ class FirstPlugin:
 
     plugin_id: str = "dup"
     display_name: str = "first"
+    plugin_api_version: int = 1
 
     def on_activate(self, context: VisualizerContext) -> None:
         return None
@@ -35,6 +36,7 @@ class SecondPlugin:
 
     plugin_id: str = "dup"
     display_name: str = "second"
+    plugin_api_version: int = 1
 
     def on_activate(self, context: VisualizerContext) -> None:
         return None
@@ -69,6 +71,7 @@ def test_local_plugin_discovery_from_directory(tmp_path: Path) -> None:
 class LocalViz:
     plugin_id = "local.demo"
     display_name = "Local Demo"
+    plugin_api_version = 1
 
     def on_activate(self, context):
         return None
@@ -95,6 +98,7 @@ def test_local_duplicate_id_does_not_override_built_in(tmp_path: Path) -> None:
 class DuplicateBasic:
     plugin_id = "basic"
     display_name = "Override Basic"
+    plugin_api_version = 1
 
     def on_activate(self, context):
         return None
@@ -130,3 +134,89 @@ def test_registry_logs_load_summary(caplog) -> None:
 def test_registry_requires_registered_default_id() -> None:
     with pytest.raises(ValueError, match="default_id 'missing' is not registered"):
         VisualizerRegistry({"dup": FirstPlugin}, default_id="missing")
+
+
+def test_local_package_plugin_discovery_from_directory(tmp_path: Path) -> None:
+    package_dir = tmp_path / "demo_pkg"
+    package_dir.mkdir()
+    (package_dir / "__init__.py").write_text(
+        """
+from .impl import PackageViz
+""".strip(),
+        encoding="utf-8",
+    )
+    (package_dir / "impl.py").write_text(
+        """
+class PackageViz:
+    plugin_id = "local.package"
+    display_name = "Local Package"
+    plugin_api_version = 1
+
+    def on_activate(self, context):
+        return None
+
+    def on_deactivate(self):
+        return None
+
+    def render(self, frame):
+        return "package"
+""".strip(),
+        encoding="utf-8",
+    )
+    registry = VisualizerRegistry.built_in(local_plugin_paths=[str(tmp_path)])
+    assert registry.has_plugin("local.package")
+
+
+def test_registry_rejects_incompatible_plugin_api_version(tmp_path: Path) -> None:
+    plugin_file = tmp_path / "bad_api.py"
+    plugin_file.write_text(
+        """
+class BadApiPlugin:
+    plugin_id = "local.bad-api"
+    display_name = "Bad API"
+    plugin_api_version = 99
+
+    def on_activate(self, context):
+        return None
+
+    def on_deactivate(self):
+        return None
+
+    def render(self, frame):
+        return "bad"
+""".strip(),
+        encoding="utf-8",
+    )
+    registry = VisualizerRegistry.built_in(local_plugin_paths=[str(tmp_path)])
+    assert not registry.has_plugin("local.bad-api")
+
+
+def test_registry_enforce_mode_blocks_risky_plugin(tmp_path: Path) -> None:
+    plugin_file = tmp_path / "risky.py"
+    plugin_file.write_text(
+        """
+import subprocess
+
+class RiskyViz:
+    plugin_id = "local.risky"
+    display_name = "Risky"
+    plugin_api_version = 1
+
+    def on_activate(self, context):
+        return None
+
+    def on_deactivate(self):
+        return None
+
+    def render(self, frame):
+        return "risky"
+""".strip(),
+        encoding="utf-8",
+    )
+    registry = VisualizerRegistry.built_in(
+        local_plugin_paths=[str(tmp_path)],
+        plugin_security_mode="enforce",
+    )
+    assert not registry.has_plugin("local.risky")
+    notices = registry.consume_notices()
+    assert any("Blocked plugin" in notice for notice in notices)

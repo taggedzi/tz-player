@@ -49,3 +49,8 @@ def db_path(app_name: str = DEFAULT_APP_NAME) -> Path:
 def state_path(app_name: str = DEFAULT_APP_NAME) -> Path:
     """Return the JSON state file path."""
     return config_dir(app_name) / "state.json"
+
+
+def visualizer_plugin_dir(app_name: str = DEFAULT_APP_NAME) -> Path:
+    """Return the per-user visualizer drop-in plugin directory."""
+    return _ensure_dir(config_dir(app_name) / "visualizers" / "plugins")

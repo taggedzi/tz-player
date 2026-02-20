@@ -31,6 +31,7 @@ def test_paths_use_platformdirs_and_create_dirs(tmp_path, monkeypatch) -> None:
     assert paths.log_dir() == data_dir / "logs"
     assert paths.db_path() == data_dir / "tz-player.sqlite"
     assert paths.state_path() == config_dir / "state.json"
+    assert paths.visualizer_plugin_dir() == config_dir / "visualizers" / "plugins"
 
     assert data_dir.exists()
     assert config_dir.exists()

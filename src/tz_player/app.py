@@ -22,7 +22,7 @@ import sys
 import time
 from dataclasses import replace
 from pathlib import Path
-from typing import Callable, Literal, cast
+from typing import Any, Callable, Literal, cast
 
 from rich.text import Text
 from textual.app import App, ComposeResult
@@ -36,7 +36,7 @@ from . import __version__
 from .doctor import render_report, run_doctor
 from .events import PlayerStateChanged, TrackChanged
 from .logging_utils import setup_logging
-from .paths import db_path, log_dir, state_path
+from .paths import db_path, log_dir, state_path, visualizer_plugin_dir
 from .runtime_config import resolve_log_level
 from .services.audio_envelope_analysis import (
     analyze_track_envelope,
@@ -68,6 +68,7 @@ logger = logging.getLogger(__name__)
 METADATA_REFRESH_DEBOUNCE = 0.2
 SPEED_MIN = 0.5
 SPEED_MAX = 4.0
+VISUALIZER_PLUGIN_SECURITY_MODES = {"off", "warn", "enforce"}
 CYBERPUNK_THEME = Theme(
     name="cyberpunk-clean",
     primary="#00D7E6",
@@ -271,6 +272,7 @@ class TzPlayerApp(App):
         backend_name: str | None = None,
         visualizer_fps_override: int | None = None,
         visualizer_plugin_paths_override: list[str] | None = None,
+        visualizer_plugin_security_mode_override: str | None = None,
     ) -> None:
         """Initialize app state and deferred service dependencies.
 
@@ -288,6 +290,9 @@ class TzPlayerApp(App):
         self._backend_name = backend_name
         self._visualizer_fps_override = visualizer_fps_override
         self._visualizer_plugin_paths_override = visualizer_plugin_paths_override
+        self._visualizer_plugin_security_mode_override = (
+            visualizer_plugin_security_mode_override
+        )
         self.player_service: PlayerService | None = None
         self.player_state = PlayerState()
         self.current_track: TrackInfo | None = None
@@ -356,6 +361,15 @@ class TzPlayerApp(App):
                 visualizer_plugin_paths=tuple(self._visualizer_plugin_paths_override)
                 if self._visualizer_plugin_paths_override is not None
                 else self.state.visualizer_plugin_paths,
+                visualizer_plugin_security_mode=(
+                    _normalize_visualizer_plugin_security_mode(
+                        self._visualizer_plugin_security_mode_override
+                    )
+                    if self._visualizer_plugin_security_mode_override is not None
+                    else _normalize_visualizer_plugin_security_mode(
+                        self.state.visualizer_plugin_security_mode
+                    )
+                ),
             )
             await run_blocking(save_state, state_path(), self.state)
             try:
@@ -884,13 +898,16 @@ class TzPlayerApp(App):
 
     async def _start_visualizer(self) -> None:
         """Create registry/host, activate plugin, and start frame timer loop."""
-        local_plugin_paths = list(self.state.visualizer_plugin_paths)
-        if local_plugin_paths:
-            self.visualizer_registry = VisualizerRegistry.built_in(
-                local_plugin_paths=local_plugin_paths
-            )
-        else:
-            self.visualizer_registry = VisualizerRegistry.built_in()
+        configured_paths = list(self.state.visualizer_plugin_paths)
+        default_plugin_path = str(visualizer_plugin_dir())
+        local_plugin_paths = [default_plugin_path, *configured_paths]
+        self.visualizer_registry = VisualizerRegistry.built_in(
+            local_plugin_paths=local_plugin_paths,
+            plugin_security_mode=self.state.visualizer_plugin_security_mode,
+        )
+        registry_notices = self.visualizer_registry.consume_notices()
+        if registry_notices:
+            self._set_runtime_notice(registry_notices[0], ttl_s=10.0)
         self.visualizer_host = VisualizerHost(
             self.visualizer_registry, target_fps=self.state.visualizer_fps
         )
@@ -1221,6 +1238,13 @@ def _normalize_persisted_visualizer_fps(value: int) -> int:
     return 10
 
 
+def _normalize_visualizer_plugin_security_mode(value: str) -> str:
+    normalized = value.strip().lower()
+    if normalized in VISUALIZER_PLUGIN_SECURITY_MODES:
+        return normalized
+    return "warn"
+
+
 def _clamp_int(value: int, min_value: int, max_value: int) -> int:
     return max(min_value, min(value, max_value))
 
@@ -1265,6 +1289,11 @@ def build_parser() -> argparse.ArgumentParser:
         dest="visualizer_plugin_paths",
         help="Local visualizer module/package path (repeatable).",
     )
+    parser.add_argument(
+        "--visualizer-plugin-security",
+        choices=("off", "warn", "enforce"),
+        help="Local plugin security policy mode.",
+    )
     return parser
 
 
@@ -1287,24 +1316,17 @@ def main() -> int:
         logging.getLogger(__name__).info("Starting tz-player TUI")
         visualizer_fps = getattr(args, "visualizer_fps", None)
         visualizer_plugin_paths = getattr(args, "visualizer_plugin_paths", None)
-        if visualizer_fps is not None and visualizer_plugin_paths is not None:
-            app = TzPlayerApp(
-                backend_name=args.backend,
-                visualizer_fps_override=visualizer_fps,
-                visualizer_plugin_paths_override=visualizer_plugin_paths,
+        visualizer_plugin_security = getattr(args, "visualizer_plugin_security", None)
+        app_kwargs: dict[str, object] = {"backend_name": args.backend}
+        if visualizer_fps is not None:
+            app_kwargs["visualizer_fps_override"] = visualizer_fps
+        if visualizer_plugin_paths is not None:
+            app_kwargs["visualizer_plugin_paths_override"] = visualizer_plugin_paths
+        if visualizer_plugin_security is not None:
+            app_kwargs["visualizer_plugin_security_mode_override"] = (
+                visualizer_plugin_security
             )
-        elif visualizer_fps is not None:
-            app = TzPlayerApp(
-                backend_name=args.backend,
-                visualizer_fps_override=visualizer_fps,
-            )
-        elif visualizer_plugin_paths is not None:
-            app = TzPlayerApp(
-                backend_name=args.backend,
-                visualizer_plugin_paths_override=visualizer_plugin_paths,
-            )
-        else:
-            app = TzPlayerApp(backend_name=args.backend)
+        app = TzPlayerApp(**cast(dict[str, Any], app_kwargs))
         app.run()
         return 1 if getattr(app, "startup_failed", False) else 0
     except Exception as exc:  # pragma: no cover - top-level safety net

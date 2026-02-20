@@ -116,7 +116,12 @@ def test_visualizer_selection_persists_across_restart(tmp_path, monkeypatch) -> 
     monkeypatch.setattr(
         app_module.VisualizerRegistry,
         "built_in",
-        classmethod(lambda cls: registry),
+        classmethod(
+            lambda cls,
+            *,
+            local_plugin_paths=None,
+            plugin_security_mode="warn": registry
+        ),
     )
 
     app1 = TzPlayerApp(auto_init=False, backend_name="fake")
@@ -164,7 +169,12 @@ def test_unknown_persisted_visualizer_falls_back_and_repersists(
     monkeypatch.setattr(
         app_module.VisualizerRegistry,
         "built_in",
-        classmethod(lambda cls: registry),
+        classmethod(
+            lambda cls,
+            *,
+            local_plugin_paths=None,
+            plugin_security_mode="warn": registry
+        ),
     )
 
     save_state(
@@ -200,7 +210,12 @@ def test_ansi_visualizer_output_does_not_raise_markup_error(
     monkeypatch.setattr(
         app_module.VisualizerRegistry,
         "built_in",
-        classmethod(lambda cls: registry),
+        classmethod(
+            lambda cls,
+            *,
+            local_plugin_paths=None,
+            plugin_security_mode="warn": registry
+        ),
     )
     app = TzPlayerApp(auto_init=False, backend_name="fake")
 
@@ -300,7 +315,7 @@ def test_cli_visualizer_plugin_paths_override_persisted_state(
     )
     captured_paths: list[str] = []
 
-    def fake_built_in(cls, *, local_plugin_paths=None):
+    def fake_built_in(cls, *, local_plugin_paths=None, plugin_security_mode="warn"):
         if local_plugin_paths:
             captured_paths.extend(local_plugin_paths)
         return VisualizerRegistry({"viz.default": VizDefault}, default_id="viz.default")
@@ -326,4 +341,5 @@ def test_cli_visualizer_plugin_paths_override_persisted_state(
     _run(run_app())
     persisted = load_state(paths.state_path())
     assert persisted.visualizer_plugin_paths == ("cli.plugins",)
-    assert captured_paths == ["cli.plugins"]
+    assert "cli.plugins" in captured_paths
+    assert any(path.endswith("visualizers/plugins") for path in captured_paths)

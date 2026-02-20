@@ -13,6 +13,7 @@ class BasicVisualizer:
 
     plugin_id: str = "basic"
     display_name: str = "Basic"
+    plugin_api_version: int = 1
     _ansi_enabled: bool = True
 
     def on_activate(self, context: VisualizerContext) -> None:

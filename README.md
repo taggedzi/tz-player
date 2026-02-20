@@ -211,6 +211,8 @@ Type to filter your playlist.
 * Plugins are supported.
 * If a visualizer fails, the player switches to a safe default automatically.
 * Visualizers never interrupt playback.
+* Local drop-in plugins are auto-discovered from `<user_config_dir>/visualizers/plugins`.
+* Plugin safety preflight is configurable with `--visualizer-plugin-security` (`off|warn|enforce`).
 
 This keeps the interface stable even if a plugin misbehaves.
 

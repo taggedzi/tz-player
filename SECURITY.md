@@ -26,6 +26,15 @@ Please avoid public disclosure until the issue has been assessed.
 - Triage priority is based on impact, exploitability, and maintainer capacity.
 - Fixes may be released quickly for critical issues, or delayed when capacity is constrained.
 
+## Third-Party Visualizer Plugins
+
+Visualizer plugins are Python code and execute with the same user permissions as the app process.
+
+- Only install plugins from sources you trust.
+- The app includes static plugin safety checks (`off`, `warn`, `enforce`) to detect common risky patterns.
+- These checks reduce risk but do not provide complete sandboxing of arbitrary Python code.
+- For higher assurance, run only reviewed plugins in constrained OS environments.
+
 ## Dependency Strategy
 
 - Keep direct dependencies minimal and review new additions.

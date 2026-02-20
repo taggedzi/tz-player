@@ -24,6 +24,12 @@ Add local visualizer plugin discovery paths (repeatable):
 tz-player --visualizer-plugin-path ./my_visualizers --visualizer-plugin-path mypkg.visualizers
 ```
 
+Set local plugin security policy mode:
+
+```
+tz-player --visualizer-plugin-security warn
+```
+
 Notes:
 - Default backend is `vlc`.
 - The VLC backend requires VLC/libVLC installed on your system.
@@ -40,6 +46,10 @@ Logging and diagnostics:
 - `--quiet` sets log level to `WARNING` (takes precedence over `--verbose`).
 - `--log-file /path/to/tz-player.log` writes logs to an explicit file path.
 - `--visualizer-plugin-path <path_or_module>` adds local visualizer plugin discovery entries for this run (repeatable; CLI overrides persisted list).
+- `--visualizer-plugin-security <off|warn|enforce>` controls static safety checks for local plugin source.
+  - `warn` (default): plugin loads, warning is logged/notified when risky patterns are detected.
+  - `enforce`: plugin is blocked when risky patterns are detected.
+  - `off`: skip static safety preflight checks.
 - Without `--log-file`, logs are written to the app log directory as `tz-player.log`.
   - Typical default location pattern: `<user_data_dir>/logs/tz-player.log`.
 - TUI/GUI runs write logs to file by default (console log streaming is disabled to avoid drawing over the TUI).
@@ -84,6 +94,12 @@ Built-in visualizer IDs include:
 - `vu.reactive`
 - `cover.ascii.static`, `cover.ascii.motion` (embedded artwork ASCII; requires embedded cover art in media files)
   - Fallback lookup is local-only and also checks sidecar files in the same directory (`cover.*`, `folder.*`, `front.*`, `album.*`, `artwork.*`, `<track-stem>.*`).
+
+Drop-in local plugin folder:
+- `tz-player` always scans the user plugin folder:
+  - `<user_config_dir>/visualizers/plugins`
+- This folder is created automatically at startup.
+- You can add additional plugin paths with `--visualizer-plugin-path`.
 
 Status pane controls:
 - Click or drag the TIME bar to seek.

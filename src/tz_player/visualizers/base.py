@@ -48,6 +48,7 @@ class VisualizerPlugin(Protocol):
 
     plugin_id: str
     display_name: str
+    plugin_api_version: int
 
     def on_activate(self, context: VisualizerContext) -> None: ...
     def on_deactivate(self) -> None: ...
