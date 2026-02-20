@@ -24,6 +24,12 @@ def test_gui_parser_accepts_visualizer_fps() -> None:
     assert args.visualizer_fps == 12
 
 
+def test_gui_parser_accepts_visualizer_responsiveness_profile() -> None:
+    parser = build_parser()
+    args = parser.parse_args(["--visualizer-responsiveness", "safe"])
+    assert args.visualizer_responsiveness == "safe"
+
+
 def test_gui_parser_accepts_repeatable_visualizer_plugin_paths() -> None:
     parser = build_parser()
     args = parser.parse_args(

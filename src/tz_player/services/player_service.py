@@ -33,6 +33,11 @@ from tz_player.services.playback_backend import (
 )
 from tz_player.services.spectrum_service import SpectrumReading, SpectrumService
 from tz_player.services.spectrum_store import SpectrumParams
+from tz_player.services.waveform_proxy_service import (
+    WaveformProxyReading,
+    WaveformProxyService,
+)
+from tz_player.services.waveform_proxy_store import WaveformProxyParams
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +93,12 @@ class PlayerState:
     spectrum_bands: bytes | None = None
     spectrum_source: str | None = None
     spectrum_status: str | None = None
+    waveform_min_left: float | None = None
+    waveform_max_left: float | None = None
+    waveform_min_right: float | None = None
+    waveform_max_right: float | None = None
+    waveform_source: str | None = None
+    waveform_status: str | None = None
     beat_strength: float | None = None
     beat_is_onset: bool | None = None
     beat_bpm: float | None = None
@@ -115,9 +126,13 @@ class PlayerService:
         spectrum_service: SpectrumService | None = None,
         spectrum_params: SpectrumParams | None = None,
         should_sample_spectrum: Callable[[], bool] | None = None,
+        waveform_proxy_service: WaveformProxyService | None = None,
+        waveform_proxy_params: WaveformProxyParams | None = None,
+        should_sample_waveform: Callable[[], bool] | None = None,
         beat_service: BeatService | None = None,
         beat_params: BeatParams | None = None,
         should_sample_beat: Callable[[], bool] | None = None,
+        poll_interval_s: float = 0.25,
         shuffle_random: random.Random | None = None,
         default_duration_ms: int = 180_000,
         initial_state: PlayerState | None = None,
@@ -136,7 +151,7 @@ class PlayerService:
         self._lock = asyncio.Lock()
         self._stop_requested = False
         self._poll_task: asyncio.Task[None] | None = None
-        self._poll_interval = 0.25
+        self._poll_interval = max(0.05, min(1.0, float(poll_interval_s)))
         self._end_handled_item_id: int | None = None
         self._max_position_seen_ms = self._state.position_ms
         self._track_started_monotonic_s: float | None = None
@@ -151,6 +166,9 @@ class PlayerService:
         self._spectrum_service = spectrum_service
         self._spectrum_params = spectrum_params
         self._should_sample_spectrum = should_sample_spectrum
+        self._waveform_proxy_service = waveform_proxy_service
+        self._waveform_proxy_params = waveform_proxy_params
+        self._should_sample_waveform = should_sample_waveform
         self._beat_service = beat_service
         self._beat_params = beat_params
         self._should_sample_beat = should_sample_beat
@@ -197,6 +215,12 @@ class PlayerService:
                 spectrum_bands=None,
                 spectrum_source=None,
                 spectrum_status=None,
+                waveform_min_left=None,
+                waveform_max_left=None,
+                waveform_min_right=None,
+                waveform_max_right=None,
+                waveform_source=None,
+                waveform_status=None,
                 beat_strength=None,
                 beat_is_onset=None,
                 beat_bpm=None,
@@ -296,6 +320,12 @@ class PlayerService:
                 spectrum_bands=None,
                 spectrum_source=None,
                 spectrum_status=None,
+                waveform_min_left=None,
+                waveform_max_left=None,
+                waveform_min_right=None,
+                waveform_max_right=None,
+                waveform_source=None,
+                waveform_status=None,
                 beat_strength=None,
                 beat_is_onset=None,
                 beat_bpm=None,
@@ -741,6 +771,7 @@ class PlayerService:
                         track_path=self._current_track_path,
                     )
                     spectrum_reading = await self._sample_spectrum_if_enabled(position)
+                    waveform_reading = await self._sample_waveform_if_enabled(position)
                     beat_reading = await self._sample_beat_if_enabled(position)
                 except Exception:  # pragma: no cover - backend safety net
                     continue
@@ -820,6 +851,44 @@ class PlayerService:
                             spectrum_bands=spectrum_bands,
                             spectrum_source=spectrum_source,
                             spectrum_status=spectrum_status,
+                        )
+                        emit = True
+                    waveform_min_left: float | None
+                    waveform_max_left: float | None
+                    waveform_min_right: float | None
+                    waveform_max_right: float | None
+                    waveform_source: str | None
+                    waveform_status: str | None
+                    if waveform_reading is not None:
+                        waveform_min_left = waveform_reading.min_left
+                        waveform_max_left = waveform_reading.max_left
+                        waveform_min_right = waveform_reading.min_right
+                        waveform_max_right = waveform_reading.max_right
+                        waveform_source = waveform_reading.source
+                        waveform_status = waveform_reading.status
+                    else:
+                        waveform_min_left = None
+                        waveform_max_left = None
+                        waveform_min_right = None
+                        waveform_max_right = None
+                        waveform_source = None
+                        waveform_status = None
+                    if (
+                        waveform_min_left != self._state.waveform_min_left
+                        or waveform_max_left != self._state.waveform_max_left
+                        or waveform_min_right != self._state.waveform_min_right
+                        or waveform_max_right != self._state.waveform_max_right
+                        or waveform_source != self._state.waveform_source
+                        or waveform_status != self._state.waveform_status
+                    ):
+                        self._state = replace(
+                            self._state,
+                            waveform_min_left=waveform_min_left,
+                            waveform_max_left=waveform_max_left,
+                            waveform_min_right=waveform_min_right,
+                            waveform_max_right=waveform_max_right,
+                            waveform_source=waveform_source,
+                            waveform_status=waveform_status,
                         )
                         emit = True
                     beat_strength: float | None
@@ -933,6 +1002,27 @@ class PlayerService:
                 track_path=self._current_track_path,
                 position_ms=max(0, position_ms),
                 params=self._beat_params,
+            )
+        except Exception:
+            return None
+
+    async def _sample_waveform_if_enabled(
+        self, position_ms: int
+    ) -> WaveformProxyReading | None:
+        if self._waveform_proxy_service is None or self._waveform_proxy_params is None:
+            return None
+        if self._current_track_path is None:
+            return None
+        if (
+            self._should_sample_waveform is not None
+            and not self._should_sample_waveform()
+        ):
+            return None
+        try:
+            return await self._waveform_proxy_service.sample(
+                track_path=self._current_track_path,
+                position_ms=max(0, position_ms),
+                params=self._waveform_proxy_params,
             )
         except Exception:
             return None

@@ -21,6 +21,8 @@ from tz_player.services.playback_backend import (
 from tz_player.services.player_service import PlayerService, PlayerState, TrackInfo
 from tz_player.services.spectrum_service import SpectrumReading
 from tz_player.services.spectrum_store import SpectrumParams
+from tz_player.services.waveform_proxy_service import WaveformProxyReading
+from tz_player.services.waveform_proxy_store import WaveformProxyParams
 
 
 def _run(coro):
@@ -378,6 +380,116 @@ def test_player_service_sets_beat_state_when_enabled() -> None:
         assert service.state.beat_status == "ready"
         assert beat.calls
         assert beat.calls[-1][0] == "/tmp/song.mp3"
+        await service.shutdown()
+
+    _run(run())
+
+
+def test_player_service_sets_waveform_proxy_state_when_enabled() -> None:
+    class NoLiveFakeBackend(FakePlaybackBackend):
+        async def get_level_sample(self) -> LevelSample | None:
+            return None
+
+    class WaveformProxyServiceStub:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str | None, int, WaveformProxyParams]] = []
+
+        async def sample(
+            self,
+            *,
+            track_path: str | None,
+            position_ms: int,
+            params: WaveformProxyParams,
+        ) -> WaveformProxyReading:
+            self.calls.append((track_path, position_ms, params))
+            return WaveformProxyReading(
+                min_left=-0.75,
+                max_left=0.50,
+                min_right=-0.60,
+                max_right=0.65,
+                source="cache",
+                status="ready",
+            )
+
+    async def emit_event(_event: object) -> None:
+        return None
+
+    async def run() -> None:
+        waveform = WaveformProxyServiceStub()
+        service = PlayerService(
+            emit_event=emit_event,
+            track_info_provider=_track_info_provider,
+            backend=NoLiveFakeBackend(tick_interval_ms=50),
+            waveform_proxy_service=waveform,  # type: ignore[arg-type]
+            waveform_proxy_params=WaveformProxyParams(hop_ms=20),
+            should_sample_waveform=lambda: True,
+        )
+        await service.start()
+        await service.play_item(1, 1)
+        await asyncio.sleep(0.35)
+        assert service.state.waveform_min_left == -0.75
+        assert service.state.waveform_max_left == 0.50
+        assert service.state.waveform_min_right == -0.60
+        assert service.state.waveform_max_right == 0.65
+        assert service.state.waveform_source == "cache"
+        assert service.state.waveform_status == "ready"
+        assert waveform.calls
+        assert waveform.calls[-1][0] == "/tmp/song.mp3"
+        await service.shutdown()
+
+    _run(run())
+
+
+def test_player_service_skips_waveform_proxy_sampling_when_disabled() -> None:
+    class NoLiveFakeBackend(FakePlaybackBackend):
+        async def get_level_sample(self) -> LevelSample | None:
+            return None
+
+    class WaveformProxyServiceStub:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def sample(
+            self,
+            *,
+            track_path: str | None,
+            position_ms: int,
+            params: WaveformProxyParams,
+        ) -> WaveformProxyReading:
+            del track_path, position_ms, params
+            self.calls += 1
+            return WaveformProxyReading(
+                min_left=-0.1,
+                max_left=0.1,
+                min_right=-0.1,
+                max_right=0.1,
+                source="cache",
+                status="ready",
+            )
+
+    async def emit_event(_event: object) -> None:
+        return None
+
+    async def run() -> None:
+        waveform = WaveformProxyServiceStub()
+        service = PlayerService(
+            emit_event=emit_event,
+            track_info_provider=_track_info_provider,
+            backend=NoLiveFakeBackend(tick_interval_ms=50),
+            waveform_proxy_service=waveform,  # type: ignore[arg-type]
+            waveform_proxy_params=WaveformProxyParams(hop_ms=20),
+            should_sample_waveform=lambda: False,
+        )
+        await service.start()
+        await service.play_item(1, 1)
+        await asyncio.sleep(0.35)
+        assert service.state.waveform_min_left is None
+        assert service.state.waveform_max_left is None
+        assert service.state.waveform_min_right is None
+        assert service.state.waveform_max_right is None
+        assert service.state.waveform_source is None
+        assert service.state.waveform_status is None
+        assert waveform.calls == 0
         await service.shutdown()
 
     _run(run())

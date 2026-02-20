@@ -52,6 +52,13 @@ class VisualizerHost:
             return False
         return bool(getattr(plugin, "requires_beat", False))
 
+    @property
+    def active_requires_waveform(self) -> bool:
+        plugin = self._active_plugin
+        if plugin is None:
+            return False
+        return bool(getattr(plugin, "requires_waveform", False))
+
     def activate(self, plugin_id: str | None, context: VisualizerContext) -> str:
         """Activate requested plugin, falling back to default on failure/missing."""
         requested = plugin_id or self._registry.default_id
@@ -140,6 +147,15 @@ class VisualizerHost:
             self.activate(self._registry.default_id, context)
 
         if self._skip_frames > 0:
+            logger.info(
+                "Visualizer throttle skip frame",
+                extra={
+                    "event": "visualizer_throttle_skip",
+                    "active_plugin_id": self._active_id,
+                    "remaining_skip_frames": self._skip_frames,
+                    "target_fps": self._target_fps,
+                },
+            )
             self._skip_frames -= 1
             return "Visualizer throttled"
 
@@ -170,12 +186,31 @@ class VisualizerHost:
         elapsed = time.monotonic() - start
         if elapsed > self._budget_s:
             self._overrun_streak += 1
+            logger.info(
+                "Visualizer render overrun",
+                extra={
+                    "event": "visualizer_render_overrun",
+                    "active_plugin_id": self._active_id,
+                    "elapsed_s": elapsed,
+                    "budget_s": self._budget_s,
+                    "overrun_streak": self._overrun_streak,
+                    "target_fps": self._target_fps,
+                },
+            )
             if self._overrun_streak >= 3:
                 logger.warning(
                     "Visualizer '%s' render overrun %.3fs > %.3fs; throttling one frame",
                     self._active_id,
                     elapsed,
                     self._budget_s,
+                    extra={
+                        "event": "visualizer_throttle_engaged",
+                        "active_plugin_id": self._active_id,
+                        "elapsed_s": elapsed,
+                        "budget_s": self._budget_s,
+                        "target_fps": self._target_fps,
+                        "throttle_frames": 1,
+                    },
                 )
                 self._skip_frames = 1
                 self._overrun_streak = 0

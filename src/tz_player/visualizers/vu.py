@@ -77,7 +77,8 @@ class VuReactiveVisualizer:
         left = _clamp(left)
         right = _clamp(right)
         peak_in = max(left, right)
-        decay = 0.97
+        # Faster decay keeps normalization responsive when tracks get quieter.
+        decay = 0.94
         self._norm_peak = max(peak_in, self._norm_peak * decay, 0.12)
         gain = 1.0 / self._norm_peak
         return (_boost_level(left, gain), _boost_level(right, gain))
@@ -108,7 +109,8 @@ def _fallback_levels(frame: VisualizerFrameInput) -> tuple[float, float]:
 
 
 def _smooth(current: float, target: float) -> float:
-    alpha = 0.45 if target > current else 0.22
+    # Bias toward faster visible response while retaining basic stability.
+    alpha = 0.62 if target > current else 0.34
     return _clamp(current + ((target - current) * alpha))
 
 

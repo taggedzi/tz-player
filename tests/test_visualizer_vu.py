@@ -6,7 +6,7 @@ import re
 
 from tz_player.visualizers.base import VisualizerContext, VisualizerFrameInput
 from tz_player.visualizers.registry import VisualizerRegistry
-from tz_player.visualizers.vu import VuReactiveVisualizer
+from tz_player.visualizers.vu import VuReactiveVisualizer, _smooth
 
 _SGR_PATTERN = re.compile(r"\x1b\[[0-9;]*m")
 
@@ -309,6 +309,12 @@ def test_vu_non_finite_time_values_render_safely() -> None:
     )
     assert output
     assert "TIME --:--/--:--" in finite_output
+
+
+def test_vu_smoothing_constants_prioritize_faster_response() -> None:
+    assert _smooth(0.0, 1.0) >= 0.60
+    assert _smooth(1.0, 0.0) <= 0.70
+    assert _smooth(0.20, 0.0) < 0.15
 
 
 def _meter_pct(output: str, label: str) -> int:

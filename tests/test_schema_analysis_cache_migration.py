@@ -64,7 +64,7 @@ def test_schema_migrates_v3_envelope_rows_into_generic_analysis_cache(tmp_path) 
         create_schema(conn)
 
         version = conn.execute("PRAGMA user_version").fetchone()[0]
-        assert version == 6
+        assert version == 7
 
         migrated_entry = conn.execute(
             """

@@ -36,6 +36,12 @@ Set local plugin runtime mode:
 tz-player --visualizer-plugin-runtime isolated
 ```
 
+Set visualizer responsiveness profile:
+
+```
+tz-player --visualizer-responsiveness balanced
+```
+
 Notes:
 - Default backend is `vlc`.
 - The VLC backend requires VLC/libVLC installed on your system.
@@ -59,6 +65,15 @@ Logging and diagnostics:
 - `--visualizer-plugin-runtime <in-process|isolated>` controls how local plugins execute.
   - `in-process` (default): local plugins run in the app process.
   - `isolated`: local plugins run in a subprocess with RPC timeouts and fail-closed fallback behavior.
+- `--visualizer-responsiveness <safe|balanced|aggressive>` selects profile defaults for visualizer responsiveness.
+  - `safe`: lower CPU, conservative responsiveness defaults.
+  - `balanced`: recommended default profile.
+  - `aggressive`: higher responsiveness, higher CPU cost.
+  - Profiles also tune analysis freshness defaults (FFT/beat hop) and player polling cadence.
+  - Precedence for render cadence:
+    - `--visualizer-fps` (explicit) overrides profile defaults.
+    - without explicit FPS, `--visualizer-responsiveness` sets profile-default FPS.
+    - persisted FPS is used only when no CLI FPS/profile override is provided.
 - Without `--log-file`, logs are written to the app log directory as `tz-player.log`.
   - Typical default location pattern: `<user_data_dir>/logs/tz-player.log`.
 - TUI/GUI runs write logs to file by default (console log streaming is disabled to avoid drawing over the TUI).
@@ -101,11 +116,18 @@ Built-in visualizer IDs include:
 - `matrix.green`, `matrix.blue`, `matrix.red`
 - `ops.hackscope`
 - `vu.reactive`
+- `viz.spectrogram.waterfall`
+- `viz.spectrum.terrain`
+- `viz.reactor.particles`
+- `viz.spectrum.radial`
+- `viz.typography.glitch`
+- `viz.waveform.proxy`
+- `viz.waveform.neon`
 - `cover.ascii.static`, `cover.ascii.motion` (embedded artwork ASCII; requires embedded cover art in media files)
   - Fallback lookup is local-only and also checks sidecar files in the same directory (`cover.*`, `folder.*`, `front.*`, `album.*`, `artwork.*`, `<track-stem>.*`).
 
 Lazy analysis cache notes:
-- Scalar level, FFT/spectrum, and beat analysis are computed only when requested by visualizer flows.
+- Scalar level, FFT/spectrum, waveform-proxy, and beat analysis are computed only when requested by visualizer flows.
 - Computed analysis is persisted in SQLite cache and reused across restarts.
 - Visualizers may expose analysis state labels such as `READY`, `LOADING`, or `MISSING` while cache fills.
 

@@ -37,7 +37,15 @@ from .doctor import render_report, run_doctor
 from .events import PlayerStateChanged, TrackChanged
 from .logging_utils import setup_logging
 from .paths import db_path, log_dir, state_path, visualizer_plugin_dir
-from .runtime_config import resolve_log_level
+from .runtime_config import (
+    VISUALIZER_RESPONSIVENESS_PROFILES,
+    normalize_visualizer_responsiveness_profile,
+    profile_default_beat_hop_ms,
+    profile_default_player_poll_interval_s,
+    profile_default_spectrum_hop_ms,
+    profile_default_visualizer_fps,
+    resolve_log_level,
+)
 from .services.analysis_cache_pruner import SqliteAnalysisCachePruner
 from .services.audio_beat_analysis import analyze_track_beats
 from .services.audio_envelope_analysis import (
@@ -48,6 +56,7 @@ from .services.audio_envelope_analysis import (
 from .services.audio_envelope_store import SqliteEnvelopeStore
 from .services.audio_spectrum_analysis import analyze_track_spectrum
 from .services.audio_tags import read_audio_tags
+from .services.audio_waveform_proxy_analysis import analyze_track_waveform_proxy
 from .services.beat_service import BeatService
 from .services.beat_store import BeatParams, SqliteBeatStore
 from .services.fake_backend import FakePlaybackBackend
@@ -57,6 +66,11 @@ from .services.playlist_store import PlaylistStore
 from .services.spectrum_service import SpectrumService
 from .services.spectrum_store import SpectrumParams, SqliteSpectrumStore
 from .services.vlc_backend import VLCPlaybackBackend
+from .services.waveform_proxy_service import WaveformProxyService
+from .services.waveform_proxy_store import (
+    SqliteWaveformProxyStore,
+    WaveformProxyParams,
+)
 from .state_store import AppState, load_state_with_notice, save_state
 from .ui.actions_menu import ActionsMenuDismissed, ActionsMenuPopup, ActionsMenuSelected
 from .ui.modals.error import ErrorModal
@@ -283,6 +297,7 @@ class TzPlayerApp(App):
         auto_init: bool = True,
         backend_name: str | None = None,
         visualizer_fps_override: int | None = None,
+        visualizer_responsiveness_profile_override: str | None = None,
         visualizer_plugin_paths_override: list[str] | None = None,
         visualizer_plugin_security_mode_override: str | None = None,
         visualizer_plugin_runtime_mode_override: str | None = None,
@@ -302,6 +317,9 @@ class TzPlayerApp(App):
         self._auto_init = auto_init
         self._backend_name = backend_name
         self._visualizer_fps_override = visualizer_fps_override
+        self._visualizer_responsiveness_profile_override = (
+            visualizer_responsiveness_profile_override
+        )
         self._visualizer_plugin_paths_override = visualizer_plugin_paths_override
         self._visualizer_plugin_security_mode_override = (
             visualizer_plugin_security_mode_override
@@ -318,14 +336,18 @@ class TzPlayerApp(App):
         self.spectrum_service: SpectrumService | None = None
         self.beat_store: SqliteBeatStore | None = None
         self.beat_service: BeatService | None = None
+        self.waveform_proxy_store: SqliteWaveformProxyStore | None = None
+        self.waveform_proxy_service: WaveformProxyService | None = None
         self.analysis_cache_pruner: SqliteAnalysisCachePruner | None = None
         self._metadata_refresh_task: asyncio.Task[None] | None = None
         self._metadata_pending_ids: set[int] = set()
         self._envelope_analysis_tasks: dict[str, asyncio.Task[None]] = {}
         self._spectrum_analysis_tasks: dict[str, asyncio.Task[None]] = {}
         self._beat_analysis_tasks: dict[str, asyncio.Task[None]] = {}
+        self._waveform_proxy_analysis_tasks: dict[str, asyncio.Task[None]] = {}
         self._spectrum_params = SpectrumParams(band_count=48, hop_ms=40)
         self._beat_params = BeatParams(hop_ms=40)
+        self._waveform_proxy_params = WaveformProxyParams(hop_ms=20)
         self._analysis_cache_prune_task: asyncio.Task[None] | None = None
         self._next_prewarm_task: asyncio.Task[None] | None = None
         self._next_prewarm_context: tuple[int, int, str, bool, int] | None = None
@@ -374,16 +396,41 @@ class TzPlayerApp(App):
             backend_name = _resolve_backend_name(
                 self._backend_name, self.state.playback_backend
             )
-            state_fps = _normalize_persisted_visualizer_fps(self.state.visualizer_fps)
+            has_profile_override = (
+                self._visualizer_responsiveness_profile_override is not None
+            )
+            profile_override = self._visualizer_responsiveness_profile_override
+            effective_profile = (
+                normalize_visualizer_responsiveness_profile(
+                    profile_override if profile_override is not None else "balanced"
+                )
+                if has_profile_override
+                else normalize_visualizer_responsiveness_profile(
+                    self.state.visualizer_responsiveness_profile
+                )
+            )
+            profile_default_fps = profile_default_visualizer_fps(effective_profile)
+            profile_spectrum_hop_ms = profile_default_spectrum_hop_ms(effective_profile)
+            profile_beat_hop_ms = profile_default_beat_hop_ms(effective_profile)
+            profile_poll_interval_s = profile_default_player_poll_interval_s(
+                effective_profile
+            )
+            state_fps = _normalize_persisted_visualizer_fps(
+                self.state.visualizer_fps,
+                default_fps=profile_default_fps,
+            )
             effective_fps = (
                 _clamp_int(self._visualizer_fps_override, 2, 30)
                 if self._visualizer_fps_override is not None
+                else profile_default_fps
+                if has_profile_override
                 else state_fps
             )
             self.state = replace(
                 self.state,
                 playback_backend=backend_name,
                 visualizer_fps=effective_fps,
+                visualizer_responsiveness_profile=effective_profile,
                 visualizer_plugin_paths=tuple(self._visualizer_plugin_paths_override)
                 if self._visualizer_plugin_paths_override is not None
                 else self.state.visualizer_plugin_paths,
@@ -406,6 +453,27 @@ class TzPlayerApp(App):
                     )
                 ),
             )
+            self._spectrum_params = SpectrumParams(
+                band_count=48,
+                hop_ms=profile_spectrum_hop_ms,
+            )
+            self._beat_params = BeatParams(hop_ms=profile_beat_hop_ms)
+            waveform_hop_ms = {"safe": 30, "balanced": 20, "aggressive": 10}[
+                effective_profile
+            ]
+            self._waveform_proxy_params = WaveformProxyParams(hop_ms=waveform_hop_ms)
+            logger.info(
+                "Visualizer responsiveness profile applied",
+                extra={
+                    "event": "visualizer_responsiveness_profile_applied",
+                    "profile": effective_profile,
+                    "visualizer_fps": effective_fps,
+                    "spectrum_hop_ms": profile_spectrum_hop_ms,
+                    "beat_hop_ms": profile_beat_hop_ms,
+                    "waveform_proxy_hop_ms": waveform_hop_ms,
+                    "player_poll_interval_s": profile_poll_interval_s,
+                },
+            )
             await run_blocking(save_state, state_path(), self.state)
             try:
                 await self.store.initialize()
@@ -422,6 +490,12 @@ class TzPlayerApp(App):
                 self.beat_service = BeatService(
                     cache_provider=self.beat_store,
                     schedule_analysis=self._schedule_beat_analysis_for_path,
+                )
+                self.waveform_proxy_store = SqliteWaveformProxyStore(db_path())
+                await self.waveform_proxy_store.initialize()
+                self.waveform_proxy_service = WaveformProxyService(
+                    cache_provider=self.waveform_proxy_store,
+                    schedule_analysis=self._schedule_waveform_proxy_analysis_for_path,
                 )
                 self.analysis_cache_pruner = SqliteAnalysisCachePruner(db_path())
                 playlist_id = await self.store.ensure_playlist("Default")
@@ -445,9 +519,13 @@ class TzPlayerApp(App):
                 spectrum_service=self.spectrum_service,
                 spectrum_params=self._spectrum_params,
                 should_sample_spectrum=self._active_visualizer_requests_spectrum,
+                waveform_proxy_service=self.waveform_proxy_service,
+                waveform_proxy_params=self._waveform_proxy_params,
+                should_sample_waveform=self._active_visualizer_requests_waveform,
                 beat_service=self.beat_service,
                 beat_params=self._beat_params,
                 should_sample_beat=self._active_visualizer_requests_beat,
+                poll_interval_s=profile_poll_interval_s,
                 initial_state=self.player_state,
             )
             self.metadata_service = MetadataService(
@@ -523,6 +601,14 @@ class TzPlayerApp(App):
                 *self._beat_analysis_tasks.values(), return_exceptions=True
             )
             self._beat_analysis_tasks.clear()
+        for task in self._waveform_proxy_analysis_tasks.values():
+            task.cancel()
+        if self._waveform_proxy_analysis_tasks:
+            await asyncio.gather(
+                *self._waveform_proxy_analysis_tasks.values(),
+                return_exceptions=True,
+            )
+            self._waveform_proxy_analysis_tasks.clear()
         self._cancel_next_track_prewarm()
         if self.player_service is not None:
             await self.player_service.shutdown()
@@ -898,6 +984,55 @@ class TzPlayerApp(App):
         except Exception as exc:
             logger.debug("Beat analysis failed for %s: %s", path, exc)
 
+    async def _schedule_waveform_proxy_analysis_for_path(
+        self, track_path: str, params: WaveformProxyParams
+    ) -> None:
+        """Schedule lazy waveform-proxy analysis when a visualizer requests it."""
+        if self.waveform_proxy_store is None or not track_path:
+            return
+        key = f"{track_path}|hop={params.hop_ms}"
+        existing = self._waveform_proxy_analysis_tasks.get(key)
+        if existing is not None and not existing.done():
+            return
+        task = asyncio.create_task(
+            self._ensure_waveform_proxy_for_track(track_path, params)
+        )
+        self._waveform_proxy_analysis_tasks[key] = task
+        task.add_done_callback(
+            lambda _task: self._waveform_proxy_analysis_tasks.pop(key, None)
+        )
+
+    async def _ensure_waveform_proxy_for_track(
+        self, track_path: str, params: WaveformProxyParams
+    ) -> None:
+        if self.waveform_proxy_store is None:
+            return
+        path = Path(track_path)
+        try:
+            if await self.waveform_proxy_store.has_waveform_proxy(path, params=params):
+                return
+            result = await run_blocking(
+                analyze_track_waveform_proxy,
+                path,
+                hop_ms=params.hop_ms,
+            )
+            if result is None or not result.frames:
+                return
+            await self.waveform_proxy_store.upsert_waveform_proxy(
+                path,
+                duration_ms=max(1, result.duration_ms),
+                params=params,
+                frames=result.frames,
+            )
+            self._schedule_analysis_cache_prune(reason="post_write", delay_s=0.0)
+            logger.info(
+                "Waveform proxy analyzed for %s (%d frames)",
+                path,
+                len(result.frames),
+            )
+        except Exception as exc:
+            logger.debug("Waveform proxy analysis failed for %s: %s", path, exc)
+
     def _schedule_analysis_cache_prune(
         self,
         *,
@@ -1216,6 +1351,12 @@ class TzPlayerApp(App):
             spectrum_bands=self.player_state.spectrum_bands,
             spectrum_source=self.player_state.spectrum_source,
             spectrum_status=self.player_state.spectrum_status,
+            waveform_min_left=self.player_state.waveform_min_left,
+            waveform_max_left=self.player_state.waveform_max_left,
+            waveform_min_right=self.player_state.waveform_min_right,
+            waveform_max_right=self.player_state.waveform_max_right,
+            waveform_source=self.player_state.waveform_source,
+            waveform_status=self.player_state.waveform_status,
             beat_strength=self.player_state.beat_strength,
             beat_is_onset=self.player_state.beat_is_onset,
             beat_bpm=self.player_state.beat_bpm,
@@ -1251,6 +1392,11 @@ class TzPlayerApp(App):
         if self.visualizer_host is None:
             return False
         return self.visualizer_host.active_requires_beat
+
+    def _active_visualizer_requests_waveform(self) -> bool:
+        if self.visualizer_host is None:
+            return False
+        return self.visualizer_host.active_requires_waveform
 
     def _update_audio_level_notice(self, track_path: str) -> None:
         if self.current_track is None:
@@ -1494,10 +1640,10 @@ def _build_backend(name: str) -> FakePlaybackBackend | VLCPlaybackBackend:
     return FakePlaybackBackend()
 
 
-def _normalize_persisted_visualizer_fps(value: int) -> int:
+def _normalize_persisted_visualizer_fps(value: int, *, default_fps: int) -> int:
     if 2 <= value <= 30:
         return value
-    return 10
+    return _clamp_int(default_fps, 2, 30)
 
 
 def _normalize_visualizer_plugin_security_mode(value: str) -> str:
@@ -1553,6 +1699,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Visualizer render cadence (clamped to 2-30 FPS).",
     )
     parser.add_argument(
+        "--visualizer-responsiveness",
+        choices=VISUALIZER_RESPONSIVENESS_PROFILES,
+        help="Visualizer responsiveness profile (safe|balanced|aggressive).",
+    )
+    parser.add_argument(
         "--visualizer-plugin-path",
         action="append",
         dest="visualizer_plugin_paths",
@@ -1589,12 +1740,17 @@ def main() -> int:
             return report.exit_code
         logging.getLogger(__name__).info("Starting tz-player TUI")
         visualizer_fps = getattr(args, "visualizer_fps", None)
+        visualizer_responsiveness = getattr(args, "visualizer_responsiveness", None)
         visualizer_plugin_paths = getattr(args, "visualizer_plugin_paths", None)
         visualizer_plugin_security = getattr(args, "visualizer_plugin_security", None)
         visualizer_plugin_runtime = getattr(args, "visualizer_plugin_runtime", None)
         app_kwargs: dict[str, object] = {"backend_name": args.backend}
         if visualizer_fps is not None:
             app_kwargs["visualizer_fps_override"] = visualizer_fps
+        if visualizer_responsiveness is not None:
+            app_kwargs["visualizer_responsiveness_profile_override"] = (
+                visualizer_responsiveness
+            )
         if visualizer_plugin_paths is not None:
             app_kwargs["visualizer_plugin_paths_override"] = visualizer_plugin_paths
         if visualizer_plugin_security is not None:

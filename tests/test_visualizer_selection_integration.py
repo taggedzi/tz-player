@@ -162,6 +162,24 @@ class VizBeat:
         return "beat"
 
 
+@dataclass
+class VizWaveform:
+    """Visualizer stub opting into waveform-proxy sampling capability."""
+
+    plugin_id: str = "viz.waveform"
+    display_name: str = "Viz Waveform"
+    requires_waveform: bool = True
+
+    def on_activate(self, context: VisualizerContext) -> None:
+        return None
+
+    def on_deactivate(self) -> None:
+        return None
+
+    def render(self, frame: VisualizerFrameInput) -> str:
+        return "waveform"
+
+
 def test_visualizer_selection_persists_across_restart(tmp_path, monkeypatch) -> None:
     _setup_dirs(tmp_path, monkeypatch)
     registry = VisualizerRegistry(
@@ -305,13 +323,82 @@ def test_invalid_persisted_visualizer_fps_recovers_to_default(
             await asyncio.sleep(0)
             await app._initialize_state()
             assert app.visualizer_host is not None
-            assert app.visualizer_host.target_fps == 10
-            assert app.state.visualizer_fps == 10
+            assert app.visualizer_host.target_fps == 16
+            assert app.state.visualizer_fps == 16
             app.exit()
 
     _run(run_app())
     persisted = load_state(paths.state_path())
-    assert persisted.visualizer_fps == 10
+    assert persisted.visualizer_fps == 16
+
+
+def test_cli_visualizer_responsiveness_override_sets_profile_default_fps(
+    tmp_path, monkeypatch
+) -> None:
+    _setup_dirs(tmp_path, monkeypatch)
+    save_state(
+        paths.state_path(),
+        AppState(
+            playback_backend="fake",
+            visualizer_fps=12,
+            visualizer_responsiveness_profile="safe",
+        ),
+    )
+    app = TzPlayerApp(
+        auto_init=False,
+        backend_name="fake",
+        visualizer_responsiveness_profile_override="aggressive",
+    )
+
+    async def run_app() -> None:
+        async with app.run_test():
+            await asyncio.sleep(0)
+            await app._initialize_state()
+            assert app.visualizer_host is not None
+            assert app.state.visualizer_responsiveness_profile == "aggressive"
+            assert app.visualizer_host.target_fps == 22
+            assert app.state.visualizer_fps == 22
+            assert app._spectrum_params.hop_ms == 24
+            assert app._beat_params.hop_ms == 24
+            assert app.player_service is not None
+            assert app.player_service._poll_interval == 0.12
+            app.exit()
+
+    _run(run_app())
+    persisted = load_state(paths.state_path())
+    assert persisted.visualizer_responsiveness_profile == "aggressive"
+    assert persisted.visualizer_fps == 22
+
+
+def test_startup_logs_visualizer_responsiveness_profile_event(
+    tmp_path, monkeypatch, caplog
+) -> None:
+    _setup_dirs(tmp_path, monkeypatch)
+    caplog.set_level("INFO", logger="tz_player.app")
+    app = TzPlayerApp(
+        auto_init=False,
+        backend_name="fake",
+        visualizer_responsiveness_profile_override="safe",
+    )
+
+    async def run_app() -> None:
+        async with app.run_test():
+            await asyncio.sleep(0)
+            await app._initialize_state()
+            app.exit()
+
+    _run(run_app())
+    events = [
+        record
+        for record in caplog.records
+        if getattr(record, "event", None) == "visualizer_responsiveness_profile_applied"
+    ]
+    assert events
+    event = events[-1]
+    assert getattr(event, "profile", None) == "safe"
+    assert getattr(event, "visualizer_fps", None) == 10
+    assert getattr(event, "spectrum_hop_ms", None) == 40
+    assert getattr(event, "beat_hop_ms", None) == 40
 
 
 def test_cli_visualizer_fps_override_is_clamped(tmp_path, monkeypatch) -> None:
@@ -432,6 +519,37 @@ def test_app_beat_request_capability_follows_active_visualizer(
             await asyncio.sleep(0)
             assert app.visualizer_host.active_id == "viz.beat"
             assert app._active_visualizer_requests_beat() is True
+            app.exit()
+
+    _run(run_app())
+
+
+def test_app_waveform_request_capability_follows_active_visualizer(
+    tmp_path, monkeypatch
+) -> None:
+    _setup_dirs(tmp_path, monkeypatch)
+    registry = VisualizerRegistry(
+        {
+            "viz.default": VizDefault,
+            "viz.waveform": VizWaveform,
+        },
+        default_id="viz.default",
+    )
+    _stub_registry_built_in(monkeypatch, registry)
+    app = TzPlayerApp(auto_init=False, backend_name="fake")
+
+    async def run_app() -> None:
+        async with app.run_test() as pilot:
+            await asyncio.sleep(0)
+            await app._initialize_state()
+            assert app.visualizer_host is not None
+            assert app.visualizer_host.active_id == "viz.default"
+            assert app._active_visualizer_requests_waveform() is False
+
+            await pilot.press("z")
+            await asyncio.sleep(0)
+            assert app.visualizer_host.active_id == "viz.waveform"
+            assert app._active_visualizer_requests_waveform() is True
             app.exit()
 
     _run(run_app())

@@ -17,7 +17,7 @@ from . import __version__
 from .app import TzPlayerApp
 from .logging_utils import setup_logging
 from .paths import log_dir
-from .runtime_config import resolve_log_level
+from .runtime_config import VISUALIZER_RESPONSIVENESS_PROFILES, resolve_log_level
 from .version import build_help_epilog
 
 
@@ -47,6 +47,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--visualizer-fps",
         type=int,
         help="Visualizer render cadence (clamped to 2-30 FPS).",
+    )
+    parser.add_argument(
+        "--visualizer-responsiveness",
+        choices=VISUALIZER_RESPONSIVENESS_PROFILES,
+        help="Visualizer responsiveness profile (safe|balanced|aggressive).",
     )
     parser.add_argument(
         "--visualizer-plugin-path",
@@ -81,12 +86,17 @@ def main() -> int:
         )
         logging.getLogger(__name__).info("Starting tz-player GUI")
         visualizer_fps = getattr(args, "visualizer_fps", None)
+        visualizer_responsiveness = getattr(args, "visualizer_responsiveness", None)
         visualizer_plugin_paths = getattr(args, "visualizer_plugin_paths", None)
         visualizer_plugin_security = getattr(args, "visualizer_plugin_security", None)
         visualizer_plugin_runtime = getattr(args, "visualizer_plugin_runtime", None)
         app_kwargs: dict[str, object] = {"backend_name": args.backend}
         if visualizer_fps is not None:
             app_kwargs["visualizer_fps_override"] = visualizer_fps
+        if visualizer_responsiveness is not None:
+            app_kwargs["visualizer_responsiveness_profile_override"] = (
+                visualizer_responsiveness
+            )
         if visualizer_plugin_paths is not None:
             app_kwargs["visualizer_plugin_paths_override"] = visualizer_plugin_paths
         if visualizer_plugin_security is not None:

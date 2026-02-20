@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import asyncio
 from pathlib import Path
 
@@ -90,3 +91,39 @@ def test_add_folder_scans_via_run_blocking(monkeypatch, tmp_path) -> None:
     assert added["label"] == "add folder"
     paths = added["args"][0]
     assert paths == [track]
+
+
+def test_advanced_visualizer_modules_avoid_blocking_imports() -> None:
+    """Guard against obvious blocking/runtime-risk imports in render modules."""
+    root = Path(__file__).resolve().parents[1]
+    visualizer_modules = [
+        root / "src/tz_player/visualizers/waterfall.py",
+        root / "src/tz_player/visualizers/terrain.py",
+        root / "src/tz_player/visualizers/reactor.py",
+        root / "src/tz_player/visualizers/radial.py",
+        root / "src/tz_player/visualizers/typography.py",
+    ]
+    forbidden_roots = {
+        "subprocess",
+        "socket",
+        "http",
+        "urllib",
+        "requests",
+        "sqlite3",
+    }
+    for module in visualizer_modules:
+        parsed = ast.parse(module.read_text(encoding="utf-8"))
+        for node in ast.walk(parsed):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    root_name = alias.name.split(".")[0]
+                    assert root_name not in forbidden_roots, (
+                        f"{module.name} imports forbidden module '{alias.name}'"
+                    )
+            elif isinstance(node, ast.ImportFrom):
+                if node.module is None:
+                    continue
+                root_name = node.module.split(".")[0]
+                assert root_name not in forbidden_roots, (
+                    f"{module.name} imports forbidden module '{node.module}'"
+                )

@@ -9,8 +9,13 @@ Execution tracker derived from `SPEC.md`.
 - `in_progress`: actively being worked
 - `done`: implemented, validated, and committed
 - `blocked`: requires decision or external dependency
+- `deferred`: intentionally postponed by project decision
 
 ## Active Backlog
+
+- No active implementation tasks currently queued.
+
+## Archived Recent Work
 
 ### T-038 User Drop-In Visualizer Plugins + Security Hardening
 - Spec Ref: Section `6` (Plugin discovery/lifecycle), Section `8` (reliability/error handling), `WF-06`, `WF-07`
@@ -289,6 +294,211 @@ Execution tracker derived from `SPEC.md`.
   - `.ubuntu-venv/bin/python -m mypy src`
   - `.ubuntu-venv/bin/python -m pytest`
 
+### T-044 Advanced Visualizer Plugin Pack (Practical + Capability-Gated)
+- Spec Ref: Section `6` (visualizer/plugin model), Section `8` (reliability/error handling), `WF-06`, `WF-07`
+- Status: `done`
+- Goal:
+  - Add a curated set of advanced built-in visualizer plugins inspired by the proposed concepts, while preserving non-blocking render constraints and graceful capability fallback behavior.
+- Scope:
+  - Implement practical visualizers now using existing lazy analysis services (scalar, FFT, beat).
+  - Explicitly gate or defer concepts that require unavailable runtime data (true live waveform/stereo sample stream or phase).
+  - Keep plugin IDs deterministic and contract-compatible for third-party plugin authors.
+- Non-goals:
+  - Live PCM waveform/phase extraction from playback backends in this task.
+  - GPU-accelerated or non-terminal rendering paths.
+- Tasks:
+  - `T-044A` Spectrogram Waterfall (history heatmap). Status: `done`
+    - New plugin ID: `viz.spectrogram.waterfall`.
+    - Use FFT bands with rolling history buffer and intensity glyph ramps.
+    - Add optional beat pulse accent on newest row.
+  - `T-044B` Audio Terrain (spectral landscape). Status: `done`
+    - New plugin ID: `viz.spectrum.terrain`.
+    - Group FFT bins into width buckets with filled curve rendering.
+    - Add optional beat-triggered terrain lift/flash effect.
+  - `T-044C` Radial Spectrum (donut analyzer). Status: `done`
+    - New plugin ID: `viz.spectrum.radial`.
+    - Render spoke-based radial FFT approximation in terminal grid.
+    - Add short peak-hold and beat ring pulse.
+  - `T-044D` Particle Reactor / Starfield Burst. Status: `done`
+    - New plugin ID: `viz.reactor.particles`.
+    - Drive particle spawn/velocity from bass-mid-high aggregate + RMS + beat.
+    - Keep deterministic bounded particle counts for frame-budget safety.
+  - `T-044E` Typography Visual (metadata + glitch/glow). Status: `done`
+    - New plugin ID: `viz.typography.glitch`.
+    - Render title/artist-centered layout with subtle RMS/FFT modulation.
+    - Apply beat-triggered brief glitch/border pulse effects with readability guardrails.
+  - `T-044F` Oscilloscope/Persistence and Lissajous feasibility gate. Status: `done`
+    - Document current constraints for true oscilloscope and stereo XY:
+      - no guaranteed live time-domain sample stream in current backend abstraction
+      - no reliable stereo phase/L-R sample feed for visualizer frame contract
+    - Define practical fallback designs that can run on FFT+scalar only (stylized approximation mode).
+    - Mark true waveform/phase variants as blocked until a live-sample capability task is approved.
+  - `T-044G` Visualizer contract/docs updates for new effects. Status: `done`
+    - Ensure `docs/visualizations.md` lists new plugin IDs, capability requirements, and fallback semantics.
+    - Add concise plugin-author guidance for effect patterns using scalar/FFT/beat without blocking render.
+    - Confirm compatibility statement for existing plugins remains unchanged.
+  - `T-044H` Performance and reliability validation for advanced visualizers. Status: `done`
+    - Add tests for render determinism, fallback behavior, and no-crash degradation.
+    - Add opt-in perf checks for high-refresh scenarios and large-pane sizes.
+    - Ensure no per-frame blocking I/O and no keyboard responsiveness regressions.
+- Recommended implementation order:
+  1. `T-044A` Spectrogram Waterfall
+     - Lowest complexity, highest immediate value using existing FFT pipeline.
+  2. `T-044E` Typography Visual
+     - Fast to ship and leverages metadata + scalar/beat with low render risk.
+  3. `T-044B` Audio Terrain
+     - Reuses FFT grouping patterns; moderate complexity, strong visual payoff.
+  4. `T-044D` Particle Reactor
+     - Introduces simulation state; do after simpler deterministic renderers.
+  5. `T-044C` Radial Spectrum
+     - Hardest terminal geometry/render mapping; defer until core pack is stable.
+  6. `T-044G` Contract/docs updates
+     - Finalize docs once concrete plugin behavior/IDs are settled.
+  7. `T-044H` Performance/reliability validation
+     - Run after feature completion as release gate for the pack.
+  8. `T-044F` Oscilloscope/Lissajous feasibility gate
+     - Keep as explicit capability decision milestone; do when evaluating next data-contract expansion.
+- Acceptance:
+  - At least five concepts are implemented with existing services (`FFT`/`scalar`/`beat`) and selectable via registry.
+  - Oscilloscope/Lissajous true-signal variants are clearly capability-gated (or deferred) with explicit docs.
+  - New visualizers meet render-budget and fallback reliability expectations.
+- Validation (per implementation change set):
+  - `.ubuntu-venv/bin/python -m ruff check .`
+  - `.ubuntu-venv/bin/python -m ruff format --check .`
+  - `.ubuntu-venv/bin/python -m mypy src`
+  - `.ubuntu-venv/bin/python -m pytest`
+
+### T-045 Live Sample Stream Capability for True Waveform/Phase Visualizers
+- Spec Ref: Section `5` (analysis/service model), Section `6` (visualizer/plugin contract), Section `8` (non-blocking reliability)
+- Status: `deferred`
+- Goal:
+  - Introduce an explicit live sample stream capability so true oscilloscope and stereo Lissajous visualizers can be implemented with signal-accurate inputs.
+- Blockers:
+  - Backend abstraction does not currently expose bounded live sample windows.
+  - `VisualizerFrameInput` does not currently carry waveform/stereo phase sample vectors.
+  - Perf/observability budgets for high-rate sample consumers are not yet defined.
+- Deferral note:
+  - Deferred by decision in favor of the cached waveform-proxy approach implemented in `T-047` for v1 scope.
+- Required decision inputs:
+  - Which backends must support live samples for v1/v1.1 target.
+  - Sample window format/rate/channel model for plugin-facing contract.
+  - Scheduling/backpressure policy to prevent UI starvation.
+
+### T-046 Visualizer Responsiveness Tuning Profiles (Safe/Balanced/Aggressive)
+- Spec Ref: Section `6` (visualizer rendering), Section `8` (performance/reliability), `WF-06`, `WF-07`
+- Status: `done`
+- Goal:
+  - Improve perceived visualizer responsiveness while preserving keyboard-first responsiveness and non-blocking guarantees.
+- Scope:
+  - Tune render cadence, analysis cadence, and plugin-level smoothing/hold behavior.
+  - Add profile-based defaults (`safe`, `balanced`, `aggressive`) with deterministic runtime behavior.
+  - Add observability/perf checks to prevent regressions or hidden throttling.
+- Non-goals:
+  - Live PCM sample stream contract changes (tracked separately in `T-045`).
+  - Rewriting visualizer architecture.
+- Tasks:
+  - `T-046A` Add responsiveness profiles and runtime config wiring. Status: `done`
+    - Define profile presets:
+      - `safe`: low CPU / conservative cadence
+      - `balanced`: recommended default
+      - `aggressive`: high responsiveness / higher CPU
+    - Wire profile selection via runtime config and CLI with clear precedence docs.
+  - `T-046B` Render cadence tuning (host FPS targets). Status: `done`
+    - Set profile-specific visualizer FPS targets.
+    - Keep existing hard clamps and fallback safety.
+    - Ensure host throttle behavior remains deterministic.
+  - `T-046C` Analysis cadence tuning (scalar/FFT/beat freshness). Status: `done`
+    - Tune FFT hop/lookup cadence by profile where practical.
+    - Tune scalar update cadence and beat pulse/hold windows.
+    - Preserve cache model and non-blocking scheduling.
+  - `T-046D` Plugin inertia pass for built-in reactive visualizers. Status: `done`
+    - Reduce smoothing/hold constants where latency feel is excessive.
+    - Keep readability and stability for paused/low-signal states.
+    - Validate deterministic output remains intact for same inputs.
+  - `T-046E` Observability for responsiveness/throttle detection. Status: `done`
+    - Add/expand structured logs for:
+      - render overruns
+      - skipped/throttled frames
+      - active responsiveness profile
+    - Provide actionable diagnostics in perf runs.
+  - `T-046F` Performance and UX validation matrix. Status: `done`
+    - Add profile-aware checks for:
+      - median render time and worst-frame budget
+      - no keyboard responsiveness regressions
+      - no excessive host throttling under target pane sizes
+    - Keep opt-in heavy perf coverage for larger panes/high frame counts.
+- Acceptance:
+  - `balanced` profile yields visibly faster response than current baseline without breaking UI responsiveness.
+  - `safe` profile remains stable on lower-resource systems.
+  - `aggressive` profile remains bounded by host throttle protections and clearly documented tradeoffs.
+  - Profile behavior is documented and test-covered.
+- Validation (per implementation change set):
+  - `.ubuntu-venv/bin/python -m ruff check .`
+  - `.ubuntu-venv/bin/python -m ruff format --check .`
+  - `.ubuntu-venv/bin/python -m mypy src`
+  - `.ubuntu-venv/bin/python -m pytest`
+
+### T-047 Waveform-Proxy Cache for PCM-Like Visualizer Signals
+- Spec Ref: Section `5` (analysis services), Section `6` (visualizer/plugin contract), Section `7` (persistence), Section `8` (non-blocking reliability), `WF-06`
+- Status: `done`
+- Goal:
+  - Add a lightweight waveform-proxy analysis/cache that provides PCM-like shape data for visualizers without storing raw PCM.
+  - Keep storage and CPU bounded while preserving lazy/on-demand analysis behavior.
+- Scope:
+  - Introduce a new proxy feature set per time-slice (for example `min_l`, `max_l`, `min_r`, `max_r`) using quantized storage.
+  - Reuse existing decode + lazy cache pipeline patterns (wave/ffmpeg decode, async scheduling, persisted DB cache, retention).
+  - Expose proxy readings to visualizers/plugins through the same non-blocking service model used for scalar/FFT/beat.
+- Non-goals:
+  - True live PCM sample stream contract (remains tracked by `T-045`).
+  - Storing full PCM payloads in DB.
+- Design decisions required before implementation:
+  - `T-047D.1` Proxy frame schema density defaults. Status: `done`
+    - Chosen defaults:
+      - cadence: profile-tuned hop (`safe=30ms`, `balanced=20ms`, `aggressive=10ms`)
+      - quantization: signed `int8` min/max channel extrema (`min_l/max_l/min_r/max_r`)
+  - `T-047D.2` Interpolation/render policy. Status: `done`
+    - Chosen policy:
+      - store nearest frame buckets and resolve playback lookup via nearest-neighbor frame selection
+      - plugin guidance documents proxy as PCM-like envelope ranges, not sample-accurate vectors
+- Tasks:
+  - `T-047A` Define waveform-proxy data contract. Status: `done`
+    - Add request/response model for proxy reads (source/status tokens aligned with existing analysis services).
+    - Define normalized value ranges and timestamp semantics.
+  - `T-047B` Add persistent schema + migration for proxy cache. Status: `done`
+    - Add cache entry type and per-frame proxy table keyed by track fingerprint + params hash.
+    - Add indexes for efficient position-based lookup.
+    - Add migration tests for schema upgrades.
+  - `T-047C` Implement proxy analysis generator. Status: `done`
+    - Reuse existing decode inputs and derive per-window extrema/features.
+    - Keep work off UI loop and bounded by `max_frames`/time-window controls.
+  - `T-047D` Implement `WaveformProxyService` (lazy, async, cache-first). Status: `done`
+    - Cache hit: return ready proxy frame for playback position.
+    - Cache miss: schedule background analysis and return fallback/loading token.
+    - Preserve deterministic behavior on missing/error paths.
+  - `T-047E` Wire player/runtime state and visualizer contract. Status: `done`
+    - Add optional proxy fields to player/visualizer frame input.
+    - Keep backward compatibility for existing plugins.
+    - Add at least one built-in visualizer path that consumes proxy data (or adapter in existing pseudo-wave plugin).
+  - `T-047F` Retention + observability integration. Status: `done`
+    - Ensure proxy cache participates in global analysis retention/pruning.
+    - Add structured logs for proxy cache hit/miss/schedule/prune activity.
+  - `T-047G` Performance/reliability validation at scale. Status: `done`
+    - Add tests for large playlist scenarios and bounded storage growth.
+    - Add opt-in perf checks to verify no keyboard responsiveness regressions.
+    - Validate no per-frame blocking I/O in visualizer render paths.
+  - `T-047H` Docs and acceptance mapping updates. Status: `done`
+    - Update `docs/visualizations.md` and `docs/usage.md` with proxy capability and limitations.
+    - Update `docs/workflow-acceptance.md` mapping for new proxy service/tests.
+- Acceptance:
+  - Proxy analysis remains lazy/on-demand and persisted once computed.
+  - Storage footprint stays substantially smaller than raw PCM while supporting waveform-like visuals.
+  - Existing visualizers/plugins continue to function without requiring proxy fields.
+  - At least one visualizer demonstrates proxy-backed PCM-like rendering behavior.
+- Validation (per implementation change set):
+  - `.ubuntu-venv/bin/python -m ruff check .`
+  - `.ubuntu-venv/bin/python -m ruff format --check .`
+  - `.ubuntu-venv/bin/python -m mypy src`
+  - `.ubuntu-venv/bin/python -m pytest`
 ### DOC-001 Internal Documentation Campaign (All Project Files)
 - Status: `done`
 - Goal:

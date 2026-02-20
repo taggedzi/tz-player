@@ -1,4 +1,4 @@
-"""Tests for schema v5->v7 beat/waveform cache migration behavior."""
+"""Tests for schema v6->v7 waveform-proxy migration behavior."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import sqlite3
 from tz_player.db.schema import create_schema
 
 
-def test_schema_migrates_v5_adds_analysis_beat_frames(tmp_path) -> None:
+def test_schema_migrates_v6_adds_analysis_waveform_proxy_frames(tmp_path) -> None:
     db_path = tmp_path / "library.sqlite"
     with sqlite3.connect(db_path) as conn:
         conn.execute(
@@ -29,7 +29,7 @@ def test_schema_migrates_v5_adds_analysis_beat_frames(tmp_path) -> None:
             )
             """
         )
-        conn.execute("PRAGMA user_version = 5")
+        conn.execute("PRAGMA user_version = 6")
         create_schema(conn)
 
         version = conn.execute("PRAGMA user_version").fetchone()[0]
@@ -38,7 +38,7 @@ def test_schema_migrates_v5_adds_analysis_beat_frames(tmp_path) -> None:
             """
             SELECT name
             FROM sqlite_master
-            WHERE type = 'table' AND name = 'analysis_beat_frames'
+            WHERE type = 'table' AND name = 'analysis_waveform_proxy_frames'
             """
         ).fetchone()
         assert table is not None

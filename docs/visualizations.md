@@ -68,6 +68,12 @@ class VisualizerFrameInput:
     spectrum_bands: bytes | None = None
     spectrum_source: str | None = None  # cache|fallback
     spectrum_status: str | None = None  # ready|loading|missing|error
+    waveform_min_left: float | None = None
+    waveform_max_left: float | None = None
+    waveform_min_right: float | None = None
+    waveform_max_right: float | None = None
+    waveform_source: str | None = None  # cache|fallback
+    waveform_status: str | None = None  # ready|loading|missing|error
     beat_strength: float | None = None
     beat_is_onset: bool | None = None
     beat_bpm: float | None = None
@@ -81,6 +87,7 @@ class VisualizerPlugin(Protocol):
     plugin_api_version: int
     requires_spectrum: bool  # optional, defaults to False when omitted
     requires_beat: bool  # optional, defaults to False when omitted
+    requires_waveform: bool  # optional, defaults to False when omitted
 
     def on_activate(self, context: VisualizerContext) -> None: ...
     def on_deactivate(self) -> None: ...
@@ -109,6 +116,61 @@ Notes:
 - Beat analysis scheduling is host-managed and keyed by plugin capability:
   - `requires_beat = True` opts in.
   - Omitted/False means no beat sampling work is triggered.
+- Waveform-proxy analysis scheduling is host-managed and keyed by plugin capability:
+  - `requires_waveform = True` opts in.
+  - Omitted/False means no waveform-proxy sampling work is triggered.
+
+## Built-In Visualizer IDs (Current)
+
+- `basic`
+- `matrix.green`
+- `matrix.blue`
+- `matrix.red`
+- `ops.hackscope`
+- `vu.reactive`
+- `cover.ascii.static`
+- `cover.ascii.motion`
+- `viz.spectrogram.waterfall` (`requires_spectrum = True`)
+- `viz.spectrum.terrain` (`requires_spectrum = True`)
+- `viz.reactor.particles` (`requires_spectrum = True`, `requires_beat = True`)
+- `viz.spectrum.radial` (`requires_spectrum = True`, `requires_beat = True`)
+- `viz.typography.glitch` (`requires_beat = True`)
+- `viz.waveform.proxy` (`requires_waveform = True`)
+- `viz.waveform.neon` (`requires_waveform = True`)
+
+Fallback/capability semantics:
+- Missing analysis data is expected during warmup and must render safely using state text such as `LOADING`, `MISSING`, or `ERROR`.
+- Visualizers without capability flags continue to receive base frame fields and run unchanged.
+- Capability flags only opt-in scheduler behavior; they do not guarantee immediate `ready` data on first frames.
+
+## Oscilloscope / Lissajous Feasibility Gate
+
+Current constraint summary:
+- The current playback backend abstraction does not provide a guaranteed live time-domain sample stream for visualizers.
+- The current visualizer frame contract does not provide stereo left/right sample vectors or explicit phase data.
+- Existing lazy analysis services provide scalar levels, quantized FFT bands, and beat markers only.
+
+Decision for v1:
+- True oscilloscope and true stereo XY/Lissajous renderers are deferred.
+- These variants are blocked until a dedicated live-sample capability is added to backend and frame contracts.
+
+Practical fallback designs (supported now):
+- Oscilloscope-style approximation:
+  - derive a pseudo-wave from grouped FFT band envelopes plus scalar level
+  - render persistence trails as stylized motion, clearly documented as non-waveform-accurate
+- Lissajous-style approximation:
+  - map low/mid grouped energies to X/Y trajectories
+  - optionally use beat pulses to drive bloom/density changes
+- Both fallback styles must preserve:
+  - deterministic render output for same input frame
+  - non-blocking render path
+  - explicit handling of `loading|missing|error` analysis states
+
+Live-sample expansion requirements (future task):
+- Backend-facing service for bounded live sample chunks (mono and optional stereo variants).
+- Contract extension for visualizer input fields carrying sample windows and sampling metadata.
+- Capability flag(s) for sample-demanding plugins, with cache/fallback behavior defined.
+- Perf/observability budgets to protect UI responsiveness under high refresh rates.
 
 ## Local Plugin Security Modes
 
@@ -171,6 +233,7 @@ Checklist:
 6. If using scalar/spectrum analysis data, handle `loading|missing|error` explicitly.
 7. Place plugin file/package in the drop-in folder or pass an explicit plugin path.
 8. Add tests for activation, rendering, and fallback behavior.
+9. Keep render-path work bounded: precompute constants, avoid large allocations, and avoid dynamic imports in `render`.
 
 Minimal example:
 
@@ -227,6 +290,34 @@ class SpectrumBarsPlugin:
         return " ".join(f"{value:03d}" for value in frame.spectrum_bands[:16])
 ```
 
+Beat-aware example sketch:
+
+```python
+class BeatPulsePlugin:
+    plugin_id = "pulse.beat"
+    display_name = "Pulse (Beat)"
+    plugin_api_version = 1
+    requires_beat = True
+
+    def on_activate(self, context) -> None:
+        self._ansi_enabled = context.ansi_enabled
+
+    def on_deactivate(self) -> None:
+        return None
+
+    def render(self, frame) -> str:
+        if frame.beat_status != "ready":
+            return f"BEAT {frame.beat_status or 'missing'}"
+        return "PULSE!" if frame.beat_is_onset else "..."
+```
+
+Authoring patterns for scalar/FFT/beat:
+- Scalar (`level_left`/`level_right`): treat missing values as normal; use deterministic fallback animation only if needed.
+- FFT (`spectrum_bands`): prefer width-bucket aggregation to reduce jitter and keep CPU bounded.
+- Waveform-proxy (`waveform_min_*`/`waveform_max_*`): treat as PCM-like envelope ranges, not true live sample vectors.
+- Beat (`beat_is_onset`, `beat_strength`): use short accents (single-frame flash/pulse), not long blocking transitions.
+- Never do DB reads, subprocess calls, filesystem scans, or network calls from `render`.
+
 ## Testing Expectations
 
 - Unit tests for registry duplicate ID handling and default fallback.
@@ -234,9 +325,7 @@ class SpectrumBarsPlugin:
 - Unit tests for plugin exceptions during activation/render.
 - UI integration test proving visualization failures do not block keyboard transport controls.
 
-## Planned Plugin Pack (Next Phase)
-
-This section documents planned extra-scope visualizers before implementation.
+## Plugin Pack Notes
 
 ### 1) Matrix Rain (Non-Reactive)
 
@@ -278,6 +367,27 @@ This section documents planned extra-scope visualizers before implementation.
 - Goal: level-based meter tied to real playback energy when signal data exists.
 - Implemented ID:
   - `vu.reactive`
+
+### 4) Advanced Analysis-Reactive Pack
+
+- Implemented IDs:
+  - `viz.spectrogram.waterfall`
+  - `viz.spectrum.terrain`
+  - `viz.reactor.particles`
+  - `viz.spectrum.radial`
+  - `viz.typography.glitch`
+- Data capability model:
+  - spectrum-only: waterfall, terrain
+  - spectrum+beat: reactor, radial
+  - beat-only: typography
+
+### 5) Deferred True-Signal Modes
+
+- Deferred modes:
+  - true oscilloscope (time-domain waveform from live samples)
+  - true stereo phase scope / Lissajous (left/right sample stream)
+- Status:
+  - blocked pending live-sample capability task and contract expansion
 - Contract:
   - consume normalized levels from shared `AudioLevelService`
   - service source priority: `live backend` -> `envelope cache` -> `fallback`
