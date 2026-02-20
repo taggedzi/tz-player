@@ -522,6 +522,51 @@ class PlaylistStore:
         tokens = [token.strip().lower() for token in query.split() if token.strip()]
         if not tokens:
             return []
+        with self._connect() as conn:
+            mode = "fts"
+            try:
+                result = self._search_item_ids_fts_sync(
+                    conn, playlist_id, tokens, limit
+                )
+            except sqlite3.OperationalError:
+                mode = "like_fallback"
+                result = self._search_item_ids_like_sync(
+                    conn, playlist_id, tokens, limit
+                )
+        _log_slow_db_op(
+            "search_item_ids",
+            start=start,
+            playlist_id=playlist_id,
+            mode=mode,
+            token_count=len(tokens),
+            limit=limit,
+            rows=len(result),
+        )
+        return result
+
+    def _search_item_ids_fts_sync(
+        self, conn: sqlite3.Connection, playlist_id: int, tokens: list[str], limit: int
+    ) -> list[int]:
+        if not _has_playlist_search_fts(conn):
+            return self._search_item_ids_like_sync(conn, playlist_id, tokens, limit)
+        fts_query = _build_fts_query(tokens)
+        rows = conn.execute(
+            """
+            SELECT playlist_items.id AS item_id
+            FROM playlist_search
+            JOIN playlist_items ON playlist_items.id = playlist_search.rowid
+            WHERE playlist_search MATCH ?
+              AND playlist_items.playlist_id = ?
+            ORDER BY playlist_items.pos_key
+            LIMIT ?
+            """,
+            (fts_query, playlist_id, limit),
+        ).fetchall()
+        return [int(row["item_id"]) for row in rows]
+
+    def _search_item_ids_like_sync(
+        self, conn: sqlite3.Connection, playlist_id: int, tokens: list[str], limit: int
+    ) -> list[int]:
         field_exprs = [
             "LOWER(COALESCE(track_meta.title, ''))",
             "LOWER(COALESCE(track_meta.artist, ''))",
@@ -539,30 +584,20 @@ class PlaylistStore:
         for token in tokens:
             params.extend([f"%{token}%"] * len(field_exprs))
         params.append(limit)
-        with self._connect() as conn:
-            rows = conn.execute(
-                f"""
-                SELECT playlist_items.id AS item_id
-                FROM playlist_items
-                JOIN tracks ON tracks.id = playlist_items.track_id
-                LEFT JOIN track_meta ON track_meta.track_id = tracks.id
-                WHERE playlist_items.playlist_id = ?
-                  AND {where_clause}
-                ORDER BY playlist_items.pos_key
-                LIMIT ?
-                """,
-                params,
-            ).fetchall()
-        result = [int(row["item_id"]) for row in rows]
-        _log_slow_db_op(
-            "search_item_ids",
-            start=start,
-            playlist_id=playlist_id,
-            token_count=len(tokens),
-            limit=limit,
-            rows=len(result),
-        )
-        return result
+        rows = conn.execute(
+            f"""
+            SELECT playlist_items.id AS item_id
+            FROM playlist_items
+            JOIN tracks ON tracks.id = playlist_items.track_id
+            LEFT JOIN track_meta ON track_meta.track_id = tracks.id
+            WHERE playlist_items.playlist_id = ?
+              AND {where_clause}
+            ORDER BY playlist_items.pos_key
+            LIMIT ?
+            """,
+            params,
+        ).fetchall()
+        return [int(row["item_id"]) for row in rows]
 
     def _get_next_item_id_sync(
         self, playlist_id: int, item_id: int, wrap: bool
@@ -1025,6 +1060,23 @@ def _coerce_meta_valid(value: int | None) -> bool | None:
     if value is None:
         return None
     return bool(int(value))
+
+
+def _has_playlist_search_fts(conn: sqlite3.Connection) -> bool:
+    row = conn.execute(
+        """
+        SELECT 1
+        FROM sqlite_master
+        WHERE name = 'playlist_search'
+        LIMIT 1
+        """
+    ).fetchone()
+    return row is not None
+
+
+def _build_fts_query(tokens: list[str]) -> str:
+    escaped = [token.replace('"', '""') for token in tokens]
+    return " AND ".join(f'"{token}"*' for token in escaped)
 
 
 def _log_slow_db_op(op: str, *, start: float, **context: object) -> None:
