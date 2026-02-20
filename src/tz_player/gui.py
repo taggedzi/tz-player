@@ -11,6 +11,7 @@ import argparse
 import logging
 import sys
 from pathlib import Path
+from typing import Any, cast
 
 from . import __version__
 from .app import TzPlayerApp
@@ -53,6 +54,16 @@ def build_parser() -> argparse.ArgumentParser:
         dest="visualizer_plugin_paths",
         help="Local visualizer module/package path (repeatable).",
     )
+    parser.add_argument(
+        "--visualizer-plugin-security",
+        choices=("off", "warn", "enforce"),
+        help="Local plugin security policy mode.",
+    )
+    parser.add_argument(
+        "--visualizer-plugin-runtime",
+        choices=("in-process", "isolated"),
+        help="Local plugin runtime mode.",
+    )
     return parser
 
 
@@ -71,24 +82,22 @@ def main() -> int:
         logging.getLogger(__name__).info("Starting tz-player GUI")
         visualizer_fps = getattr(args, "visualizer_fps", None)
         visualizer_plugin_paths = getattr(args, "visualizer_plugin_paths", None)
-        if visualizer_fps is not None and visualizer_plugin_paths is not None:
-            app = TzPlayerApp(
-                backend_name=args.backend,
-                visualizer_fps_override=visualizer_fps,
-                visualizer_plugin_paths_override=visualizer_plugin_paths,
+        visualizer_plugin_security = getattr(args, "visualizer_plugin_security", None)
+        visualizer_plugin_runtime = getattr(args, "visualizer_plugin_runtime", None)
+        app_kwargs: dict[str, object] = {"backend_name": args.backend}
+        if visualizer_fps is not None:
+            app_kwargs["visualizer_fps_override"] = visualizer_fps
+        if visualizer_plugin_paths is not None:
+            app_kwargs["visualizer_plugin_paths_override"] = visualizer_plugin_paths
+        if visualizer_plugin_security is not None:
+            app_kwargs["visualizer_plugin_security_mode_override"] = (
+                visualizer_plugin_security
             )
-        elif visualizer_fps is not None:
-            app = TzPlayerApp(
-                backend_name=args.backend,
-                visualizer_fps_override=visualizer_fps,
+        if visualizer_plugin_runtime is not None:
+            app_kwargs["visualizer_plugin_runtime_mode_override"] = (
+                visualizer_plugin_runtime
             )
-        elif visualizer_plugin_paths is not None:
-            app = TzPlayerApp(
-                backend_name=args.backend,
-                visualizer_plugin_paths_override=visualizer_plugin_paths,
-            )
-        else:
-            app = TzPlayerApp(backend_name=args.backend)
+        app = TzPlayerApp(**cast(dict[str, Any], app_kwargs))
         app.run()
         return 1 if getattr(app, "startup_failed", False) else 0
     except Exception as exc:  # pragma: no cover - top-level safety net

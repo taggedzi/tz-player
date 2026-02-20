@@ -16,6 +16,7 @@ class _MatrixRainBase:
 
     plugin_id: str
     display_name: str
+    plugin_api_version: int
     _head_rgb: tuple[int, int, int]
     _trail_rgb: tuple[int, int, int]
     _ansi_enabled: bool = True
@@ -65,6 +66,7 @@ class _MatrixRainBase:
 class MatrixGreenVisualizer(_MatrixRainBase):
     plugin_id: str = "matrix.green"
     display_name: str = "Matrix Rain (Green)"
+    plugin_api_version: int = 1
     _head_rgb: tuple[int, int, int] = (215, 255, 220)
     _trail_rgb: tuple[int, int, int] = (0, 255, 110)
 
@@ -73,6 +75,7 @@ class MatrixGreenVisualizer(_MatrixRainBase):
 class MatrixBlueVisualizer(_MatrixRainBase):
     plugin_id: str = "matrix.blue"
     display_name: str = "Matrix Rain (Blue)"
+    plugin_api_version: int = 1
     _head_rgb: tuple[int, int, int] = (210, 240, 255)
     _trail_rgb: tuple[int, int, int] = (0, 180, 255)
 
@@ -81,6 +84,7 @@ class MatrixBlueVisualizer(_MatrixRainBase):
 class MatrixRedVisualizer(_MatrixRainBase):
     plugin_id: str = "matrix.red"
     display_name: str = "Matrix Rain (Red)"
+    plugin_api_version: int = 1
     _head_rgb: tuple[int, int, int] = (255, 220, 220)
     _trail_rgb: tuple[int, int, int] = (255, 75, 75)
 

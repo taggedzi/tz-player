@@ -21,7 +21,8 @@ If this file conflicts with `SPEC.md`, `SPEC.md` is authoritative.
 v1 target discovery order:
 
 1. Built-in plugins under `tz_player.visualizers`.
-2. Optional local plugins from configured import path(s).
+2. Local drop-in plugins under `<user_config_dir>/visualizers/plugins`.
+3. Optional local plugins from configured import path(s).
 
 Rules:
 
@@ -65,6 +66,7 @@ class VisualizerFrameInput:
 class VisualizerPlugin(Protocol):
     plugin_id: str
     display_name: str
+    plugin_api_version: int
 
     def on_activate(self, context: VisualizerContext) -> None: ...
     def on_deactivate(self) -> None: ...
@@ -75,6 +77,35 @@ Notes:
 - `render` output must be safe for Textual `Static` content.
 - `render` should be deterministic for the same `VisualizerFrameInput`.
 - No blocking file/db/network calls in `on_activate` or `render`.
+- `plugin_api_version` must match the app-supported plugin API version.
+
+## Local Plugin Security Modes
+
+- `off`: disable static preflight checks.
+- `warn` (default): detect risky source patterns and allow load with warnings.
+- `enforce`: detect risky source patterns and block plugin load.
+
+Current static checks flag risky patterns such as:
+- process/network primitives (`subprocess`, `socket`, `http`/`urllib`)
+- dynamic execution (`exec`, `eval`, `compile`, `__import__`)
+- destructive filesystem calls (`os.remove`, `shutil.rmtree`, write-mode `open(...)`)
+
+These checks reduce risk but do not provide full sandboxing.
+
+## Local Plugin Runtime Modes
+
+- `in-process` (default): local plugins execute inside the app process.
+- `isolated`: local plugins execute in a dedicated subprocess and are called over IPC.
+
+`isolated` mode improves containment for plugin faults/hangs but is still not a full security sandbox.
+
+## Trust Model and Limits
+
+- Python plugins run as user-provided code and are not fully sandboxed in-process.
+- Treat third-party plugins as trusted code unless reviewed.
+- Use `enforce` mode to block plugins with obvious risky patterns, but do not treat it as complete containment.
+- `isolated` mode provides process separation and timeout-based failover for local plugins.
+- Stronger isolation still requires OS-level sandboxing and is not guaranteed by default runtime mode.
 
 ## Lifecycle and Error Handling
 
@@ -102,11 +133,12 @@ Notes:
 Checklist:
 
 1. Define `plugin_id` and `display_name`.
-2. Implement `on_activate`, `on_deactivate`, and `render`.
-3. Return bounded-width/height text for the current pane dimensions.
-4. Handle `idle`, `paused`, and missing-duration states explicitly.
-5. Register plugin in the visualizer registry.
-6. Add tests for activation, rendering, and fallback behavior.
+2. Set `plugin_api_version = 1` (current API).
+3. Implement `on_activate`, `on_deactivate`, and `render`.
+4. Return bounded-width/height text for the current pane dimensions.
+5. Handle `idle`, `paused`, and missing-duration states explicitly.
+6. Place plugin file/package in the drop-in folder or pass an explicit plugin path.
+7. Add tests for activation, rendering, and fallback behavior.
 
 Minimal example:
 
@@ -118,6 +150,7 @@ from dataclasses import dataclass
 class BasicBarsPlugin:
     plugin_id: str = "bars.basic"
     display_name: str = "Bars (Basic)"
+    plugin_api_version: int = 1
     _ansi_enabled: bool = True
 
     def on_activate(self, context) -> None:

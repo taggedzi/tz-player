@@ -17,6 +17,7 @@ class VuReactiveVisualizer:
 
     plugin_id: str = "vu.reactive"
     display_name: str = "VU Meter (Reactive)"
+    plugin_api_version: int = 1
     _ansi_enabled: bool = True
     _left_smooth: float = 0.0
     _right_smooth: float = 0.0

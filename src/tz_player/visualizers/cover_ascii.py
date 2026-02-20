@@ -159,6 +159,7 @@ class CoverAsciiStaticVisualizer:
 
     plugin_id: str = "cover.ascii.static"
     display_name: str = "Cover ASCII (Static)"
+    plugin_api_version: int = 1
     _ansi_enabled: bool = True
 
     def on_activate(self, context: VisualizerContext) -> None:
@@ -189,6 +190,7 @@ class CoverAsciiMotionVisualizer:
 
     plugin_id: str = "cover.ascii.motion"
     display_name: str = "Cover ASCII (Motion)"
+    plugin_api_version: int = 1
     _ansi_enabled: bool = True
 
     def on_activate(self, context: VisualizerContext) -> None:

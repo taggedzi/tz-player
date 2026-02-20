@@ -12,6 +12,78 @@ Execution tracker derived from `SPEC.md`.
 
 ## Active Backlog
 
+### T-038 User Drop-In Visualizer Plugins + Security Hardening
+- Spec Ref: Section `6` (Plugin discovery/lifecycle), Section `8` (reliability/error handling), `WF-06`, `WF-07`
+- Status: `done`
+- Goal:
+  - Evolve current local-plugin loading into a true user drop-in plugin system with a standard plugin directory and practical security guardrails.
+  - Preserve keyboard-first UX, non-blocking render guarantees, and fallback safety.
+- Scope:
+  - Add deterministic auto-discovery from a default per-user plugin directory.
+  - Improve plugin discovery for real-world plugin packages (not only single-file scripts).
+  - Add plugin validation/diagnostics and risk controls for untrusted Python plugin code.
+  - Document a clear trust model and operational limits.
+- Non-goals:
+  - Perfect sandboxing of arbitrary Python code inside the main process.
+  - Networked/remote plugin download or marketplace behavior.
+- Acceptance:
+  - User can place a valid plugin in a documented default plugin location and have it discovered without manual state-file editing.
+  - Invalid or risky plugins are rejected with explicit log and user-facing diagnostics.
+  - Plugin failures continue to degrade safely to `basic` without app crash.
+  - Security posture is explicitly documented, including what is and is not guaranteed.
+- Tasks:
+  - `T-038A` Define plugin directory contract and precedence. Status: `done`
+    - Add canonical default plugin directory under app-managed user paths.
+    - Define precedence order for plugin discovery sources:
+      - built-ins
+      - default drop-in directory
+      - explicit CLI/plugin path overrides
+    - Clarify persistence behavior for configured plugin paths.
+  - `T-038B` Implement package-aware discovery model. Status: `done`
+    - Support plugin package directories (with `__init__.py`) and multi-file plugins.
+    - Keep deterministic discovery ordering and duplicate-ID handling.
+    - Ensure startup remains resilient when one plugin/package import fails.
+  - `T-038C` Introduce plugin manifest + compatibility validation. Status: `done`
+    - Define minimal plugin metadata contract (for example: `plugin_id`, `display_name`, `plugin_api_version`, optional `author`, `version`).
+    - Reject plugins with incompatible API version or invalid IDs.
+    - Surface reasoned diagnostics for rejected plugins.
+  - `T-038D` Add plugin safety policy enforcement (baseline checks). Status: `done`
+    - Add static preflight checks for obviously risky constructs in plugin sources (for example direct `subprocess`, `socket`, destructive file ops, dynamic `exec`/`eval` usage), with configurable policy:
+      - `warn` mode (default): load with warning
+      - `enforce` mode: block load on policy violations
+    - Add plugin source allowlist/denylist controls for import paths if needed.
+    - Ensure policy outcome is logged and visible to users as runtime notices when relevant.
+  - `T-038E` Add process-isolated plugin runner (optional hardened mode). Status: `done`
+    - Design/run plugins out-of-process for stronger containment (separate worker process boundary).
+    - Define IPC contract for `on_activate`/`render`/`on_deactivate`.
+    - Apply resource/time limits and fail-closed fallback behavior when runner is unhealthy.
+    - Keep in-process mode available for compatibility/performance.
+  - `T-038F` Add plugin management diagnostics UX. Status: `done`
+    - Provide a user-visible plugin diagnostics surface (loaded, rejected, reason).
+    - Add startup summary with loaded plugin IDs, source path, and policy status.
+    - Add a safe rescan workflow (manual action) that does not block UI.
+  - `T-038G` Documentation and trust model update. Status: `done`
+    - Update `docs/visualizations.md` and `docs/usage.md` with:
+      - drop-in folder usage
+      - plugin packaging examples
+      - security policy modes and defaults
+      - explicit trust model and limitations
+    - Add a dedicated security note for plugins in `SECURITY.md`.
+  - `T-038H` Test coverage and release checks. Status: `done`
+    - Unit tests for discovery precedence, package loading, manifest validation, and policy checks.
+    - Integration tests for drop-in folder auto-discovery, fallback safety, and diagnostics surfacing.
+    - Tests for blocked-risk plugin cases and optional isolated-runner failure handling.
+    - Update acceptance mapping docs and release checklist for plugin-security posture.
+- Risks / Decisions Needed:
+  - Python in-process plugins cannot be fully sandboxed; meaningful containment requires process isolation plus OS-level restrictions where available.
+  - Strict security policy may reject legitimate plugins; policy defaults and override UX must be clear.
+  - Cross-platform isolation capabilities differ (Linux/macOS/Windows), requiring capability-gated behavior.
+- Validation (per implementation change set):
+  - `.ubuntu-venv/bin/python -m ruff check .`
+  - `.ubuntu-venv/bin/python -m ruff format --check .`
+  - `.ubuntu-venv/bin/python -m mypy src`
+  - `.ubuntu-venv/bin/python -m pytest`
+
 ### DOC-001 Internal Documentation Campaign (All Project Files)
 - Status: `done`
 - Goal:

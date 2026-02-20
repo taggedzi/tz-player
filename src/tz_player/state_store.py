@@ -30,6 +30,8 @@ class AppState:
     visualizer_id: str | None = None
     visualizer_fps: int = 10
     visualizer_plugin_paths: tuple[str, ...] = ()
+    visualizer_plugin_security_mode: str = "warn"
+    visualizer_plugin_runtime_mode: str = "in-process"
     ansi_enabled: bool = True
     log_level: str = "INFO"
 
@@ -94,6 +96,12 @@ def _coerce_state(data: dict[str, Any]) -> AppState:
         )
         if isinstance(data.get("visualizer_plugin_paths"), list)
         else (),
+        visualizer_plugin_security_mode=_str_or_default(
+            data.get("visualizer_plugin_security_mode"), "warn"
+        ),
+        visualizer_plugin_runtime_mode=_str_or_default(
+            data.get("visualizer_plugin_runtime_mode"), "in-process"
+        ),
         ansi_enabled=_bool_or_default(data.get("ansi_enabled"), True),
         log_level=_str_or_default(data.get("log_level"), "INFO"),
     )

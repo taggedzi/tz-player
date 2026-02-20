@@ -43,6 +43,7 @@ class HackScopeVisualizer:
 
     plugin_id: str = "ops.hackscope"
     display_name: str = "HackScope (Fictional)"
+    plugin_api_version: int = 1
     _ansi_enabled: bool = True
 
     def on_activate(self, context: VisualizerContext) -> None:
