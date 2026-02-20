@@ -379,7 +379,7 @@ Execution tracker derived from `SPEC.md`.
 
 ### T-046 Visualizer Responsiveness Tuning Profiles (Safe/Balanced/Aggressive)
 - Spec Ref: Section `6` (visualizer rendering), Section `8` (performance/reliability), `WF-06`, `WF-07`
-- Status: `in_progress`
+- Status: `done`
 - Goal:
   - Improve perceived visualizer responsiveness while preserving keyboard-first responsiveness and non-blocking guarantees.
 - Scope:
@@ -414,7 +414,7 @@ Execution tracker derived from `SPEC.md`.
       - skipped/throttled frames
       - active responsiveness profile
     - Provide actionable diagnostics in perf runs.
-  - `T-046F` Performance and UX validation matrix. Status: `todo`
+  - `T-046F` Performance and UX validation matrix. Status: `done`
     - Add profile-aware checks for:
       - median render time and worst-frame budget
       - no keyboard responsiveness regressions
