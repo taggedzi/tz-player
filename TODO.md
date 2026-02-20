@@ -377,6 +377,59 @@ Execution tracker derived from `SPEC.md`.
   - Sample window format/rate/channel model for plugin-facing contract.
   - Scheduling/backpressure policy to prevent UI starvation.
 
+### T-046 Visualizer Responsiveness Tuning Profiles (Safe/Balanced/Aggressive)
+- Spec Ref: Section `6` (visualizer rendering), Section `8` (performance/reliability), `WF-06`, `WF-07`
+- Status: `todo`
+- Goal:
+  - Improve perceived visualizer responsiveness while preserving keyboard-first responsiveness and non-blocking guarantees.
+- Scope:
+  - Tune render cadence, analysis cadence, and plugin-level smoothing/hold behavior.
+  - Add profile-based defaults (`safe`, `balanced`, `aggressive`) with deterministic runtime behavior.
+  - Add observability/perf checks to prevent regressions or hidden throttling.
+- Non-goals:
+  - Live PCM sample stream contract changes (tracked separately in `T-045`).
+  - Rewriting visualizer architecture.
+- Tasks:
+  - `T-046A` Add responsiveness profiles and runtime config wiring. Status: `todo`
+    - Define profile presets:
+      - `safe`: low CPU / conservative cadence
+      - `balanced`: recommended default
+      - `aggressive`: high responsiveness / higher CPU
+    - Wire profile selection via runtime config and CLI with clear precedence docs.
+  - `T-046B` Render cadence tuning (host FPS targets). Status: `todo`
+    - Set profile-specific visualizer FPS targets.
+    - Keep existing hard clamps and fallback safety.
+    - Ensure host throttle behavior remains deterministic.
+  - `T-046C` Analysis cadence tuning (scalar/FFT/beat freshness). Status: `todo`
+    - Tune FFT hop/lookup cadence by profile where practical.
+    - Tune scalar update cadence and beat pulse/hold windows.
+    - Preserve cache model and non-blocking scheduling.
+  - `T-046D` Plugin inertia pass for built-in reactive visualizers. Status: `todo`
+    - Reduce smoothing/hold constants where latency feel is excessive.
+    - Keep readability and stability for paused/low-signal states.
+    - Validate deterministic output remains intact for same inputs.
+  - `T-046E` Observability for responsiveness/throttle detection. Status: `todo`
+    - Add/expand structured logs for:
+      - render overruns
+      - skipped/throttled frames
+      - active responsiveness profile
+    - Provide actionable diagnostics in perf runs.
+  - `T-046F` Performance and UX validation matrix. Status: `todo`
+    - Add profile-aware checks for:
+      - median render time and worst-frame budget
+      - no keyboard responsiveness regressions
+      - no excessive host throttling under target pane sizes
+    - Keep opt-in heavy perf coverage for larger panes/high frame counts.
+- Acceptance:
+  - `balanced` profile yields visibly faster response than current baseline without breaking UI responsiveness.
+  - `safe` profile remains stable on lower-resource systems.
+  - `aggressive` profile remains bounded by host throttle protections and clearly documented tradeoffs.
+  - Profile behavior is documented and test-covered.
+- Validation (per implementation change set):
+  - `.ubuntu-venv/bin/python -m ruff check .`
+  - `.ubuntu-venv/bin/python -m ruff format --check .`
+  - `.ubuntu-venv/bin/python -m mypy src`
+  - `.ubuntu-venv/bin/python -m pytest`
 ### DOC-001 Internal Documentation Campaign (All Project Files)
 - Status: `done`
 - Goal:
