@@ -14,6 +14,8 @@ import pytest
 import tz_player.paths as paths
 from tz_player.app import TzPlayerApp
 from tz_player.services.playlist_store import POS_STEP, PlaylistStore
+from tz_player.visualizers.base import VisualizerContext, VisualizerFrameInput
+from tz_player.visualizers.registry import VisualizerRegistry
 
 pytestmark = pytest.mark.skipif(
     os.getenv("TZ_PLAYER_RUN_PERF") != "1",
@@ -30,6 +32,18 @@ LARGE_SEARCH_BROAD_BUDGET_S = 2.80
 LARGE_SEARCH_MULTI_TOKEN_BUDGET_S = 12.00
 LARGE_SEARCH_MISS_BUDGET_S = 3.00
 LARGE_RANDOM_MEDIAN_BUDGET_S = 0.012
+ADVANCED_VIZ_RENDER_MEDIAN_BUDGET_S = 0.035
+ADVANCED_VIZ_RENDER_MAX_BUDGET_S = 0.120
+ADVANCED_VIZ_FRAME_COUNT = 120
+ADVANCED_VIZ_PANE_WIDTH = 160
+ADVANCED_VIZ_PANE_HEIGHT = 50
+ADVANCED_VIZ_IDS = (
+    "viz.spectrogram.waterfall",
+    "viz.spectrum.terrain",
+    "viz.reactor.particles",
+    "viz.spectrum.radial",
+    "viz.typography.glitch",
+)
 
 
 class FakeAppDirs:
@@ -214,3 +228,59 @@ def test_large_playlist_store_navigation_search_and_random_budget(tmp_path) -> N
         f"Median get_random_item_id elapsed {median_random:.4f}s exceeded budget "
         f"{LARGE_RANDOM_MEDIAN_BUDGET_S:.4f}s"
     )
+
+
+def test_advanced_visualizer_large_pane_render_budget() -> None:
+    registry = VisualizerRegistry.built_in()
+    context = VisualizerContext(ansi_enabled=False, unicode_enabled=True)
+    spectrum = bytes(((idx * 9) % 256) for idx in range(48))
+    for plugin_id in ADVANCED_VIZ_IDS:
+        plugin = registry.create(plugin_id)
+        assert plugin is not None
+        plugin.on_activate(context)
+        samples: list[float] = []
+        for frame_idx in range(ADVANCED_VIZ_FRAME_COUNT):
+            frame = VisualizerFrameInput(
+                frame_index=frame_idx,
+                monotonic_s=frame_idx / 60.0,
+                width=ADVANCED_VIZ_PANE_WIDTH,
+                height=ADVANCED_VIZ_PANE_HEIGHT,
+                status="playing",
+                position_s=frame_idx * 0.04,
+                duration_s=300.0,
+                volume=72.0,
+                speed=1.0,
+                repeat_mode="OFF",
+                shuffle=False,
+                track_id=1,
+                track_path="/perf/advanced.mp3",
+                title="Perf Signal",
+                artist="Bench",
+                album="Suite",
+                level_left=0.65,
+                level_right=0.58,
+                spectrum_bands=spectrum,
+                spectrum_source="cache",
+                spectrum_status="ready",
+                beat_is_onset=(frame_idx % 24 == 0),
+                beat_strength=0.8 if frame_idx % 24 == 0 else 0.2,
+                beat_bpm=126.0,
+                beat_source="cache",
+                beat_status="ready",
+            )
+            begin = time.perf_counter()
+            output = plugin.render(frame)
+            elapsed = time.perf_counter() - begin
+            samples.append(elapsed)
+            assert output
+        plugin.on_deactivate()
+        median_elapsed = statistics.median(samples)
+        worst_elapsed = max(samples)
+        assert median_elapsed <= ADVANCED_VIZ_RENDER_MEDIAN_BUDGET_S, (
+            f"{plugin_id} median render {median_elapsed:.4f}s exceeded budget "
+            f"{ADVANCED_VIZ_RENDER_MEDIAN_BUDGET_S:.4f}s"
+        )
+        assert worst_elapsed <= ADVANCED_VIZ_RENDER_MAX_BUDGET_S, (
+            f"{plugin_id} max render {worst_elapsed:.4f}s exceeded budget "
+            f"{ADVANCED_VIZ_RENDER_MAX_BUDGET_S:.4f}s"
+        )

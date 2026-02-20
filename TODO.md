@@ -332,7 +332,7 @@ Execution tracker derived from `SPEC.md`.
     - Ensure `docs/visualizations.md` lists new plugin IDs, capability requirements, and fallback semantics.
     - Add concise plugin-author guidance for effect patterns using scalar/FFT/beat without blocking render.
     - Confirm compatibility statement for existing plugins remains unchanged.
-  - `T-044H` Performance and reliability validation for advanced visualizers. Status: `todo`
+  - `T-044H` Performance and reliability validation for advanced visualizers. Status: `done`
     - Add tests for render determinism, fallback behavior, and no-crash degradation.
     - Add opt-in perf checks for high-refresh scenarios and large-pane sizes.
     - Ensure no per-frame blocking I/O and no keyboard responsiveness regressions.
