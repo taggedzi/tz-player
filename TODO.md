@@ -289,6 +289,80 @@ Execution tracker derived from `SPEC.md`.
   - `.ubuntu-venv/bin/python -m mypy src`
   - `.ubuntu-venv/bin/python -m pytest`
 
+### T-044 Advanced Visualizer Plugin Pack (Practical + Capability-Gated)
+- Spec Ref: Section `6` (visualizer/plugin model), Section `8` (reliability/error handling), `WF-06`, `WF-07`
+- Status: `in_progress`
+- Goal:
+  - Add a curated set of advanced built-in visualizer plugins inspired by the proposed concepts, while preserving non-blocking render constraints and graceful capability fallback behavior.
+- Scope:
+  - Implement practical visualizers now using existing lazy analysis services (scalar, FFT, beat).
+  - Explicitly gate or defer concepts that require unavailable runtime data (true live waveform/stereo sample stream or phase).
+  - Keep plugin IDs deterministic and contract-compatible for third-party plugin authors.
+- Non-goals:
+  - Live PCM waveform/phase extraction from playback backends in this task.
+  - GPU-accelerated or non-terminal rendering paths.
+- Tasks:
+  - `T-044A` Spectrogram Waterfall (history heatmap). Status: `done`
+    - New plugin ID: `viz.spectrogram.waterfall`.
+    - Use FFT bands with rolling history buffer and intensity glyph ramps.
+    - Add optional beat pulse accent on newest row.
+  - `T-044B` Audio Terrain (spectral landscape). Status: `todo`
+    - New plugin ID: `viz.spectrum.terrain`.
+    - Group FFT bins into width buckets with filled curve rendering.
+    - Add optional beat-triggered terrain lift/flash effect.
+  - `T-044C` Radial Spectrum (donut analyzer). Status: `todo`
+    - New plugin ID: `viz.spectrum.radial`.
+    - Render spoke-based radial FFT approximation in terminal grid.
+    - Add short peak-hold and beat ring pulse.
+  - `T-044D` Particle Reactor / Starfield Burst. Status: `todo`
+    - New plugin ID: `viz.reactor.particles`.
+    - Drive particle spawn/velocity from bass-mid-high aggregate + RMS + beat.
+    - Keep deterministic bounded particle counts for frame-budget safety.
+  - `T-044E` Typography Visual (metadata + glitch/glow). Status: `todo`
+    - New plugin ID: `viz.typography.glitch`.
+    - Render title/artist-centered layout with subtle RMS/FFT modulation.
+    - Apply beat-triggered brief glitch/border pulse effects with readability guardrails.
+  - `T-044F` Oscilloscope/Persistence and Lissajous feasibility gate. Status: `todo`
+    - Document current constraints for true oscilloscope and stereo XY:
+      - no guaranteed live time-domain sample stream in current backend abstraction
+      - no reliable stereo phase/L-R sample feed for visualizer frame contract
+    - Define practical fallback designs that can run on FFT+scalar only (stylized approximation mode).
+    - Mark true waveform/phase variants as blocked until a live-sample capability task is approved.
+  - `T-044G` Visualizer contract/docs updates for new effects. Status: `todo`
+    - Ensure `docs/visualizations.md` lists new plugin IDs, capability requirements, and fallback semantics.
+    - Add concise plugin-author guidance for effect patterns using scalar/FFT/beat without blocking render.
+    - Confirm compatibility statement for existing plugins remains unchanged.
+  - `T-044H` Performance and reliability validation for advanced visualizers. Status: `todo`
+    - Add tests for render determinism, fallback behavior, and no-crash degradation.
+    - Add opt-in perf checks for high-refresh scenarios and large-pane sizes.
+    - Ensure no per-frame blocking I/O and no keyboard responsiveness regressions.
+- Recommended implementation order:
+  1. `T-044A` Spectrogram Waterfall
+     - Lowest complexity, highest immediate value using existing FFT pipeline.
+  2. `T-044E` Typography Visual
+     - Fast to ship and leverages metadata + scalar/beat with low render risk.
+  3. `T-044B` Audio Terrain
+     - Reuses FFT grouping patterns; moderate complexity, strong visual payoff.
+  4. `T-044D` Particle Reactor
+     - Introduces simulation state; do after simpler deterministic renderers.
+  5. `T-044C` Radial Spectrum
+     - Hardest terminal geometry/render mapping; defer until core pack is stable.
+  6. `T-044G` Contract/docs updates
+     - Finalize docs once concrete plugin behavior/IDs are settled.
+  7. `T-044H` Performance/reliability validation
+     - Run after feature completion as release gate for the pack.
+  8. `T-044F` Oscilloscope/Lissajous feasibility gate
+     - Keep as explicit capability decision milestone; do when evaluating next data-contract expansion.
+- Acceptance:
+  - At least five concepts are implemented with existing services (`FFT`/`scalar`/`beat`) and selectable via registry.
+  - Oscilloscope/Lissajous true-signal variants are clearly capability-gated (or deferred) with explicit docs.
+  - New visualizers meet render-budget and fallback reliability expectations.
+- Validation (per implementation change set):
+  - `.ubuntu-venv/bin/python -m ruff check .`
+  - `.ubuntu-venv/bin/python -m ruff format --check .`
+  - `.ubuntu-venv/bin/python -m mypy src`
+  - `.ubuntu-venv/bin/python -m pytest`
+
 ### DOC-001 Internal Documentation Campaign (All Project Files)
 - Status: `done`
 - Goal:

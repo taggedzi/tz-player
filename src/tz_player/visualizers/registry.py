@@ -27,6 +27,7 @@ from .hackscope import HackScopeVisualizer
 from .isolated_runner import IsolatedPluginProxy, PluginSourceSpec
 from .matrix import MatrixBlueVisualizer, MatrixGreenVisualizer, MatrixRedVisualizer
 from .vu import VuReactiveVisualizer
+from .waterfall import SpectrogramWaterfallVisualizer
 
 logger = logging.getLogger(__name__)
 
@@ -154,6 +155,7 @@ class VisualizerRegistry:
             MatrixRedVisualizer,
             HackScopeVisualizer,
             VuReactiveVisualizer,
+            SpectrogramWaterfallVisualizer,
             CoverAsciiStaticVisualizer,
             CoverAsciiMotionVisualizer,
         ]
