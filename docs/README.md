@@ -9,6 +9,7 @@ This folder contains lightweight project documentation.
 - `architecture.md` for design notes
 - `visualizations.md` for visualization subsystem and plugin authoring contract
 - `gap-analysis.md` for workflow-to-spec gap mapping and prioritized backlog
+- `workflow/` for implementation workflow maps (startup/runtime call paths)
 - `adr/` for architectural decision records
 
 Project-level governance docs live at repo root:
