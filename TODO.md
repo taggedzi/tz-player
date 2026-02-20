@@ -188,6 +188,39 @@ Execution tracker derived from `SPEC.md`.
   - `.ubuntu-venv/bin/python -m mypy src`
   - `.ubuntu-venv/bin/python -m pytest`
 
+### T-041 Observability Hardening + Large Playlist Scalability
+- Spec Ref: Section `8` (diagnostics/logging), `WF-02`, `WF-03`, `WF-05`, `WF-07`
+- Status: `in_progress`
+- Goal:
+  - Improve runtime observability for heavy playlist operations and analysis workflows.
+  - Reduce query/path bottlenecks for very large playlists (target: up to 100k items).
+- Scope:
+  - Add structured slow-path telemetry for playlist DB hotspots and cache pipeline events.
+  - Replace high-cost random item selection query patterns that do full-table sort work.
+  - Add/expand opt-in performance checks focused on high-count playlist navigation/search actions.
+  - Document large-playlist limits and recommended runtime flags/workflows.
+- Non-goals:
+  - Sidecar analysis cache export/import features.
+  - Remote/clustered metadata or search systems.
+- Tasks:
+  - `T-041A` PlaylistStore observability instrumentation. Status: `done`
+    - Add structured slow-query logging around high-traffic DB operations.
+    - Include operation name, elapsed time, and key context fields.
+  - `T-041B` Remove `ORDER BY RANDOM()` scale bottleneck. Status: `done`
+    - Replace full-table random sort selection with count + random offset selection.
+    - Preserve exclusion semantics and deterministic testability.
+  - `T-041C` High-count playlist opt-in perf checks. Status: `done`
+    - Add perf checks that exercise 100k-ish playlist scenarios in opt-in mode.
+    - Validate key interactions remain within practical budget envelopes.
+  - `T-041D` Large-playlist usage/docs guidance. Status: `done`
+    - Document expected behavior and caveats for very large playlists.
+    - Add troubleshooting notes for heavy metadata/search workloads.
+- Validation (per implementation change set):
+  - `.ubuntu-venv/bin/python -m ruff check .`
+  - `.ubuntu-venv/bin/python -m ruff format --check .`
+  - `.ubuntu-venv/bin/python -m mypy src`
+  - `.ubuntu-venv/bin/python -m pytest`
+
 ### DOC-001 Internal Documentation Campaign (All Project Files)
 - Status: `done`
 - Goal:

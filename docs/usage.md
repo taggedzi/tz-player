@@ -109,6 +109,14 @@ Lazy analysis cache notes:
 - Computed analysis is persisted in SQLite cache and reused across restarts.
 - Visualizers may expose analysis state labels such as `READY`, `LOADING`, or `MISSING` while cache fills.
 
+Large-playlist guidance:
+- `tz-player` is designed to handle high-count playlists (for example ~100k rows), but behavior depends on terminal throughput and host storage performance.
+- Keep logs enabled (`INFO` default) when tuning large libraries; slow DB hotspots emit `event=playlist_store_slow_query` entries with operation and elapsed ms.
+- Find/search and metadata-heavy views are the most expensive paths; narrow search terms and allow lazy analysis to warm over time.
+- Prefer SSD-backed app data directories for best playlist/query responsiveness.
+- For benchmark-style checks, run opt-in perf tests:
+  - `TZ_PLAYER_RUN_PERF=1 .ubuntu-venv/bin/python -m pytest tests/test_performance_opt_in.py`
+
 Drop-in local plugin folder:
 - `tz-player` always scans the user plugin folder:
   - `<user_config_dir>/visualizers/plugins`
