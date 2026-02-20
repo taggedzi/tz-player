@@ -10,7 +10,7 @@ import hashlib
 import json
 import sqlite3
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 _SCALAR_DEFAULT_PARAMS_JSON = json.dumps(
     {"bucket_ms": 50}, sort_keys=True, separators=(",", ":")
 )
@@ -95,6 +95,10 @@ def create_schema(conn: sqlite3.Connection) -> None:
         version = 3
     if version == 3:
         _migrate_v3_to_v4(conn)
+        conn.execute("PRAGMA user_version = 4")
+        version = 4
+    if version == 4:
+        _migrate_v4_to_v5(conn)
         conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
 
 
@@ -308,7 +312,345 @@ def _migrate_v3_to_v4(conn: sqlite3.Connection) -> None:
     )
 
 
+def _migrate_v4_to_v5(conn: sqlite3.Connection) -> None:
+    """Add FTS-backed playlist search index and synchronization triggers."""
+    _begin_immediate(conn)
+    _create_playlist_search_fts(conn)
+
+
+def _create_playlist_search_fts(conn: sqlite3.Connection) -> bool:
+    """Create and backfill FTS playlist search structures when FTS5 is available."""
+    if not _table_exists(conn, "tracks") or not _table_exists(conn, "playlist_items"):
+        return False
+    has_track_meta = _table_exists(conn, "track_meta")
+    try:
+        conn.execute(
+            """
+            CREATE VIRTUAL TABLE IF NOT EXISTS playlist_search USING fts5(
+                item_id UNINDEXED,
+                playlist_id UNINDEXED,
+                title,
+                artist,
+                album,
+                year,
+                path,
+                tokenize='unicode61 remove_diacritics 2'
+            )
+            """
+        )
+    except sqlite3.OperationalError as exc:
+        # Some SQLite builds do not include FTS5; keep LIKE search behavior there.
+        if "fts5" in str(exc).lower() or "no such module" in str(exc).lower():
+            return False
+        raise
+
+    if has_track_meta:
+        conn.execute(
+            """
+            INSERT INTO playlist_search (
+                rowid,
+                item_id,
+                playlist_id,
+                title,
+                artist,
+                album,
+                year,
+                path
+            )
+            SELECT
+                pi.id,
+                pi.id,
+                pi.playlist_id,
+                COALESCE(tm.title, ''),
+                COALESCE(tm.artist, ''),
+                COALESCE(tm.album, ''),
+                COALESCE(CAST(tm.year AS TEXT), ''),
+                COALESCE(t.path, '')
+            FROM playlist_items AS pi
+            JOIN tracks AS t
+              ON t.id = pi.track_id
+            LEFT JOIN track_meta AS tm
+              ON tm.track_id = t.id
+            """
+        )
+    else:
+        conn.execute(
+            """
+            INSERT INTO playlist_search (
+                rowid,
+                item_id,
+                playlist_id,
+                title,
+                artist,
+                album,
+                year,
+                path
+            )
+            SELECT
+                pi.id,
+                pi.id,
+                pi.playlist_id,
+                '',
+                '',
+                '',
+                '',
+                COALESCE(t.path, '')
+            FROM playlist_items AS pi
+            JOIN tracks AS t
+              ON t.id = pi.track_id
+            """
+        )
+    if has_track_meta:
+        conn.execute(
+            """
+            CREATE TRIGGER IF NOT EXISTS trg_playlist_search_item_insert
+            AFTER INSERT ON playlist_items
+            BEGIN
+                INSERT INTO playlist_search (
+                    rowid,
+                    item_id,
+                    playlist_id,
+                    title,
+                    artist,
+                    album,
+                    year,
+                    path
+                )
+                SELECT
+                    NEW.id,
+                    NEW.id,
+                    NEW.playlist_id,
+                    COALESCE(tm.title, ''),
+                    COALESCE(tm.artist, ''),
+                    COALESCE(tm.album, ''),
+                    COALESCE(CAST(tm.year AS TEXT), ''),
+                    COALESCE(t.path, '')
+                FROM tracks AS t
+                LEFT JOIN track_meta AS tm
+                  ON tm.track_id = t.id
+                WHERE t.id = NEW.track_id;
+            END
+            """
+        )
+        conn.execute(
+            """
+            CREATE TRIGGER IF NOT EXISTS trg_playlist_search_item_update
+            AFTER UPDATE OF track_id, playlist_id ON playlist_items
+            BEGIN
+                INSERT OR REPLACE INTO playlist_search (
+                    rowid,
+                    item_id,
+                    playlist_id,
+                    title,
+                    artist,
+                    album,
+                    year,
+                    path
+                )
+                SELECT
+                    NEW.id,
+                    NEW.id,
+                    NEW.playlist_id,
+                    COALESCE(tm.title, ''),
+                    COALESCE(tm.artist, ''),
+                    COALESCE(tm.album, ''),
+                    COALESCE(CAST(tm.year AS TEXT), ''),
+                    COALESCE(t.path, '')
+                FROM tracks AS t
+                LEFT JOIN track_meta AS tm
+                  ON tm.track_id = t.id
+                WHERE t.id = NEW.track_id;
+            END
+            """
+        )
+    else:
+        conn.execute(
+            """
+            CREATE TRIGGER IF NOT EXISTS trg_playlist_search_item_insert
+            AFTER INSERT ON playlist_items
+            BEGIN
+                INSERT INTO playlist_search (
+                    rowid,
+                    item_id,
+                    playlist_id,
+                    title,
+                    artist,
+                    album,
+                    year,
+                    path
+                )
+                SELECT
+                    NEW.id,
+                    NEW.id,
+                    NEW.playlist_id,
+                    '',
+                    '',
+                    '',
+                    '',
+                    COALESCE(t.path, '')
+                FROM tracks AS t
+                WHERE t.id = NEW.track_id;
+            END
+            """
+        )
+        conn.execute(
+            """
+            CREATE TRIGGER IF NOT EXISTS trg_playlist_search_item_update
+            AFTER UPDATE OF track_id, playlist_id ON playlist_items
+            BEGIN
+                INSERT OR REPLACE INTO playlist_search (
+                    rowid,
+                    item_id,
+                    playlist_id,
+                    title,
+                    artist,
+                    album,
+                    year,
+                    path
+                )
+                SELECT
+                    NEW.id,
+                    NEW.id,
+                    NEW.playlist_id,
+                    '',
+                    '',
+                    '',
+                    '',
+                    COALESCE(t.path, '')
+                FROM tracks AS t
+                WHERE t.id = NEW.track_id;
+            END
+            """
+        )
+    conn.execute(
+        """
+        CREATE TRIGGER IF NOT EXISTS trg_playlist_search_item_delete
+        AFTER DELETE ON playlist_items
+        BEGIN
+            DELETE FROM playlist_search WHERE rowid = OLD.id;
+        END
+        """
+    )
+    conn.execute(
+        """
+        CREATE TRIGGER IF NOT EXISTS trg_playlist_search_track_path_update
+        AFTER UPDATE OF path ON tracks
+        BEGIN
+            UPDATE playlist_search
+            SET path = COALESCE(NEW.path, '')
+            WHERE rowid IN (
+                SELECT id
+                FROM playlist_items
+                WHERE track_id = NEW.id
+            );
+        END
+        """
+    )
+    if has_track_meta:
+        conn.execute(
+            """
+            UPDATE playlist_search
+            SET
+                title = COALESCE(
+                    (SELECT track_meta.title
+                     FROM playlist_items
+                     JOIN track_meta ON track_meta.track_id = playlist_items.track_id
+                     WHERE playlist_items.id = playlist_search.rowid),
+                    ''
+                ),
+                artist = COALESCE(
+                    (SELECT track_meta.artist
+                     FROM playlist_items
+                     JOIN track_meta ON track_meta.track_id = playlist_items.track_id
+                     WHERE playlist_items.id = playlist_search.rowid),
+                    ''
+                ),
+                album = COALESCE(
+                    (SELECT track_meta.album
+                     FROM playlist_items
+                     JOIN track_meta ON track_meta.track_id = playlist_items.track_id
+                     WHERE playlist_items.id = playlist_search.rowid),
+                    ''
+                ),
+                year = COALESCE(
+                    (SELECT CAST(track_meta.year AS TEXT)
+                     FROM playlist_items
+                     JOIN track_meta ON track_meta.track_id = playlist_items.track_id
+                     WHERE playlist_items.id = playlist_search.rowid),
+                    ''
+                )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TRIGGER IF NOT EXISTS trg_playlist_search_track_meta_insert
+            AFTER INSERT ON track_meta
+            BEGIN
+                UPDATE playlist_search
+                SET
+                    title = COALESCE(NEW.title, ''),
+                    artist = COALESCE(NEW.artist, ''),
+                    album = COALESCE(NEW.album, ''),
+                    year = COALESCE(CAST(NEW.year AS TEXT), '')
+                WHERE rowid IN (
+                    SELECT id
+                    FROM playlist_items
+                    WHERE track_id = NEW.track_id
+                );
+            END
+            """
+        )
+        conn.execute(
+            """
+            CREATE TRIGGER IF NOT EXISTS trg_playlist_search_track_meta_update
+            AFTER UPDATE OF title, artist, album, year ON track_meta
+            BEGIN
+                UPDATE playlist_search
+                SET
+                    title = COALESCE(NEW.title, ''),
+                    artist = COALESCE(NEW.artist, ''),
+                    album = COALESCE(NEW.album, ''),
+                    year = COALESCE(CAST(NEW.year AS TEXT), '')
+                WHERE rowid IN (
+                    SELECT id
+                    FROM playlist_items
+                    WHERE track_id = NEW.track_id
+                );
+            END
+            """
+        )
+        conn.execute(
+            """
+            CREATE TRIGGER IF NOT EXISTS trg_playlist_search_track_meta_delete
+            AFTER DELETE ON track_meta
+            BEGIN
+                UPDATE playlist_search
+                SET title = '', artist = '', album = '', year = ''
+                WHERE rowid IN (
+                    SELECT id
+                    FROM playlist_items
+                    WHERE track_id = OLD.track_id
+                );
+            END
+            """
+        )
+    return True
+
+
 def _begin_immediate(conn: sqlite3.Connection) -> None:
     """Start immediate transaction only when one is not already active."""
     if not conn.in_transaction:
         conn.execute("BEGIN IMMEDIATE")
+
+
+def _table_exists(conn: sqlite3.Connection, table_name: str) -> bool:
+    row = conn.execute(
+        """
+        SELECT 1
+        FROM sqlite_master
+        WHERE type = 'table' AND name = ?
+        LIMIT 1
+        """,
+        (table_name,),
+    ).fetchone()
+    return row is not None
