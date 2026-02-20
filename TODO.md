@@ -404,7 +404,7 @@ Execution tracker derived from `SPEC.md`.
     - Tune FFT hop/lookup cadence by profile where practical.
     - Tune scalar update cadence and beat pulse/hold windows.
     - Preserve cache model and non-blocking scheduling.
-  - `T-046D` Plugin inertia pass for built-in reactive visualizers. Status: `todo`
+  - `T-046D` Plugin inertia pass for built-in reactive visualizers. Status: `done`
     - Reduce smoothing/hold constants where latency feel is excessive.
     - Keep readability and stability for paused/low-signal states.
     - Validate deterministic output remains intact for same inputs.
