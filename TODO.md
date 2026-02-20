@@ -318,7 +318,7 @@ Execution tracker derived from `SPEC.md`.
     - New plugin ID: `viz.reactor.particles`.
     - Drive particle spawn/velocity from bass-mid-high aggregate + RMS + beat.
     - Keep deterministic bounded particle counts for frame-budget safety.
-  - `T-044E` Typography Visual (metadata + glitch/glow). Status: `todo`
+  - `T-044E` Typography Visual (metadata + glitch/glow). Status: `done`
     - New plugin ID: `viz.typography.glitch`.
     - Render title/artist-centered layout with subtle RMS/FFT modulation.
     - Apply beat-triggered brief glitch/border pulse effects with readability guardrails.
