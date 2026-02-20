@@ -6,9 +6,17 @@ applied sequentially and are written to be idempotent within their version step.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import sqlite3
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
+_SCALAR_DEFAULT_PARAMS_JSON = json.dumps(
+    {"bucket_ms": 50}, sort_keys=True, separators=(",", ":")
+)
+_SCALAR_DEFAULT_PARAMS_HASH = hashlib.sha1(
+    _SCALAR_DEFAULT_PARAMS_JSON.encode("utf-8")
+).hexdigest()
 
 SCHEMA_V1_STATEMENTS = [
     """
@@ -83,6 +91,10 @@ def create_schema(conn: sqlite3.Connection) -> None:
         version = 2
     if version == 2:
         _migrate_v2_to_v3(conn)
+        conn.execute("PRAGMA user_version = 3")
+        version = 3
+    if version == 3:
+        _migrate_v3_to_v4(conn)
         conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
 
 
@@ -158,6 +170,141 @@ def _migrate_v2_to_v3(conn: sqlite3.Connection) -> None:
     )
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_audio_points_envelope_pos ON audio_envelope_points(envelope_id, position_ms)"
+    )
+
+
+def _migrate_v3_to_v4(conn: sqlite3.Connection) -> None:
+    """Add generic analysis cache and FFT spectrum frame storage tables."""
+    _begin_immediate(conn)
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS analysis_cache_entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            analysis_type TEXT NOT NULL,
+            path_norm TEXT NOT NULL,
+            mtime_ns INTEGER,
+            size_bytes INTEGER,
+            analysis_version INTEGER NOT NULL,
+            params_hash TEXT NOT NULL,
+            params_json TEXT NOT NULL,
+            duration_ms INTEGER NOT NULL,
+            frame_count INTEGER NOT NULL DEFAULT 0,
+            byte_size INTEGER NOT NULL DEFAULT 0,
+            computed_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+            last_accessed_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+            UNIQUE(path_norm, mtime_ns, size_bytes, analysis_type, analysis_version, params_hash)
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS analysis_scalar_frames (
+            entry_id INTEGER NOT NULL,
+            position_ms INTEGER NOT NULL,
+            level_left REAL NOT NULL,
+            level_right REAL NOT NULL,
+            PRIMARY KEY (entry_id, position_ms),
+            FOREIGN KEY(entry_id) REFERENCES analysis_cache_entries(id) ON DELETE CASCADE
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS analysis_spectrum_frames (
+            entry_id INTEGER NOT NULL,
+            frame_idx INTEGER NOT NULL,
+            position_ms INTEGER NOT NULL,
+            bands BLOB NOT NULL,
+            PRIMARY KEY (entry_id, frame_idx),
+            FOREIGN KEY(entry_id) REFERENCES analysis_cache_entries(id) ON DELETE CASCADE
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_analysis_cache_lookup ON analysis_cache_entries(analysis_type, path_norm, analysis_version, params_hash)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_analysis_cache_access ON analysis_cache_entries(last_accessed_at)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_analysis_cache_computed ON analysis_cache_entries(computed_at)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_analysis_scalar_pos ON analysis_scalar_frames(entry_id, position_ms)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_analysis_spectrum_pos ON analysis_spectrum_frames(entry_id, position_ms)"
+    )
+    # Migrate existing scalar envelope cache rows into generic analysis cache tables.
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO analysis_cache_entries (
+            analysis_type,
+            path_norm,
+            mtime_ns,
+            size_bytes,
+            analysis_version,
+            params_hash,
+            params_json,
+            duration_ms,
+            frame_count,
+            byte_size,
+            computed_at,
+            last_accessed_at
+        )
+        SELECT
+            'scalar',
+            e.path_norm,
+            e.mtime_ns,
+            e.size_bytes,
+            e.analysis_version,
+            ?,
+            ?,
+            e.duration_ms,
+            COUNT(p.position_ms),
+            COUNT(p.position_ms) * 24,
+            e.computed_at,
+            e.computed_at
+        FROM audio_envelopes AS e
+        LEFT JOIN audio_envelope_points AS p
+          ON p.envelope_id = e.id
+        GROUP BY
+            e.id,
+            e.path_norm,
+            e.mtime_ns,
+            e.size_bytes,
+            e.analysis_version,
+            e.duration_ms,
+            e.computed_at
+        """,
+        (_SCALAR_DEFAULT_PARAMS_HASH, _SCALAR_DEFAULT_PARAMS_JSON),
+    )
+    conn.execute(
+        """
+        INSERT OR REPLACE INTO analysis_scalar_frames (
+            entry_id,
+            position_ms,
+            level_left,
+            level_right
+        )
+        SELECT
+            a.id,
+            p.position_ms,
+            p.level_left,
+            p.level_right
+        FROM audio_envelopes AS e
+        JOIN analysis_cache_entries AS a
+          ON a.analysis_type = 'scalar'
+         AND a.path_norm = e.path_norm
+         AND a.analysis_version = e.analysis_version
+         AND a.params_hash = ?
+         AND a.params_json = ?
+         AND a.mtime_ns IS e.mtime_ns
+         AND a.size_bytes IS e.size_bytes
+        JOIN audio_envelope_points AS p
+          ON p.envelope_id = e.id
+        """,
+        (_SCALAR_DEFAULT_PARAMS_HASH, _SCALAR_DEFAULT_PARAMS_JSON),
     )
 
 

@@ -17,6 +17,8 @@ from tz_player.services.playback_backend import (
     StateChanged,
 )
 from tz_player.services.player_service import PlayerService, PlayerState, TrackInfo
+from tz_player.services.spectrum_service import SpectrumReading
+from tz_player.services.spectrum_store import SpectrumParams
 
 
 def _run(coro):
@@ -223,6 +225,104 @@ def test_player_service_uses_envelope_source_when_live_unavailable() -> None:
         assert service.state.level_right == 0.44
         assert envelope.calls
         assert envelope.calls[-1][0] == "/tmp/song.mp3"
+        await service.shutdown()
+
+    _run(run())
+
+
+def test_player_service_sets_spectrum_state_when_enabled() -> None:
+    class NoLiveFakeBackend(FakePlaybackBackend):
+        async def get_level_sample(self) -> LevelSample | None:
+            return None
+
+    class SpectrumServiceStub:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str | None, int, SpectrumParams]] = []
+
+        async def sample(
+            self,
+            *,
+            track_path: str | None,
+            position_ms: int,
+            params: SpectrumParams,
+        ) -> SpectrumReading:
+            self.calls.append((track_path, position_ms, params))
+            return SpectrumReading(
+                bands=bytes([1, 2, 3, 4]),
+                source="cache",
+                status="ready",
+            )
+
+    async def emit_event(_event: object) -> None:
+        return None
+
+    async def run() -> None:
+        spectrum = SpectrumServiceStub()
+        service = PlayerService(
+            emit_event=emit_event,
+            track_info_provider=_track_info_provider,
+            backend=NoLiveFakeBackend(tick_interval_ms=50),
+            spectrum_service=spectrum,  # type: ignore[arg-type]
+            spectrum_params=SpectrumParams(band_count=4, hop_ms=40),
+            should_sample_spectrum=lambda: True,
+        )
+        await service.start()
+        await service.play_item(1, 1)
+        await asyncio.sleep(0.35)
+        assert service.state.spectrum_bands == bytes([1, 2, 3, 4])
+        assert service.state.spectrum_source == "cache"
+        assert service.state.spectrum_status == "ready"
+        assert spectrum.calls
+        assert spectrum.calls[-1][0] == "/tmp/song.mp3"
+        await service.shutdown()
+
+    _run(run())
+
+
+def test_player_service_skips_spectrum_sampling_when_disabled() -> None:
+    class NoLiveFakeBackend(FakePlaybackBackend):
+        async def get_level_sample(self) -> LevelSample | None:
+            return None
+
+    class SpectrumServiceStub:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def sample(
+            self,
+            *,
+            track_path: str | None,
+            position_ms: int,
+            params: SpectrumParams,
+        ) -> SpectrumReading:
+            del track_path, position_ms, params
+            self.calls += 1
+            return SpectrumReading(
+                bands=bytes([1, 2, 3, 4]),
+                source="cache",
+                status="ready",
+            )
+
+    async def emit_event(_event: object) -> None:
+        return None
+
+    async def run() -> None:
+        spectrum = SpectrumServiceStub()
+        service = PlayerService(
+            emit_event=emit_event,
+            track_info_provider=_track_info_provider,
+            backend=NoLiveFakeBackend(tick_interval_ms=50),
+            spectrum_service=spectrum,  # type: ignore[arg-type]
+            spectrum_params=SpectrumParams(band_count=4, hop_ms=40),
+            should_sample_spectrum=lambda: False,
+        )
+        await service.start()
+        await service.play_item(1, 1)
+        await asyncio.sleep(0.35)
+        assert service.state.spectrum_bands is None
+        assert service.state.spectrum_source is None
+        assert service.state.spectrum_status is None
+        assert spectrum.calls == 0
         await service.shutdown()
 
     _run(run())

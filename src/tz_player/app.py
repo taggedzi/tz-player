@@ -38,17 +38,21 @@ from .events import PlayerStateChanged, TrackChanged
 from .logging_utils import setup_logging
 from .paths import db_path, log_dir, state_path, visualizer_plugin_dir
 from .runtime_config import resolve_log_level
+from .services.analysis_cache_pruner import SqliteAnalysisCachePruner
 from .services.audio_envelope_analysis import (
     analyze_track_envelope,
     ffmpeg_available,
     requires_ffmpeg_for_envelope,
 )
 from .services.audio_envelope_store import SqliteEnvelopeStore
+from .services.audio_spectrum_analysis import analyze_track_spectrum
 from .services.audio_tags import read_audio_tags
 from .services.fake_backend import FakePlaybackBackend
 from .services.metadata_service import MetadataService
 from .services.player_service import PlayerService, PlayerState, TrackInfo
 from .services.playlist_store import PlaylistStore
+from .services.spectrum_service import SpectrumService
+from .services.spectrum_store import SpectrumParams, SqliteSpectrumStore
 from .services.vlc_backend import VLCPlaybackBackend
 from .state_store import AppState, load_state_with_notice, save_state
 from .ui.actions_menu import ActionsMenuDismissed, ActionsMenuPopup, ActionsMenuSelected
@@ -68,6 +72,10 @@ logger = logging.getLogger(__name__)
 METADATA_REFRESH_DEBOUNCE = 0.2
 SPEED_MIN = 0.5
 SPEED_MAX = 4.0
+ANALYSIS_CACHE_MAX_BYTES = 2 * 1024 * 1024 * 1024
+ANALYSIS_CACHE_MAX_AGE_DAYS = 180
+ANALYSIS_CACHE_MIN_RECENT_TRACKS_PROTECTED = 200
+ANALYSIS_CACHE_PRUNE_TRIGGER_THRESHOLD = 0.90
 VISUALIZER_PLUGIN_SECURITY_MODES = {"off", "warn", "enforce"}
 VISUALIZER_PLUGIN_RUNTIME_MODES = {"in-process", "isolated"}
 CYBERPUNK_THEME = Theme(
@@ -303,9 +311,15 @@ class TzPlayerApp(App):
         self.current_track: TrackInfo | None = None
         self.metadata_service: MetadataService | None = None
         self.audio_envelope_store: SqliteEnvelopeStore | None = None
+        self.spectrum_store: SqliteSpectrumStore | None = None
+        self.spectrum_service: SpectrumService | None = None
+        self.analysis_cache_pruner: SqliteAnalysisCachePruner | None = None
         self._metadata_refresh_task: asyncio.Task[None] | None = None
         self._metadata_pending_ids: set[int] = set()
         self._envelope_analysis_tasks: dict[str, asyncio.Task[None]] = {}
+        self._spectrum_analysis_tasks: dict[str, asyncio.Task[None]] = {}
+        self._spectrum_params = SpectrumParams(band_count=48, hop_ms=40)
+        self._analysis_cache_prune_task: asyncio.Task[None] | None = None
         self._next_prewarm_task: asyncio.Task[None] | None = None
         self._next_prewarm_context: tuple[int, int, str, bool, int] | None = None
         self._envelope_missing_ffmpeg_warned: set[str] = set()
@@ -390,6 +404,13 @@ class TzPlayerApp(App):
                 await self.store.initialize()
                 self.audio_envelope_store = SqliteEnvelopeStore(db_path())
                 await self.audio_envelope_store.initialize()
+                self.spectrum_store = SqliteSpectrumStore(db_path())
+                await self.spectrum_store.initialize()
+                self.spectrum_service = SpectrumService(
+                    cache_provider=self.spectrum_store,
+                    schedule_analysis=self._schedule_spectrum_analysis_for_path,
+                )
+                self.analysis_cache_pruner = SqliteAnalysisCachePruner(db_path())
                 playlist_id = await self.store.ensure_playlist("Default")
             except Exception as exc:
                 raise RuntimeError("Database startup failed") from exc
@@ -407,6 +428,10 @@ class TzPlayerApp(App):
                 prev_track_provider=self._prev_track_provider,
                 playlist_item_ids_provider=self._playlist_item_ids_provider,
                 envelope_provider=self.audio_envelope_store,
+                schedule_envelope_analysis=self._schedule_envelope_analysis_for_path,
+                spectrum_service=self.spectrum_service,
+                spectrum_params=self._spectrum_params,
+                should_sample_spectrum=self._active_visualizer_requests_spectrum,
                 initial_state=self.player_state,
             )
             self.metadata_service = MetadataService(
@@ -435,6 +460,9 @@ class TzPlayerApp(App):
             await pane.update_transport_controls(self.player_state)
             self._update_current_track_pane()
             await self._start_visualizer()
+            self._schedule_analysis_cache_prune(
+                reason="startup", delay_s=5.0, force=True
+            )
             if state_notice is not None:
                 await self.push_screen(ErrorModal(state_notice))
         except Exception as exc:
@@ -452,6 +480,11 @@ class TzPlayerApp(App):
             with contextlib.suppress(asyncio.CancelledError):
                 await self._state_save_task
             self._state_save_task = None
+        if self._analysis_cache_prune_task is not None:
+            self._analysis_cache_prune_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._analysis_cache_prune_task
+            self._analysis_cache_prune_task = None
         await self._persist_state_now()
         for task in self._envelope_analysis_tasks.values():
             task.cancel()
@@ -460,6 +493,13 @@ class TzPlayerApp(App):
                 *self._envelope_analysis_tasks.values(), return_exceptions=True
             )
             self._envelope_analysis_tasks.clear()
+        for task in self._spectrum_analysis_tasks.values():
+            task.cancel()
+        if self._spectrum_analysis_tasks:
+            await asyncio.gather(
+                *self._spectrum_analysis_tasks.values(), return_exceptions=True
+            )
+            self._spectrum_analysis_tasks.clear()
         self._cancel_next_track_prewarm()
         if self.player_service is not None:
             await self.player_service.shutdown()
@@ -684,7 +724,6 @@ class TzPlayerApp(App):
             self.player_state = event.state
             if event.state.error:
                 self._set_runtime_notice(event.state.error, ttl_s=8.0)
-            self._schedule_next_track_prewarm()
             playing_id = (
                 event.state.item_id
                 if event.state.status in {"playing", "paused"}
@@ -699,8 +738,6 @@ class TzPlayerApp(App):
         elif isinstance(event, TrackChanged):
             self.current_track = event.track_info
             self._update_current_track_pane()
-            if event.track_info is not None:
-                self._schedule_envelope_analysis(event.track_info)
             item_id = self.player_state.item_id
             if (
                 item_id is not None
@@ -730,6 +767,131 @@ class TzPlayerApp(App):
         task = asyncio.create_task(self._ensure_envelope_for_track(track))
         self._envelope_analysis_tasks[key] = task
         task.add_done_callback(self._make_envelope_task_cleanup(key))
+
+    async def _schedule_envelope_analysis_for_path(self, track_path: str) -> None:
+        """Schedule lazy envelope analysis requested by level sampling."""
+        if not track_path:
+            return
+        track = self.current_track
+        if track is not None and track.path == track_path:
+            self._schedule_envelope_analysis(track)
+            return
+        self._schedule_envelope_analysis(
+            TrackInfo(
+                title=None,
+                artist=None,
+                album=None,
+                year=None,
+                path=track_path,
+                duration_ms=None,
+            )
+        )
+
+    async def _schedule_spectrum_analysis_for_path(
+        self, track_path: str, params: SpectrumParams
+    ) -> None:
+        """Schedule lazy spectrum analysis when a visualizer requests it."""
+        if self.spectrum_store is None or not track_path:
+            return
+        key = f"{track_path}|bands={params.band_count}|hop={params.hop_ms}"
+        existing = self._spectrum_analysis_tasks.get(key)
+        if existing is not None and not existing.done():
+            return
+        task = asyncio.create_task(self._ensure_spectrum_for_track(track_path, params))
+        self._spectrum_analysis_tasks[key] = task
+        task.add_done_callback(
+            lambda _task: self._spectrum_analysis_tasks.pop(key, None)
+        )
+
+    async def _ensure_spectrum_for_track(
+        self, track_path: str, params: SpectrumParams
+    ) -> None:
+        if self.spectrum_store is None:
+            return
+        path = Path(track_path)
+        try:
+            if await self.spectrum_store.has_spectrum(path, params=params):
+                return
+            result = await run_blocking(
+                analyze_track_spectrum,
+                path,
+                band_count=params.band_count,
+                hop_ms=params.hop_ms,
+            )
+            if result is None or not result.frames:
+                return
+            await self.spectrum_store.upsert_spectrum(
+                path,
+                duration_ms=max(1, result.duration_ms),
+                params=params,
+                frames=result.frames,
+            )
+            self._schedule_analysis_cache_prune(reason="post_write", delay_s=0.0)
+            logger.info(
+                "Spectrum analyzed for %s (%d frames)", path, len(result.frames)
+            )
+        except Exception as exc:
+            logger.debug("Spectrum analysis failed for %s: %s", path, exc)
+
+    def _schedule_analysis_cache_prune(
+        self,
+        *,
+        reason: str,
+        delay_s: float,
+        force: bool = False,
+    ) -> None:
+        if self.analysis_cache_pruner is None:
+            return
+        if (
+            self._analysis_cache_prune_task is not None
+            and not self._analysis_cache_prune_task.done()
+        ):
+            return
+        self._analysis_cache_prune_task = asyncio.create_task(
+            self._run_analysis_cache_prune(
+                reason=reason,
+                delay_s=max(0.0, float(delay_s)),
+                force=force,
+            )
+        )
+        self._analysis_cache_prune_task.add_done_callback(
+            lambda _task: setattr(self, "_analysis_cache_prune_task", None)
+        )
+
+    async def _run_analysis_cache_prune(
+        self,
+        *,
+        reason: str,
+        delay_s: float,
+        force: bool,
+    ) -> None:
+        if self.analysis_cache_pruner is None:
+            return
+        if delay_s > 0:
+            await asyncio.sleep(delay_s)
+        if not force:
+            should_prune = await self.analysis_cache_pruner.exceeds_threshold(
+                max_cache_bytes=ANALYSIS_CACHE_MAX_BYTES,
+                threshold=ANALYSIS_CACHE_PRUNE_TRIGGER_THRESHOLD,
+            )
+            if not should_prune:
+                return
+        result = await self.analysis_cache_pruner.prune(
+            max_cache_bytes=ANALYSIS_CACHE_MAX_BYTES,
+            max_age_days=ANALYSIS_CACHE_MAX_AGE_DAYS,
+            min_recent_tracks_protected=ANALYSIS_CACHE_MIN_RECENT_TRACKS_PROTECTED,
+        )
+        logger.info(
+            "Analysis cache prune completed",
+            extra={
+                "event": "analysis_cache_pruned",
+                "reason": reason,
+                "entries_pruned": result.entries_pruned,
+                "bytes_before": result.bytes_before,
+                "bytes_after": result.bytes_after,
+                "bytes_reclaimed": result.bytes_reclaimed,
+            },
+        )
 
     def _schedule_next_track_prewarm(self, *, force: bool = False) -> None:
         """Prewarm envelope data for the predicted next track while playing.
@@ -848,6 +1010,7 @@ class TzPlayerApp(App):
                 result.points,
                 duration_ms=max(1, result.duration_ms),
             )
+            self._schedule_analysis_cache_prune(reason="post_write", delay_s=0.0)
             logger.info(
                 "Envelope analyzed for %s (%d points)", path, len(result.points)
             )
@@ -984,6 +1147,10 @@ class TzPlayerApp(App):
             level_left=self.player_state.level_left,
             level_right=self.player_state.level_right,
             level_source=self.player_state.level_source,
+            level_status=self.player_state.level_status,
+            spectrum_bands=self.player_state.spectrum_bands,
+            spectrum_source=self.player_state.spectrum_source,
+            spectrum_status=self.player_state.spectrum_status,
         )
         try:
             output = self.visualizer_host.render_frame(frame, context)
@@ -1004,6 +1171,11 @@ class TzPlayerApp(App):
         else:
             render_text = output
         pane.update(Text.from_ansi(render_text))
+
+    def _active_visualizer_requests_spectrum(self) -> bool:
+        if self.visualizer_host is None:
+            return False
+        return self.visualizer_host.active_requires_spectrum
 
     def _update_audio_level_notice(self, track_path: str) -> None:
         if self.current_track is None:

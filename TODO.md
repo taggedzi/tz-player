@@ -84,6 +84,110 @@ Execution tracker derived from `SPEC.md`.
   - `.ubuntu-venv/bin/python -m mypy src`
   - `.ubuntu-venv/bin/python -m pytest`
 
+### T-039 Lazy Persistent Analysis Cache (Scalar + FFT) with Retention and Migration
+- Spec Ref: Section `5` (audio level service), Section `6` (plugin model), Section `7` (data/state), Section `8` (reliability), `WF-06`
+- Status: `done`
+- Goal:
+  - Implement lazy, on-demand analysis caching for both scalar level data and FFT/spectrum data.
+  - Persist results in DB once computed so they survive playlist clear operations.
+  - Enforce retention policy to keep storage bounded.
+  - Serve both scalar and FFT analysis to visualizer plugins through non-blocking services.
+- Scope:
+  - Add FFT/spectrum cache schema + service.
+  - Refactor scalar cache lifecycle so it is not implicitly tied to playlist contents.
+  - Add migration path from current schema to new cache model.
+  - Add service contracts for plugin consumption of scalar + FFT on request.
+  - Keep all analysis work async/background and non-blocking to Textual/UI loop.
+- Non-goals:
+  - Real-time live FFT capture from playback backends in this phase.
+  - Sidecar file export/import in this phase.
+- Acceptance:
+  - No scalar/FFT analysis is computed unless requested by active visualization flows.
+  - Once computed, scalar/FFT analysis is persisted and reused across restarts and playlist clears.
+  - Cache retention policy is enforced deterministically and verified by tests.
+  - Plugins can request scalar + FFT data via stable service contracts with source metadata.
+  - DB migration is backward-compatible and validated by migration tests.
+- Tasks:
+  - `T-039A` Define analysis data contracts for scalar + FFT services. Status: `done`
+    - Finalize request/response models for scalar and spectrum samples.
+    - Include source metadata tokens (`live|cached|fallback` style).
+    - Define lazy-load state tokens (`ready|loading|missing|error`).
+  - `T-039B` Design persistent schema for FFT cache and scalar cache ownership. Status: `done`
+    - Add FFT analysis tables (analysis metadata + frame/band payload storage).
+    - Ensure scalar cache tables are modeled as media-analysis cache, not playlist-owned data.
+    - Add indexes for efficient position-based lookup.
+  - `T-039C` Implement DB migration path and compatibility handling. Status: `done`
+    - Add schema migration steps from current DB version to new analysis-cache schema.
+    - Ensure startup upgrades are deterministic and crash-safe.
+    - Add downgrade/read-compat expectations in docs/tests where applicable.
+  - `T-039D` Implement `SpectrumService` (lazy, async, background-only). Status: `done`
+    - Add on-demand analysis scheduling only when spectrum data is requested.
+    - Run decode/FFT work off the event loop using background workers.
+    - Persist computed results and serve cached frames by playback position.
+  - `T-039E` Refactor scalar analysis service to same lazy persistent model. Status: `done`
+    - Ensure scalar analysis is request-triggered and persisted once computed.
+    - Preserve existing fallback behavior and source-priority semantics.
+    - Ensure playlist clear does not erase analysis cache.
+  - `T-039F` Implement retention policy and cache pruning. Status: `done`
+    - Add deterministic pruning policy with bounded storage behavior.
+    - Run pruning off-loop and avoid UI starvation.
+    - Emit observability events for prune runs and reclaimed entries/bytes.
+  - `T-039G` Plugin-facing API wiring for scalar + FFT requests. Status: `done`
+    - Add plugin input/service access pattern for optional FFT and scalar reads.
+    - Guarantee non-blocking render path (cache-only reads in render; schedule work elsewhere).
+    - Keep fallback rendering deterministic when analysis is unavailable/loading.
+  - `T-039G.1` Visualizer contract/versioning transition plan. Status: `done`
+    - Decide whether to extend current plugin contract or introduce a new versioned contract surface.
+    - Define compatibility guarantees for existing plugins and required fields for new plugins.
+    - Add explicit plugin API version bump rules and deprecation timeline notes.
+  - `T-039G.2` Backward-compat adapter for existing visualizers. Status: `done`
+    - Ensure all current built-in visualizers continue to run unchanged under the new data-service model.
+    - Provide adapter/shim behavior so old plugins that do not request FFT/scalar service data still render correctly.
+    - Add fallback handling for plugins missing new optional capabilities.
+  - `T-039G.3` Built-in visualizer update pass for new service access. Status: `done`
+    - Update built-in visualizers that benefit from scalar/FFT data to use the new request path safely.
+    - Keep deterministic output and frame-budget constraints intact.
+    - Ensure each updated built-in visualizer handles `loading|missing|error` service states explicitly.
+  - `T-039G.4` Contributor-facing plugin authoring guidance update. Status: `done`
+    - Document old vs new contract usage clearly for plugin authors.
+    - Provide minimal examples for:
+      - legacy-compatible visualizer
+      - scalar-aware visualizer
+      - FFT-aware visualizer
+    - Document required behavior for non-blocking render and lazy service requests.
+  - `T-039H` Docs, ADR, and acceptance mapping updates. Status: `done`
+    - Update `docs/visualizations.md`, `docs/usage.md`, and workflow docs for lazy cache semantics.
+    - Create/update ADR for analysis-cache schema + retention model.
+    - Update `docs/workflow-acceptance.md` with new test mapping.
+  - `T-039I` Validation and resilience test suite. Status: `done`
+    - Unit tests for contracts, scheduling, cache hits/misses, and pruning behavior.
+    - Migration tests for old DB -> new schema.
+    - Integration tests for plugin request flows and playlist-clear persistence behavior.
+    - Non-blocking regression tests for UI responsiveness during analysis/prune work.
+    - Compatibility tests proving existing built-in visualizers behave unchanged under new contract plumbing.
+    - Contract tests for legacy plugin compatibility and new-version plugin capability signaling.
+- Decisions Needed (Blocked Until Chosen):
+  - `T-039D.1` FFT representation and density defaults. Status: `done`
+    - Chosen defaults:
+      - `band_count = 48`
+      - `hop_ms = 40` (about 25 FPS equivalent)
+      - Store spectrum bands as quantized `uint8` values.
+  - `T-039F.1` Retention policy limits. Status: `done`
+    - Chosen policy: hybrid retention with:
+      - `max_cache_bytes = 2 GB`
+      - `max_age_days = 180`
+      - `min_recent_tracks_protected = 200` (unless hard cap must be enforced)
+  - `T-039F.2` Prune trigger policy. Status: `done`
+    - Chosen trigger strategy: hybrid
+      - Run prune once on startup with delayed scheduling.
+      - Run prune after analysis writes only when cache usage exceeds `90%` of cap.
+      - Manual prune command is optional future enhancement.
+- Validation (per implementation change set):
+  - `.ubuntu-venv/bin/python -m ruff check .`
+  - `.ubuntu-venv/bin/python -m ruff format --check .`
+  - `.ubuntu-venv/bin/python -m mypy src`
+  - `.ubuntu-venv/bin/python -m pytest`
+
 ### DOC-001 Internal Documentation Campaign (All Project Files)
 - Status: `done`
 - Goal:

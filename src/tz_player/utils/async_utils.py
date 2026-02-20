@@ -29,5 +29,13 @@ async def run_blocking(func: Callable[..., T], /, *args: Any, **kwargs: Any) -> 
     loop = asyncio.get_running_loop()
     if kwargs:
         bound = partial(func, *args, **kwargs)
-        return await loop.run_in_executor(_IO_EXECUTOR, bound)
-    return await loop.run_in_executor(_IO_EXECUTOR, func, *args)
+        future = loop.run_in_executor(_IO_EXECUTOR, bound)
+    else:
+        future = loop.run_in_executor(_IO_EXECUTOR, func, *args)
+    # Some environments can miss thread->loop wakeups for executor completion.
+    # Polling with a short timeout keeps completion deterministic.
+    while True:
+        try:
+            return await asyncio.wait_for(asyncio.shield(future), timeout=0.1)
+        except asyncio.TimeoutError:
+            continue

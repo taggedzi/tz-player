@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Literal, Protocol
 
 from .playback_backend import LevelSample
 
 LevelSource = Literal["live", "envelope", "fallback"]
+LevelStatus = Literal["ready", "loading", "missing", "error"]
 PlaybackStatus = Literal["idle", "loading", "playing", "paused", "stopped", "error"]
 
 
@@ -27,6 +29,7 @@ class AudioLevelReading:
     left: float
     right: float
     source: LevelSource
+    status: LevelStatus = "ready"
 
 
 class AudioLevelService:
@@ -37,9 +40,11 @@ class AudioLevelService:
         *,
         live_provider: object,
         envelope_provider: EnvelopeLevelProvider | None = None,
+        schedule_envelope_analysis: Callable[[str], Awaitable[None]] | None = None,
     ) -> None:
         self._live_provider = live_provider
         self._envelope_provider = envelope_provider
+        self._schedule_envelope_analysis = schedule_envelope_analysis
 
     async def sample(
         self,
@@ -69,6 +74,22 @@ class AudioLevelService:
                     left=_clamp(envelope.left),
                     right=_clamp(envelope.right),
                     source="envelope",
+                    status="ready",
+                )
+            if self._schedule_envelope_analysis is not None:
+                await self._schedule_envelope_analysis(track_path)
+                left, right = _fallback_levels(
+                    status=status,
+                    position_ms=position_ms,
+                    duration_ms=duration_ms,
+                    volume=volume,
+                    speed=speed,
+                )
+                return AudioLevelReading(
+                    left=left,
+                    right=right,
+                    source="fallback",
+                    status="loading",
                 )
 
         left, right = _fallback_levels(
@@ -78,7 +99,9 @@ class AudioLevelService:
             volume=volume,
             speed=speed,
         )
-        return AudioLevelReading(left=left, right=right, source="fallback")
+        return AudioLevelReading(
+            left=left, right=right, source="fallback", status="missing"
+        )
 
     async def _sample_live(self) -> LevelSample | None:
         method = getattr(self._live_provider, "get_level_sample", None)

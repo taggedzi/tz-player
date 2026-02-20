@@ -29,6 +29,8 @@ from tz_player.services.playback_backend import (
     PositionUpdated,
     StateChanged,
 )
+from tz_player.services.spectrum_service import SpectrumReading, SpectrumService
+from tz_player.services.spectrum_store import SpectrumParams
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +82,10 @@ class PlayerState:
     level_left: float | None = None
     level_right: float | None = None
     level_source: str | None = None
+    level_status: str | None = None
+    spectrum_bands: bytes | None = None
+    spectrum_source: str | None = None
+    spectrum_status: str | None = None
     error: str | None = None
 
 
@@ -98,6 +104,10 @@ class PlayerService:
         | None = None,
         playlist_item_ids_provider: Callable[[int], Awaitable[list[int]]] | None = None,
         envelope_provider: EnvelopeLevelProvider | None = None,
+        schedule_envelope_analysis: Callable[[str], Awaitable[None]] | None = None,
+        spectrum_service: SpectrumService | None = None,
+        spectrum_params: SpectrumParams | None = None,
+        should_sample_spectrum: Callable[[], bool] | None = None,
         shuffle_random: random.Random | None = None,
         default_duration_ms: int = 180_000,
         initial_state: PlayerState | None = None,
@@ -126,7 +136,11 @@ class PlayerService:
         self._audio_level_service = AudioLevelService(
             live_provider=backend,
             envelope_provider=envelope_provider,
+            schedule_envelope_analysis=schedule_envelope_analysis,
         )
+        self._spectrum_service = spectrum_service
+        self._spectrum_params = spectrum_params
+        self._should_sample_spectrum = should_sample_spectrum
         self._current_track_path: str | None = None
         self._backend.set_event_handler(self._handle_backend_event)
 
@@ -166,6 +180,10 @@ class PlayerService:
                 level_left=None,
                 level_right=None,
                 level_source=None,
+                level_status=None,
+                spectrum_bands=None,
+                spectrum_source=None,
+                spectrum_status=None,
                 error=None,
             )
             # A stale manual-stop latch must never suppress natural track-end advance.
@@ -256,6 +274,10 @@ class PlayerService:
                 level_left=None,
                 level_right=None,
                 level_source=None,
+                level_status=None,
+                spectrum_bands=None,
+                spectrum_source=None,
+                spectrum_status=None,
             )
             self._end_handled_item_id = None
             self._max_position_seen_ms = 0
@@ -695,6 +717,7 @@ class PlayerService:
                         speed=self._state.speed,
                         track_path=self._current_track_path,
                     )
+                    spectrum_reading = await self._sample_spectrum_if_enabled(position)
                 except Exception:  # pragma: no cover - backend safety net
                     continue
                 emit = False
@@ -723,14 +746,17 @@ class PlayerService:
                         left = _clamp_float(reading.left, 0.0, 1.0)
                         right = _clamp_float(reading.right, 0.0, 1.0)
                         source = reading.source
+                        level_status = reading.status
                     else:
                         left = None
                         right = None
                         source = None
+                        level_status = None
                     if (
                         left != self._state.level_left
                         or right != self._state.level_right
                         or source != self._state.level_source
+                        or level_status != self._state.level_status
                     ):
                         previous_source = self._state.level_source
                         self._state = replace(
@@ -738,6 +764,7 @@ class PlayerService:
                             level_left=left,
                             level_right=right,
                             level_source=source,
+                            level_status=level_status,
                         )
                         if source != previous_source and source is not None:
                             logger.info(
@@ -747,6 +774,29 @@ class PlayerService:
                                 self._state.item_id,
                                 self._current_track_path,
                             )
+                        emit = True
+                    spectrum_bands: bytes | None
+                    spectrum_source: str | None
+                    spectrum_status: str | None
+                    if spectrum_reading is not None:
+                        spectrum_bands = spectrum_reading.bands
+                        spectrum_source = spectrum_reading.source
+                        spectrum_status = spectrum_reading.status
+                    else:
+                        spectrum_bands = None
+                        spectrum_source = None
+                        spectrum_status = None
+                    if (
+                        spectrum_bands != self._state.spectrum_bands
+                        or spectrum_source != self._state.spectrum_source
+                        or spectrum_status != self._state.spectrum_status
+                    ):
+                        self._state = replace(
+                            self._state,
+                            spectrum_bands=spectrum_bands,
+                            spectrum_source=spectrum_source,
+                            spectrum_status=spectrum_status,
+                        )
                         emit = True
                     if (
                         backend_state in {"stopped", "idle"}
@@ -792,6 +842,27 @@ class PlayerService:
                     await self._emit_state()
         except asyncio.CancelledError:
             return
+
+    async def _sample_spectrum_if_enabled(
+        self, position_ms: int
+    ) -> SpectrumReading | None:
+        if self._spectrum_service is None or self._spectrum_params is None:
+            return None
+        if self._current_track_path is None:
+            return None
+        if (
+            self._should_sample_spectrum is not None
+            and not self._should_sample_spectrum()
+        ):
+            return None
+        try:
+            return await self._spectrum_service.sample(
+                track_path=self._current_track_path,
+                position_ms=max(0, position_ms),
+                params=self._spectrum_params,
+            )
+        except Exception:
+            return None
 
 
 def _clamp(value: int, min_value: int, max_value: int) -> int:

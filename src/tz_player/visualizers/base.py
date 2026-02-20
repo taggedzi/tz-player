@@ -41,6 +41,10 @@ class VisualizerFrameInput:
     level_left: float | None = None
     level_right: float | None = None
     level_source: str | None = None
+    level_status: str | None = None
+    spectrum_bands: bytes | None = None
+    spectrum_source: str | None = None
+    spectrum_status: str | None = None
 
 
 class VisualizerPlugin(Protocol):

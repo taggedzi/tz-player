@@ -63,6 +63,22 @@ class BadActivatePlugin:
         return "ok"
 
 
+@dataclass
+class SpectrumPlugin:
+    plugin_id: str = "spectrum"
+    display_name: str = "spectrum"
+    requires_spectrum: bool = True
+
+    def on_activate(self, context: VisualizerContext) -> None:
+        return None
+
+    def on_deactivate(self) -> None:
+        return None
+
+    def render(self, frame: VisualizerFrameInput) -> str:
+        return "ok"
+
+
 def _frame() -> VisualizerFrameInput:
     """Build minimal frame payload for host-render tests."""
     return VisualizerFrameInput(
@@ -147,3 +163,19 @@ def test_activate_raises_clear_error_when_fallback_activation_fails() -> None:
 
     with pytest.raises(RuntimeError, match="Fallback visualizer activation failed"):
         host.activate("bad-activate", context)
+
+
+def test_active_requires_spectrum_reflects_plugin_capability() -> None:
+    registry = VisualizerRegistry({"spectrum": SpectrumPlugin}, default_id="spectrum")
+    host = VisualizerHost(registry)
+    context = VisualizerContext(ansi_enabled=True, unicode_enabled=True)
+    host.activate("spectrum", context)
+    assert host.active_requires_spectrum is True
+
+
+def test_active_requires_spectrum_defaults_false_for_legacy_plugins() -> None:
+    registry = VisualizerRegistry({"good": GoodPlugin}, default_id="good")
+    host = VisualizerHost(registry)
+    context = VisualizerContext(ansi_enabled=True, unicode_enabled=True)
+    host.activate("good", context)
+    assert host.active_requires_spectrum is False
