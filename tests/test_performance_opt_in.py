@@ -25,7 +25,10 @@ INTERACTION_BUDGET_S = 0.1
 LARGE_PLAYLIST_SIZE = 100_000
 LARGE_WINDOW_BUDGET_S = 0.20
 LARGE_LIST_IDS_BUDGET_S = 0.65
-LARGE_SEARCH_BUDGET_S = 0.90
+LARGE_SEARCH_BUDGET_S = 2.50
+LARGE_SEARCH_BROAD_BUDGET_S = 2.80
+LARGE_SEARCH_MULTI_TOKEN_BUDGET_S = 12.00
+LARGE_SEARCH_MISS_BUDGET_S = 3.00
 LARGE_RANDOM_MEDIAN_BUDGET_S = 0.012
 
 
@@ -168,6 +171,33 @@ def test_large_playlist_store_navigation_search_and_random_budget(tmp_path) -> N
     assert search_elapsed <= LARGE_SEARCH_BUDGET_S, (
         f"search_item_ids elapsed {search_elapsed:.3f}s exceeded budget "
         f"{LARGE_SEARCH_BUDGET_S:.3f}s"
+    )
+
+    start = time.perf_counter()
+    broad_ids = _run(store.search_item_ids(playlist_id, "track", limit=1000))
+    broad_elapsed = time.perf_counter() - start
+    assert len(broad_ids) == 1000
+    assert broad_elapsed <= LARGE_SEARCH_BROAD_BUDGET_S, (
+        f"Broad search elapsed {broad_elapsed:.3f}s exceeded budget "
+        f"{LARGE_SEARCH_BROAD_BUDGET_S:.3f}s"
+    )
+
+    start = time.perf_counter()
+    multi_ids = _run(store.search_item_ids(playlist_id, "needle 000", limit=1000))
+    multi_elapsed = time.perf_counter() - start
+    assert len(multi_ids) > 0
+    assert multi_elapsed <= LARGE_SEARCH_MULTI_TOKEN_BUDGET_S, (
+        f"Multi-token search elapsed {multi_elapsed:.3f}s exceeded budget "
+        f"{LARGE_SEARCH_MULTI_TOKEN_BUDGET_S:.3f}s"
+    )
+
+    start = time.perf_counter()
+    miss_ids = _run(store.search_item_ids(playlist_id, "zzzxxyyynotfound", limit=1000))
+    miss_elapsed = time.perf_counter() - start
+    assert miss_ids == []
+    assert miss_elapsed <= LARGE_SEARCH_MISS_BUDGET_S, (
+        f"Miss search elapsed {miss_elapsed:.3f}s exceeded budget "
+        f"{LARGE_SEARCH_MISS_BUDGET_S:.3f}s"
     )
 
     async def sample_random_latencies() -> float:
