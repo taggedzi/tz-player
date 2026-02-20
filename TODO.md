@@ -42,6 +42,20 @@ Execution tracker derived from `SPEC.md`.
   - Plugins remain deterministic for same frame inputs and degrade safely when data is loading/missing.
   - Full quality gates pass after each delivered plugin change set.
 
+### T-049 Beat-Triggered Fireworks Visualizer
+- Spec Ref: Section `6` (visualizer/plugin model), Section `8` (performance/reliability), `WF-06`
+- Status: `done`
+- Goal:
+  - Add a beat-triggered fireworks visualizer that combines beat events, FFT band dominance, scalar VU intensity, and optional waveform-proxy roughness for crackle.
+- Scope:
+  - Launch rockets on beat, explode into FFT-themed bursts, and render gravity/drag/fade particle motion.
+  - Use deterministic per-track randomness so each track has a stable “firework signature.”
+  - Keep bounded particle counts and non-blocking render path.
+- Acceptance:
+  - Built-in plugin ID `viz.particle.fireworks` is selectable and stable.
+  - Visualizer responds to beat with rocket launch/explosion and degrades gracefully when inputs are missing.
+  - Full quality gates pass (ruff, format-check, mypy, pytest).
+
 ## Archived Recent Work
 
 ### T-038 User Drop-In Visualizer Plugins + Security Hardening

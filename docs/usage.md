@@ -129,6 +129,7 @@ Built-in visualizer IDs include:
 - `viz.particle.constellation`
 - `viz.particle.data_core_frag`
 - `viz.particle.plasma_stream`
+- `viz.particle.fireworks`
 - `viz.spectrum.radial`
 - `viz.typography.glitch`
 - `viz.waveform.proxy`

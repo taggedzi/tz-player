@@ -27,6 +27,7 @@ from .constellation import ConstellationVisualizer
 from .cover_ascii import CoverAsciiMotionVisualizer, CoverAsciiStaticVisualizer
 from .data_core_frag import DataCoreFragVisualizer
 from .ember_field import EmberFieldVisualizer
+from .fireworks import FireworksVisualizer
 from .gravity_well import GravityWellVisualizer
 from .hackscope import HackScopeVisualizer
 from .isolated_runner import IsolatedPluginProxy, PluginSourceSpec
@@ -186,6 +187,7 @@ class VisualizerRegistry:
             ConstellationVisualizer,
             DataCoreFragVisualizer,
             PlasmaStreamVisualizer,
+            FireworksVisualizer,
             RadialSpectrumVisualizer,
             WaveformProxyVisualizer,
             WaveformNeonVisualizer,
