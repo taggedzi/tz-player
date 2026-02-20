@@ -44,6 +44,11 @@ dependencies = [
 
 
 [project.optional-dependencies]
+analysis = [
+  # Optional higher-level audio analysis stack (beat/onset experimentation).
+  "librosa>=0.10",
+]
+
 dev = [
   # Test runner.
   "pytest>=7.4",
@@ -109,6 +114,12 @@ disallow_untyped_defs = false
 [[tool.mypy.overrides]]
 module = [
   "vlc",
+]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = [
+  "librosa",
 ]
 ignore_missing_imports = true
 

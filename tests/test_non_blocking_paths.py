@@ -11,7 +11,7 @@ import pytest
 import tz_player.services.metadata_service as metadata_service_module
 import tz_player.ui.playlist_pane as playlist_pane_module
 from tz_player.ui.playlist_pane import PlaylistPane
-from tz_player.utils.async_utils import run_blocking
+from tz_player.utils.async_utils import run_blocking, run_cpu_bound
 
 
 def _run(coro):
@@ -47,6 +47,11 @@ def test_metadata_safe_stat_uses_run_blocking(monkeypatch, tmp_path) -> None:
 def test_run_blocking_rejects_non_callable() -> None:
     with pytest.raises(TypeError, match="func must be callable"):
         _run(run_blocking(None))  # type: ignore[arg-type]
+
+
+def test_run_cpu_bound_rejects_non_callable() -> None:
+    with pytest.raises(TypeError, match="func must be callable"):
+        _run(run_cpu_bound(None))  # type: ignore[arg-type]
 
 
 def test_add_folder_scans_via_run_blocking(monkeypatch, tmp_path) -> None:

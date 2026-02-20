@@ -47,7 +47,11 @@ from .runtime_config import (
     resolve_log_level,
 )
 from .services.analysis_cache_pruner import SqliteAnalysisCachePruner
-from .services.audio_beat_analysis import analyze_track_beats
+from .services.audio_beat_analysis import (
+    analyze_track_beats,
+    analyze_track_beats_librosa,
+    librosa_available,
+)
 from .services.audio_envelope_analysis import (
     analyze_track_envelope,
     ffmpeg_available,
@@ -76,7 +80,7 @@ from .ui.actions_menu import ActionsMenuDismissed, ActionsMenuPopup, ActionsMenu
 from .ui.modals.error import ErrorModal
 from .ui.playlist_pane import PlaylistPane
 from .ui.status_pane import StatusPane
-from .utils.async_utils import run_blocking
+from .utils.async_utils import run_blocking, run_cpu_bound
 from .version import build_help_epilog
 from .visualizers import (
     VisualizerContext,
@@ -95,6 +99,7 @@ ANALYSIS_CACHE_MIN_RECENT_TRACKS_PROTECTED = 200
 ANALYSIS_CACHE_PRUNE_TRIGGER_THRESHOLD = 0.90
 VISUALIZER_PLUGIN_SECURITY_MODES = {"off", "warn", "enforce"}
 VISUALIZER_PLUGIN_RUNTIME_MODES = {"in-process", "isolated"}
+BEAT_ANALYZER_MODES = {"native", "librosa"}
 CYBERPUNK_THEME = Theme(
     name="cyberpunk-clean",
     primary="#00D7E6",
@@ -301,6 +306,7 @@ class TzPlayerApp(App):
         visualizer_plugin_paths_override: list[str] | None = None,
         visualizer_plugin_security_mode_override: str | None = None,
         visualizer_plugin_runtime_mode_override: str | None = None,
+        beat_analyzer_override: str | None = None,
     ) -> None:
         """Initialize app state and deferred service dependencies.
 
@@ -327,6 +333,8 @@ class TzPlayerApp(App):
         self._visualizer_plugin_runtime_mode_override = (
             visualizer_plugin_runtime_mode_override
         )
+        self._beat_analyzer_override = beat_analyzer_override
+        self._effective_beat_analyzer = "native"
         self.player_service: PlayerService | None = None
         self.player_state = PlayerState()
         self.current_track: TrackInfo | None = None
@@ -458,6 +466,28 @@ class TzPlayerApp(App):
                 hop_ms=profile_spectrum_hop_ms,
             )
             self._beat_params = BeatParams(hop_ms=profile_beat_hop_ms)
+            beat_mode = _normalize_beat_analyzer_mode(
+                self._beat_analyzer_override
+                or os.getenv("TZ_PLAYER_BEAT_ANALYZER", "native")
+            )
+            if beat_mode == "librosa":
+                if librosa_available():
+                    self._effective_beat_analyzer = "librosa"
+                else:
+                    self._effective_beat_analyzer = "native"
+                    self._set_runtime_notice(
+                        "Librosa beat analyzer unavailable; using native analyzer.",
+                        ttl_s=10.0,
+                    )
+                    logger.warning(
+                        "Requested librosa beat analyzer but librosa is unavailable; using native."
+                    )
+            else:
+                self._effective_beat_analyzer = "native"
+            self._beat_params = BeatParams(
+                hop_ms=profile_beat_hop_ms,
+                analyzer=self._effective_beat_analyzer,
+            )
             waveform_hop_ms = {"safe": 30, "balanced": 20, "aggressive": 10}[
                 effective_profile
             ]
@@ -472,6 +502,7 @@ class TzPlayerApp(App):
                     "beat_hop_ms": profile_beat_hop_ms,
                     "waveform_proxy_hop_ms": waveform_hop_ms,
                     "player_poll_interval_s": profile_poll_interval_s,
+                    "beat_analyzer": self._effective_beat_analyzer,
                 },
             )
             await run_blocking(save_state, state_path(), self.state)
@@ -963,11 +994,23 @@ class TzPlayerApp(App):
         try:
             if await self.beat_store.has_beats(path, params=params):
                 return
-            result = await run_blocking(
-                analyze_track_beats,
+            result = await run_cpu_bound(
+                analyze_track_beats_librosa
+                if params.analyzer == "librosa"
+                else analyze_track_beats,
                 path,
                 hop_ms=params.hop_ms,
             )
+            if (result is None or not result.frames) and params.analyzer == "librosa":
+                logger.info(
+                    "Librosa beat analysis produced no frames for %s; retrying native analyzer.",
+                    path,
+                )
+                result = await run_cpu_bound(
+                    analyze_track_beats,
+                    path,
+                    hop_ms=params.hop_ms,
+                )
             if result is None or not result.frames:
                 return
             await self.beat_store.upsert_beats(
@@ -979,7 +1022,10 @@ class TzPlayerApp(App):
             )
             self._schedule_analysis_cache_prune(reason="post_write", delay_s=0.0)
             logger.info(
-                "Beat analysis completed for %s (%d frames)", path, len(result.frames)
+                "Beat analysis completed for %s (%d frames, analyzer=%s)",
+                path,
+                len(result.frames),
+                params.analyzer,
             )
         except Exception as exc:
             logger.debug("Beat analysis failed for %s: %s", path, exc)
@@ -1660,6 +1706,15 @@ def _normalize_visualizer_plugin_runtime_mode(value: str) -> str:
     return "in-process"
 
 
+def _normalize_beat_analyzer_mode(value: str | None) -> str:
+    if value is None:
+        return "native"
+    normalized = value.strip().lower()
+    if normalized in BEAT_ANALYZER_MODES:
+        return normalized
+    return "native"
+
+
 def _clamp_int(value: int, min_value: int, max_value: int) -> int:
     return max(min_value, min(value, max_value))
 
@@ -1719,6 +1774,11 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("in-process", "isolated"),
         help="Local plugin runtime mode.",
     )
+    parser.add_argument(
+        "--beat-analyzer",
+        choices=("native", "librosa"),
+        help="Beat analyzer mode (native|librosa).",
+    )
     return parser
 
 
@@ -1744,6 +1804,7 @@ def main() -> int:
         visualizer_plugin_paths = getattr(args, "visualizer_plugin_paths", None)
         visualizer_plugin_security = getattr(args, "visualizer_plugin_security", None)
         visualizer_plugin_runtime = getattr(args, "visualizer_plugin_runtime", None)
+        beat_analyzer = getattr(args, "beat_analyzer", None)
         app_kwargs: dict[str, object] = {"backend_name": args.backend}
         if visualizer_fps is not None:
             app_kwargs["visualizer_fps_override"] = visualizer_fps
@@ -1761,6 +1822,8 @@ def main() -> int:
             app_kwargs["visualizer_plugin_runtime_mode_override"] = (
                 visualizer_plugin_runtime
             )
+        if beat_analyzer is not None:
+            app_kwargs["beat_analyzer_override"] = beat_analyzer
         app = TzPlayerApp(**cast(dict[str, Any], app_kwargs))
         app.run()
         return 1 if getattr(app, "startup_failed", False) else 0

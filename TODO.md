@@ -42,6 +42,49 @@ Execution tracker derived from `SPEC.md`.
   - Plugins remain deterministic for same frame inputs and degrade safely when data is loading/missing.
   - Full quality gates pass after each delivered plugin change set.
 
+### T-049 Beat-Triggered Fireworks Visualizer
+- Spec Ref: Section `6` (visualizer/plugin model), Section `8` (performance/reliability), `WF-06`
+- Status: `done`
+- Goal:
+  - Add a beat-triggered fireworks visualizer that combines beat events, FFT band dominance, scalar VU intensity, and optional waveform-proxy roughness for crackle.
+- Scope:
+  - Launch rockets on beat, explode into FFT-themed bursts, and render gravity/drag/fade particle motion.
+  - Use deterministic per-track randomness so each track has a stable “firework signature.”
+  - Keep bounded particle counts and non-blocking render path.
+- Acceptance:
+  - Built-in plugin ID `viz.particle.fireworks` is selectable and stable.
+  - Visualizer responds to beat with rocket launch/explosion and degrades gracefully when inputs are missing.
+  - Full quality gates pass (ruff, format-check, mypy, pytest).
+
+### T-050 Librosa Beat-Analysis Spike Workflow (Branch-Isolated)
+- Spec Ref: Section `6` (visualizer/plugin model), Section `8` (reliability/performance), Section `11` (docs/acceptance parity), `WF-06`
+- Status: `in_progress`
+- Goal:
+  - Evaluate whether `librosa` can materially improve beat/onset quality while preserving current reliability, non-blocking behavior, and licensing posture.
+- Scope:
+  - Keep current beat/fireworks improvements on a stable base branch.
+  - Run `librosa` experimentation on a child spike branch so the experiment can be merged or discarded cleanly.
+  - Define explicit merge gates (quality, behavior, docs, dependency/licensing notes).
+- Tasks:
+  - `T-050A` Branch isolation and baseline snapshot. Status: `done`
+    - Stable baseline branch: `feat/beat-fireworks-diagnostics` (commit `4367bb5`).
+    - Child spike branch: `feat/librosa-beat-spike` (created from baseline).
+  - `T-050B` Librosa integration spike (beat path only). Status: `in_progress`
+    - Add optional `librosa` beat analyzer path in analysis service.
+    - Keep existing analyzer as deterministic fallback.
+    - Preserve non-blocking scheduling and cache semantics.
+  - `T-050C` A/B validation and acceptance gate. Status: `todo`
+    - Compare onset alignment and beat strength behavior on representative tracks.
+    - Confirm quality gates pass and no startup/runtime regressions are introduced.
+    - Decide `merge` vs `discard spike`.
+  - `T-050D` Dependency, docs, and ADR completion. Status: `todo`
+    - If merged: update dependency/license docs and user-facing notes.
+    - If discarded: keep baseline branch unchanged and close spike task with findings.
+- Acceptance:
+  - We can merge or delete the `librosa` spike branch without losing baseline beat/fireworks improvements.
+  - Decision outcome and rationale are documented in ADR + TODO.
+  - Full quality gates pass for whichever path is chosen.
+
 ## Archived Recent Work
 
 ### T-038 User Drop-In Visualizer Plugins + Security Hardening
