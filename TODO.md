@@ -430,6 +430,66 @@ Execution tracker derived from `SPEC.md`.
   - `.ubuntu-venv/bin/python -m ruff format --check .`
   - `.ubuntu-venv/bin/python -m mypy src`
   - `.ubuntu-venv/bin/python -m pytest`
+
+### T-047 Waveform-Proxy Cache for PCM-Like Visualizer Signals
+- Spec Ref: Section `5` (analysis services), Section `6` (visualizer/plugin contract), Section `7` (persistence), Section `8` (non-blocking reliability), `WF-06`
+- Status: `todo`
+- Goal:
+  - Add a lightweight waveform-proxy analysis/cache that provides PCM-like shape data for visualizers without storing raw PCM.
+  - Keep storage and CPU bounded while preserving lazy/on-demand analysis behavior.
+- Scope:
+  - Introduce a new proxy feature set per time-slice (for example `min_l`, `max_l`, `min_r`, `max_r`) using quantized storage.
+  - Reuse existing decode + lazy cache pipeline patterns (wave/ffmpeg decode, async scheduling, persisted DB cache, retention).
+  - Expose proxy readings to visualizers/plugins through the same non-blocking service model used for scalar/FFT/beat.
+- Non-goals:
+  - True live PCM sample stream contract (remains tracked by `T-045`).
+  - Storing full PCM payloads in DB.
+- Design decisions required before implementation:
+  - `T-047D.1` Proxy frame schema density defaults. Status: `todo`
+    - Choose default proxy cadence (`50 Hz` vs `100 Hz` vs `200 Hz`).
+    - Choose quantization type (`int8`/`uint8` vs `int16`) and channel payload fields.
+  - `T-047D.2` Interpolation/render policy. Status: `todo`
+    - Choose nearest-neighbor vs linear interpolation for proxy lookup.
+    - Define plugin-facing guidance for deterministic usage under different visualizer FPS settings.
+- Tasks:
+  - `T-047A` Define waveform-proxy data contract. Status: `todo`
+    - Add request/response model for proxy reads (source/status tokens aligned with existing analysis services).
+    - Define normalized value ranges and timestamp semantics.
+  - `T-047B` Add persistent schema + migration for proxy cache. Status: `todo`
+    - Add cache entry type and per-frame proxy table keyed by track fingerprint + params hash.
+    - Add indexes for efficient position-based lookup.
+    - Add migration tests for schema upgrades.
+  - `T-047C` Implement proxy analysis generator. Status: `todo`
+    - Reuse existing decode inputs and derive per-window extrema/features.
+    - Keep work off UI loop and bounded by `max_frames`/time-window controls.
+  - `T-047D` Implement `WaveformProxyService` (lazy, async, cache-first). Status: `todo`
+    - Cache hit: return ready proxy frame for playback position.
+    - Cache miss: schedule background analysis and return fallback/loading token.
+    - Preserve deterministic behavior on missing/error paths.
+  - `T-047E` Wire player/runtime state and visualizer contract. Status: `todo`
+    - Add optional proxy fields to player/visualizer frame input.
+    - Keep backward compatibility for existing plugins.
+    - Add at least one built-in visualizer path that consumes proxy data (or adapter in existing pseudo-wave plugin).
+  - `T-047F` Retention + observability integration. Status: `todo`
+    - Ensure proxy cache participates in global analysis retention/pruning.
+    - Add structured logs for proxy cache hit/miss/schedule/prune activity.
+  - `T-047G` Performance/reliability validation at scale. Status: `todo`
+    - Add tests for large playlist scenarios and bounded storage growth.
+    - Add opt-in perf checks to verify no keyboard responsiveness regressions.
+    - Validate no per-frame blocking I/O in visualizer render paths.
+  - `T-047H` Docs and acceptance mapping updates. Status: `todo`
+    - Update `docs/visualizations.md` and `docs/usage.md` with proxy capability and limitations.
+    - Update `docs/workflow-acceptance.md` mapping for new proxy service/tests.
+- Acceptance:
+  - Proxy analysis remains lazy/on-demand and persisted once computed.
+  - Storage footprint stays substantially smaller than raw PCM while supporting waveform-like visuals.
+  - Existing visualizers/plugins continue to function without requiring proxy fields.
+  - At least one visualizer demonstrates proxy-backed PCM-like rendering behavior.
+- Validation (per implementation change set):
+  - `.ubuntu-venv/bin/python -m ruff check .`
+  - `.ubuntu-venv/bin/python -m ruff format --check .`
+  - `.ubuntu-venv/bin/python -m mypy src`
+  - `.ubuntu-venv/bin/python -m pytest`
 ### DOC-001 Internal Documentation Campaign (All Project Files)
 - Status: `done`
 - Goal:
