@@ -60,11 +60,7 @@ def analyze_track_beats(
         return None
 
     onsets = _onset_envelope(energies)
-    max_onset = max(onsets) if onsets else 0.0
-    if max_onset <= 0.0:
-        strengths = [0.0 for _ in onsets]
-    else:
-        strengths = [min(1.0, value / max_onset) for value in onsets]
+    strengths = _normalize_strengths(onsets)
 
     fps = 1000.0 / hop_ms
     bpm, beat_lag = _estimate_bpm(onsets, fps=fps)
@@ -195,9 +191,24 @@ def _onset_envelope(energies: list[float]) -> list[float]:
         return []
     out = [0.0]
     for idx in range(1, len(energies)):
-        diff = energies[idx] - energies[idx - 1]
-        out.append(diff if diff > 0.0 else 0.0)
+        prev_start = max(0, idx - 8)
+        prev = energies[prev_start:idx]
+        baseline = sum(prev) / len(prev) if prev else energies[idx - 1]
+        # Adaptive novelty: reward upward changes above a short-term local baseline.
+        novelty = energies[idx] - baseline
+        out.append(novelty if novelty > 0.0 else 0.0)
     return out
+
+
+def _normalize_strengths(onsets: list[float]) -> list[float]:
+    if not onsets:
+        return []
+    positives = sorted(value for value in onsets if value > 0.0)
+    if not positives:
+        return [0.0 for _ in onsets]
+    p95_index = min(len(positives) - 1, int(round((len(positives) - 1) * 0.95)))
+    scale = max(1e-6, positives[p95_index])
+    return [max(0.0, min(1.0, value / scale)) for value in onsets]
 
 
 def _estimate_bpm(onsets: list[float], *, fps: float) -> tuple[float, int]:
@@ -211,31 +222,48 @@ def _estimate_bpm(onsets: list[float], *, fps: float) -> tuple[float, int]:
     if lag_max <= lag_min:
         return 0.0, 0
 
+    lag_scores: dict[int, float] = {}
     best_lag = 0
     best_score = 0.0
     for lag in range(lag_min, lag_max + 1):
         score = 0.0
         for idx in range(lag, len(onsets)):
             score += onsets[idx] * onsets[idx - lag]
+        lag_scores[lag] = score
         if score > best_score:
             best_score = score
             best_lag = lag
     if best_lag <= 0 or best_score <= 0.0:
         return 0.0, 0
+    # Resolve octave ambiguity by preferring faster tempo when harmonically close.
+    half_lag = max(lag_min, best_lag // 2)
+    if half_lag in lag_scores and lag_scores[half_lag] >= (best_score * 0.88):
+        best_lag = half_lag
     bpm = (60.0 * fps) / best_lag
     return max(0.0, bpm), best_lag
 
 
 def _mark_beats(strengths: list[float], lag: int) -> list[bool]:
-    if not strengths or lag <= 0:
+    if not strengths:
         return [False for _ in strengths]
-    phase_scores = [0.0 for _ in range(lag)]
-    for idx, strength in enumerate(strengths):
-        phase_scores[idx % lag] += strength
-    phase = max(range(lag), key=lambda value: phase_scores[value])
+
+    min_gap = max(2, int(round(lag * 0.45))) if lag > 0 else 3
     mean_strength = sum(strengths) / len(strengths)
-    threshold = max(0.12, mean_strength * 1.35)
-    return [
-        (idx % lag == phase) and (strength >= threshold)
-        for idx, strength in enumerate(strengths)
-    ]
+    threshold = max(0.16, mean_strength * 1.10)
+    candidates: list[int] = []
+    for idx in range(1, len(strengths) - 1):
+        value = strengths[idx]
+        if value < threshold:
+            continue
+        if value >= strengths[idx - 1] and value > strengths[idx + 1]:
+            candidates.append(idx)
+    if not candidates:
+        return [False for _ in strengths]
+
+    selected: list[int] = []
+    for idx in sorted(candidates, key=lambda value: strengths[value], reverse=True):
+        if any(abs(idx - prior) < min_gap for prior in selected):
+            continue
+        selected.append(idx)
+    beat_indices = set(selected)
+    return [idx in beat_indices for idx in range(len(strengths))]

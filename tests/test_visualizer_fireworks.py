@@ -7,7 +7,14 @@ from tz_player.visualizers.fireworks import FireworksVisualizer
 from tz_player.visualizers.registry import VisualizerRegistry
 
 
-def _frame(*, frame_index: int = 10, beat_onset: bool = False) -> VisualizerFrameInput:
+def _frame(
+    *,
+    frame_index: int = 10,
+    beat_onset: bool = False,
+    level_left: float = 0.66,
+    level_right: float = 0.61,
+    spectrum_bands: bytes | None = None,
+) -> VisualizerFrameInput:
     return VisualizerFrameInput(
         frame_index=frame_index,
         monotonic_s=0.0,
@@ -25,9 +32,9 @@ def _frame(*, frame_index: int = 10, beat_onset: bool = False) -> VisualizerFram
         title="Track",
         artist="Artist",
         album="Album",
-        level_left=0.66,
-        level_right=0.61,
-        spectrum_bands=bytes([45, 68, 112, 165] * 12),
+        level_left=level_left,
+        level_right=level_right,
+        spectrum_bands=spectrum_bands or bytes([45, 68, 112, 165] * 12),
         beat_is_onset=beat_onset,
         waveform_min_left=-0.65,
         waveform_max_left=0.74,
@@ -57,3 +64,18 @@ def test_fireworks_render_launch_and_ansi() -> None:
     output_b = plugin.render(_frame(frame_index=51, beat_onset=False))
     assert "LAUNCH" in output_a
     assert "\x1b[" in output_b
+
+
+def test_fireworks_auto_launch_on_high_energy_frames_without_onset() -> None:
+    plugin = FireworksVisualizer()
+    plugin.on_activate(VisualizerContext(ansi_enabled=False, unicode_enabled=True))
+    output = plugin.render(
+        _frame(
+            frame_index=120,
+            beat_onset=False,
+            level_left=0.93,
+            level_right=0.91,
+            spectrum_bands=bytes([228, 206, 214, 224] * 12),
+        )
+    )
+    assert "SURGE" in output

@@ -49,6 +49,7 @@ class FireworksVisualizer:
     _track_key: str = ""
     _rng_state: int = 1
     _last_beat_frame: int = -1
+    _last_launch_frame: int = -1
     _rockets: list[_Rocket] = field(default_factory=list)
     _particles: list[_Particle] = field(default_factory=list)
 
@@ -76,16 +77,38 @@ class FireworksVisualizer:
             self._track_key = track_key
             self._rng_state = _stable_seed(track_key)
             self._last_beat_frame = -1
+            self._last_launch_frame = -1
             self._rockets.clear()
             self._particles.clear()
 
+        beat_strength = max(0.0, min(1.0, float(frame.beat_strength or 0.0)))
+        energy = _launch_energy(vu=vu, bass=bass, mids=mids, highs=highs)
+        did_launch = False
+
         if beat_onset and frame.frame_index != self._last_beat_frame:
             self._last_beat_frame = frame.frame_index
-            launches = 2 if (vu > 0.78 and bass > 0.58) else 1
+            did_launch = True
+            launches = 2 if (vu > 0.74 and (bass > 0.55 or beat_strength > 0.62)) else 1
             for _ in range(launches):
                 self._spawn_rocket(
                     width=width, rows=field_rows, bass=bass, theme=theme, high=highs
                 )
+        elif self._should_auto_launch(
+            frame_index=frame.frame_index,
+            energy=energy,
+            bass=bass,
+            highs=highs,
+            beat_strength=beat_strength,
+        ):
+            did_launch = True
+            launches = 2 if (energy > 0.86 and (highs > 0.62 or bass > 0.68)) else 1
+            for _ in range(launches):
+                self._spawn_rocket(
+                    width=width, rows=field_rows, bass=bass, theme=theme, high=highs
+                )
+
+        if did_launch:
+            self._last_launch_frame = frame.frame_index
 
         self._update_rockets(rows=field_rows, vu=vu, bass=bass, mids=mids, highs=highs)
         self._update_particles(rows=field_rows, cols=width, crackle=crackle)
@@ -111,6 +134,7 @@ class FireworksVisualizer:
             "BEAT FIREWORKS",
             _status_line(
                 beat_onset=beat_onset,
+                did_launch=did_launch,
                 theme=theme,
                 bass=bass,
                 mids=mids,
@@ -287,6 +311,23 @@ class FireworksVisualizer:
             return 0
         return int(self._rand_float() * n) % n
 
+    def _should_auto_launch(
+        self,
+        *,
+        frame_index: int,
+        energy: float,
+        bass: float,
+        highs: float,
+        beat_strength: float,
+    ) -> bool:
+        energetic = energy >= 0.60 and (bass >= 0.54 or highs >= 0.56)
+        if not energetic:
+            return False
+        cooldown = max(
+            3, 8 - int(round(energy * 4.0)) - int(round(beat_strength * 2.0))
+        )
+        return (frame_index - self._last_launch_frame) >= cooldown
+
 
 def _vu_level(frame: VisualizerFrameInput) -> float:
     levels = [
@@ -367,6 +408,12 @@ def _spike_ratio(*, rocket_theme: str, bass: float, mids: float, highs: float) -
     return (peak / mean) + theme_bias
 
 
+def _launch_energy(*, vu: float, bass: float, mids: float, highs: float) -> float:
+    return max(
+        0.0, min(1.0, (vu * 0.42) + (bass * 0.32) + (mids * 0.12) + (highs * 0.14))
+    )
+
+
 def _particle_glyph(brightness: float) -> str:
     if brightness >= 0.82:
         return "@"
@@ -382,13 +429,14 @@ def _particle_glyph(brightness: float) -> str:
 def _status_line(
     *,
     beat_onset: bool,
+    did_launch: bool,
     theme: str,
     bass: float,
     mids: float,
     highs: float,
     vu: float,
 ) -> str:
-    mode = "LAUNCH" if beat_onset else "IDLE"
+    mode = "LAUNCH" if beat_onset else ("SURGE" if did_launch else "IDLE")
     return (
         f"{mode} | "
         f"THEME {theme.upper()} | "

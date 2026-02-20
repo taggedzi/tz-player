@@ -34,7 +34,7 @@ class SqliteBeatStore:
 
     ANALYSIS_TYPE = "beat"
 
-    def __init__(self, db_path: Path, *, analysis_version: int = 1) -> None:
+    def __init__(self, db_path: Path, *, analysis_version: int = 2) -> None:
         self._db_path = Path(db_path)
         self._analysis_version = analysis_version
 
@@ -325,9 +325,26 @@ class SqliteBeatStore:
                 """,
                 (entry_id, pos),
             ).fetchone()
-            row_to_use = prev_row or next_row
+            row_to_use = _nearest_row(prev_row, next_row, target_position_ms=pos)
             if row_to_use is None:
                 return None
+            if not bool(int(row_to_use["is_beat"])):
+                hold_ms = max(120, int(params.hop_ms) * 4)
+                beat_row = conn.execute(
+                    """
+                    SELECT position_ms, strength_u8, is_beat, bpm
+                    FROM analysis_beat_frames
+                    WHERE entry_id = ?
+                      AND is_beat = 1
+                      AND position_ms <= ?
+                      AND position_ms >= ?
+                    ORDER BY position_ms DESC
+                    LIMIT 1
+                    """,
+                    (entry_id, pos, max(0, pos - hold_ms)),
+                ).fetchone()
+                if beat_row is not None:
+                    row_to_use = beat_row
             return BeatFrame(
                 position_ms=int(row_to_use["position_ms"]),
                 strength_u8=_clamp_u8(int(row_to_use["strength_u8"])),
@@ -362,3 +379,18 @@ def _stat_path(path: Path) -> tuple[int | None, int | None]:
 
 def _clamp_u8(value: int) -> int:
     return max(0, min(255, int(value)))
+
+
+def _nearest_row(
+    prev_row: sqlite3.Row | None,
+    next_row: sqlite3.Row | None,
+    *,
+    target_position_ms: int,
+) -> sqlite3.Row | None:
+    if prev_row is None:
+        return next_row
+    if next_row is None:
+        return prev_row
+    prev_dist = abs(target_position_ms - int(prev_row["position_ms"]))
+    next_dist = abs(int(next_row["position_ms"]) - target_position_ms)
+    return prev_row if prev_dist <= next_dist else next_row

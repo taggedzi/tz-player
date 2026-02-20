@@ -52,6 +52,52 @@ def test_beat_store_cache_hit_and_nearest_lookup(tmp_path) -> None:
     assert tail.bpm == 123.0
 
 
+def test_beat_store_prefers_nearest_frame_for_sampling(tmp_path) -> None:
+    db_path = tmp_path / "library.sqlite"
+    store = SqliteBeatStore(db_path)
+    _run(store.initialize())
+
+    track = tmp_path / "song.mp3"
+    _touch(track, b"abcdef")
+    params = BeatParams(hop_ms=40)
+    _run(
+        store.upsert_beats(
+            track,
+            duration_ms=1000,
+            params=params,
+            bpm=120.0,
+            frames=[(0, 10, False), (1000, 220, True)],
+        )
+    )
+    sample = _run(store.get_frame_at(track, position_ms=800, params=params))
+    assert sample is not None
+    assert sample.position_ms == 1000
+    assert sample.is_beat is True
+
+
+def test_beat_store_holds_recent_beat_for_short_window(tmp_path) -> None:
+    db_path = tmp_path / "library.sqlite"
+    store = SqliteBeatStore(db_path)
+    _run(store.initialize())
+
+    track = tmp_path / "song.mp3"
+    _touch(track, b"abcdef")
+    params = BeatParams(hop_ms=40)
+    _run(
+        store.upsert_beats(
+            track,
+            duration_ms=1000,
+            params=params,
+            bpm=120.0,
+            frames=[(0, 0, False), (520, 255, True), (560, 4, False), (600, 3, False)],
+        )
+    )
+    sample = _run(store.get_frame_at(track, position_ms=660, params=params))
+    assert sample is not None
+    assert sample.is_beat is True
+    assert sample.position_ms == 520
+
+
 def test_beat_store_miss_when_fingerprint_changes(tmp_path) -> None:
     db_path = tmp_path / "library.sqlite"
     store = SqliteBeatStore(db_path)

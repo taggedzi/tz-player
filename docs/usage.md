@@ -130,6 +130,7 @@ Built-in visualizer IDs include:
 - `viz.particle.data_core_frag`
 - `viz.particle.plasma_stream`
 - `viz.particle.fireworks`
+- `viz.debug.beat_scope` (beat diagnostics; explicit onset flash + strength/history telemetry)
 - `viz.spectrum.radial`
 - `viz.typography.glitch`
 - `viz.waveform.proxy`

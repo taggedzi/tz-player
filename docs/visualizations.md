@@ -144,6 +144,7 @@ Notes:
 - `viz.particle.data_core_frag` (`requires_spectrum = True`, `requires_beat = True`)
 - `viz.particle.plasma_stream` (`requires_spectrum = True`, `requires_beat = True`)
 - `viz.particle.fireworks` (`requires_spectrum = True`, `requires_beat = True`, `requires_waveform = True`)
+- `viz.debug.beat_scope` (`requires_beat = True`)
 - `viz.spectrum.radial` (`requires_spectrum = True`, `requires_beat = True`)
 - `viz.typography.glitch` (`requires_beat = True`)
 - `viz.waveform.proxy` (`requires_waveform = True`)

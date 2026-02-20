@@ -23,6 +23,7 @@ from types import ModuleType
 from .audio_tornado import AudioTornadoVisualizer
 from .base import VisualizerPlugin
 from .basic import BasicVisualizer
+from .beat_scope import BeatScopeVisualizer
 from .constellation import ConstellationVisualizer
 from .cover_ascii import CoverAsciiMotionVisualizer, CoverAsciiStaticVisualizer
 from .data_core_frag import DataCoreFragVisualizer
@@ -188,6 +189,7 @@ class VisualizerRegistry:
             DataCoreFragVisualizer,
             PlasmaStreamVisualizer,
             FireworksVisualizer,
+            BeatScopeVisualizer,
             RadialSpectrumVisualizer,
             WaveformProxyVisualizer,
             WaveformNeonVisualizer,
