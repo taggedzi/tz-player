@@ -9,15 +9,21 @@ from __future__ import annotations
 import importlib
 import importlib.util
 import multiprocessing
-import multiprocessing.connection
 import sys
 from dataclasses import dataclass
 from multiprocessing.process import BaseProcess
 from pathlib import Path
 from types import ModuleType
-from typing import Any
+from typing import Any, Protocol
 
 from .base import VisualizerContext, VisualizerFrameInput
+
+
+class _ConnLike(Protocol):
+    def send(self, obj: Any) -> None: ...
+    def recv(self) -> Any: ...
+    def poll(self, timeout: float | None = None) -> bool: ...
+    def close(self) -> None: ...
 
 
 @dataclass(frozen=True)
@@ -49,7 +55,7 @@ class IsolatedPluginProxy:
         self._timeout_s = timeout_s
         self._startup_timeout_s = startup_timeout_s
         self._ctx = multiprocessing.get_context("spawn")
-        self._conn: multiprocessing.connection.Connection | None = None
+        self._conn: _ConnLike | None = None
         self._process: BaseProcess | None = None
 
     def on_activate(self, context: VisualizerContext) -> None:
@@ -152,7 +158,7 @@ class IsolatedPluginProxy:
 
 
 def _isolated_worker(
-    conn: multiprocessing.connection.Connection,
+    conn: _ConnLike,
     source_kind: str,
     source_value: str,
     class_name: str,
@@ -213,9 +219,7 @@ def _isolated_worker(
     conn.close()
 
 
-def _safe_send(
-    conn: multiprocessing.connection.Connection, response: dict[str, Any]
-) -> None:
+def _safe_send(conn: _ConnLike, response: dict[str, Any]) -> None:
     try:
         conn.send(response)
     except (BrokenPipeError, EOFError, OSError):
