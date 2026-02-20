@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import re
+
 from tz_player.visualizers.base import VisualizerContext, VisualizerFrameInput
-from tz_player.visualizers.fireworks import FireworksVisualizer
+from tz_player.visualizers.fireworks import FireworksVisualizer, _colorize, _Rocket
 from tz_player.visualizers.registry import VisualizerRegistry
 
 
@@ -79,3 +81,58 @@ def test_fireworks_auto_launch_on_high_energy_frames_without_onset() -> None:
         )
     )
     assert "SURGE" in output
+
+
+def test_fireworks_color_palettes_cover_warm_cool_and_white_ranges() -> None:
+    rgb_pattern = re.compile(r"38;2;(\d+);(\d+);(\d+)m")
+    colors: set[tuple[int, int, int]] = set()
+    for palette in ("red", "orange", "green", "blue", "white", "purple", "gold"):
+        for glyph in ("|", ".", "+", "*", "#", "@", "^"):
+            token = _colorize(glyph, palette_name=palette, shade=0, kind="main")
+            match = rgb_pattern.search(token)
+            assert match is not None
+            colors.add((int(match.group(1)), int(match.group(2)), int(match.group(3))))
+
+    assert any(r > 230 and g < 170 and b < 150 for r, g, b in colors)  # reds
+    assert any(r > 230 and 140 <= g <= 190 and b < 140 for r, g, b in colors)  # oranges
+    assert any(g > 210 and r < 190 and b < 210 for r, g, b in colors)  # greens
+    assert any(b > 230 and r < 210 for r, g, b in colors)  # blues
+    assert any(r > 235 and g > 235 and b > 235 for r, g, b in colors)  # whites
+
+
+def test_fireworks_single_palette_stays_color_cohesive() -> None:
+    rgb_pattern = re.compile(r"38;2;(\d+);(\d+);(\d+)m")
+    samples: list[tuple[int, int, int]] = []
+    for glyph in ("@", "O", "#", "X", "*", "+", "=", ":", ".", ",", "|", "!"):
+        for shade in (-1, 0, 1):
+            token = _colorize(glyph, palette_name="blue", shade=shade, kind="main")
+            match = rgb_pattern.search(token)
+            assert match is not None
+            samples.append(
+                (int(match.group(1)), int(match.group(2)), int(match.group(3)))
+            )
+
+    # blue palette should remain blue-dominant across glyph/shade variation.
+    assert all(b >= r for r, _, b in samples)
+
+
+def test_fireworks_rocket_explodes_when_drifting_offscreen() -> None:
+    plugin = FireworksVisualizer()
+    plugin.on_activate(VisualizerContext(ansi_enabled=False, unicode_enabled=True))
+    plugin._rockets.append(
+        _Rocket(
+            x=4.8,
+            y=8.0,
+            vx=1.2,
+            vy=-0.1,
+            y_explode=1.5,
+            theme="hot",
+            burst_type="chrysanthemum",
+            palette="red",
+        )
+    )
+
+    plugin._update_rockets(rows=12, cols=5, vu=0.7, bass=0.7, mids=0.5, highs=0.4)
+
+    assert not plugin._rockets
+    assert plugin._particles

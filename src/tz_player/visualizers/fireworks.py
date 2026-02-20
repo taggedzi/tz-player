@@ -21,6 +21,7 @@ class _Rocket:
     y_explode: float
     theme: str
     burst_type: str
+    palette: str
 
 
 @dataclass
@@ -31,8 +32,9 @@ class _Particle:
     vy: float
     life: float
     brightness: float
-    theme: str
+    palette: str
     kind: str
+    shade: int
 
 
 @dataclass
@@ -111,25 +113,51 @@ class FireworksVisualizer:
             self._last_launch_frame = frame.frame_index
         self._beat_active = beat_onset
 
-        self._update_rockets(rows=field_rows, vu=vu, bass=bass, mids=mids, highs=highs)
+        self._update_rockets(
+            rows=field_rows,
+            cols=width,
+            vu=vu,
+            bass=bass,
+            mids=mids,
+            highs=highs,
+        )
         self._update_particles(rows=field_rows, cols=width, crackle=crackle)
 
         canvas = [[" " for _ in range(width)] for _ in range(field_rows)]
+        palette_canvas: list[list[str | None]] = [
+            [None for _ in range(width)] for _ in range(field_rows)
+        ]
+        shade_canvas = [[0 for _ in range(width)] for _ in range(field_rows)]
+        kind_canvas: list[list[str | None]] = [
+            [None for _ in range(width)] for _ in range(field_rows)
+        ]
         for particle in self._particles:
             px = int(round(particle.x))
             py = int(round(particle.y))
             if 0 <= px < width and 0 <= py < field_rows:
                 canvas[py][px] = _particle_glyph(particle.brightness)
+                palette_canvas[py][px] = particle.palette
+                shade_canvas[py][px] = particle.shade
+                kind_canvas[py][px] = particle.kind
         for rocket in self._rockets:
             rx = int(round(rocket.x))
             ry = int(round(rocket.y))
             if 0 <= rx < width and 0 <= ry < field_rows:
                 canvas[ry][rx] = "^"
+                palette_canvas[ry][rx] = rocket.palette
+                shade_canvas[ry][rx] = 1
+                kind_canvas[ry][rx] = "rocket"
                 trail_len = 1 + int(round(vu * 4.0))
                 for offset in range(1, trail_len + 1):
                     ty = ry + offset
                     if 0 <= ty < field_rows and canvas[ty][rx] == " ":
-                        canvas[ty][rx] = "|"
+                        trail_char = (
+                            "|" if offset <= 2 else ("!" if offset == 3 else ":")
+                        )
+                        canvas[ty][rx] = trail_char
+                        palette_canvas[ty][rx] = rocket.palette
+                        shade_canvas[ty][rx] = -1
+                        kind_canvas[ty][rx] = "trail"
 
         lines = [
             "BEAT FIREWORKS",
@@ -143,7 +171,15 @@ class FireworksVisualizer:
                 vu=vu,
             ),
         ]
-        lines.extend(_render_rows(canvas, ansi_enabled=self._ansi_enabled))
+        lines.extend(
+            _render_rows(
+                canvas,
+                palette_canvas=palette_canvas,
+                shade_canvas=shade_canvas,
+                kind_canvas=kind_canvas,
+                ansi_enabled=self._ansi_enabled,
+            )
+        )
         return _fit_lines(lines, width, height)
 
     def _spawn_rocket(
@@ -161,6 +197,7 @@ class FireworksVisualizer:
         explode_height = min_h + (1.0 - bass) * (max_h - min_h)
         y_explode = max(2.0, rows - explode_height)
         burst_type = _burst_type_for_bands(bass=bass, high=high, rng=self._rand_float())
+        palette = _palette_for_theme(theme=theme, rng=self._rand_float())
         self._rockets.append(
             _Rocket(
                 x=x,
@@ -170,12 +207,13 @@ class FireworksVisualizer:
                 y_explode=y_explode,
                 theme=theme,
                 burst_type=burst_type,
+                palette=palette,
             )
         )
         self._rockets = self._rockets[-6:]
 
     def _update_rockets(
-        self, *, rows: int, vu: float, bass: float, mids: float, highs: float
+        self, *, rows: int, cols: int, vu: float, bass: float, mids: float, highs: float
     ) -> None:
         next_rockets: list[_Rocket] = []
         for rocket in self._rockets:
@@ -183,6 +221,17 @@ class FireworksVisualizer:
             rocket.y += rocket.vy
             rocket.vy += 0.015
             if rocket.y <= rocket.y_explode:
+                self._explode(
+                    rocket=rocket,
+                    vu=vu,
+                    bass=bass,
+                    mids=mids,
+                    highs=highs,
+                )
+                continue
+            if rocket.x < 0.0 or rocket.x > float(cols - 1):
+                rocket.x = max(0.0, min(float(cols - 1), rocket.x))
+                rocket.y = max(0.0, min(float(rows - 1), rocket.y))
                 self._explode(
                     rocket=rocket,
                     vu=vu,
@@ -229,8 +278,9 @@ class FireworksVisualizer:
                             vy=math.sin(angle + jitter) * speed * 0.56,
                             life=1.0,
                             brightness=1.0,
-                            theme=rocket.theme,
+                            palette=rocket.palette,
                             kind="main",
+                            shade=self._rand_int(3) - 1,
                         )
                     )
         else:
@@ -255,8 +305,9 @@ class FireworksVisualizer:
                         vy=math.sin(angle) * speed * 0.56,
                         life=1.0,
                         brightness=1.0,
-                        theme=rocket.theme,
+                        palette=rocket.palette,
                         kind="main",
+                        shade=self._rand_int(3) - 1,
                     )
                 )
 
@@ -271,8 +322,9 @@ class FireworksVisualizer:
                     vy=math.sin(angle) * speed * 0.56,
                     life=0.45 + self._rand_float() * 0.35,
                     brightness=0.95,
-                    theme=rocket.theme,
+                    palette=rocket.palette,
                     kind="spark",
+                    shade=self._rand_int(3) - 1,
                 )
             )
 
@@ -416,15 +468,25 @@ def _launch_energy(*, vu: float, bass: float, mids: float, highs: float) -> floa
 
 
 def _particle_glyph(brightness: float) -> str:
-    if brightness >= 0.82:
+    if brightness >= 0.92:
         return "@"
-    if brightness >= 0.62:
+    if brightness >= 0.84:
+        return "O"
+    if brightness >= 0.74:
         return "#"
-    if brightness >= 0.42:
+    if brightness >= 0.64:
+        return "X"
+    if brightness >= 0.54:
         return "*"
-    if brightness >= 0.24:
+    if brightness >= 0.44:
         return "+"
-    return "."
+    if brightness >= 0.34:
+        return "="
+    if brightness >= 0.24:
+        return ":"
+    if brightness >= 0.14:
+        return "."
+    return ","
 
 
 def _status_line(
@@ -448,24 +510,123 @@ def _status_line(
     )
 
 
-def _render_rows(canvas: list[list[str]], *, ansi_enabled: bool) -> list[str]:
+def _render_rows(
+    canvas: list[list[str]],
+    *,
+    palette_canvas: list[list[str | None]],
+    shade_canvas: list[list[int]],
+    kind_canvas: list[list[str | None]],
+    ansi_enabled: bool,
+) -> list[str]:
     if not ansi_enabled:
         return ["".join(row) for row in canvas]
-    return ["".join(_colorize(cell) for cell in row) for row in canvas]
+    return [
+        "".join(
+            _colorize(
+                cell,
+                palette_name=palette_canvas[row_idx][col_idx],
+                shade=shade_canvas[row_idx][col_idx],
+                kind=kind_canvas[row_idx][col_idx],
+            )
+            for col_idx, cell in enumerate(row)
+        )
+        for row_idx, row in enumerate(canvas)
+    ]
 
 
-def _colorize(cell: str) -> str:
+_PALETTES: dict[str, tuple[tuple[int, int, int], ...]] = {
+    "red": (
+        (120, 20, 16),
+        (175, 34, 26),
+        (225, 58, 40),
+        (255, 108, 80),
+        (255, 176, 146),
+    ),
+    "orange": (
+        (126, 56, 10),
+        (170, 80, 16),
+        (224, 116, 30),
+        (255, 162, 72),
+        (255, 214, 150),
+    ),
+    "gold": (
+        (98, 70, 14),
+        (146, 108, 20),
+        (212, 166, 36),
+        (255, 214, 86),
+        (255, 241, 176),
+    ),
+    "green": (
+        (24, 94, 36),
+        (34, 132, 50),
+        (56, 186, 74),
+        (118, 230, 142),
+        (186, 255, 198),
+    ),
+    "blue": (
+        (20, 52, 116),
+        (30, 78, 162),
+        (52, 126, 222),
+        (104, 186, 255),
+        (186, 228, 255),
+    ),
+    "purple": (
+        (62, 28, 116),
+        (96, 46, 166),
+        (142, 78, 222),
+        (192, 130, 255),
+        (226, 192, 255),
+    ),
+    "white": (
+        (118, 118, 136),
+        (158, 160, 184),
+        (202, 204, 228),
+        (236, 238, 252),
+        (255, 255, 255),
+    ),
+}
+
+
+def _palette_for_theme(*, theme: str, rng: float) -> str:
+    families = {
+        "hot": ("red", "orange", "gold"),
+        "cool": ("blue", "green", "purple"),
+        "spark": ("white", "blue", "gold"),
+    }
+    options = families.get(theme, ("white", "blue", "orange"))
+    return options[int(rng * len(options)) % len(options)]
+
+
+def _colorize(
+    cell: str, *, palette_name: str | None, shade: int, kind: str | None
+) -> str:
     if cell == " ":
         return cell
-    if cell in {"|", "."}:
-        return f"\x1b[38;2;170;190;220m{cell}\x1b[0m"
-    if cell in {"+", "*"}:
-        return f"\x1b[38;2;120;214;255m{cell}\x1b[0m"
-    if cell in {"#", "X"}:
-        return f"\x1b[38;2;255;140;220m{cell}\x1b[0m"
-    if cell in {"@", "^"}:
-        return f"\x1b[38;2;255;225;140m{cell}\x1b[0m"
-    return f"\x1b[38;2;220;232;255m{cell}\x1b[0m"
+    palette = _PALETTES.get(palette_name or "", _PALETTES["white"])
+    intensity = _glyph_intensity(cell)
+    if kind == "spark":
+        intensity += 1
+    if kind == "trail":
+        intensity -= 1
+    if kind == "rocket":
+        intensity += 1
+    idx = max(0, min(len(palette) - 1, intensity + shade))
+    red, green, blue = palette[idx]
+    return f"\x1b[38;2;{red};{green};{blue}m{cell}\x1b[0m"
+
+
+def _glyph_intensity(cell: str) -> int:
+    if cell == "@":
+        return 4
+    if cell == "O":
+        return 3
+    if cell in {"#", "X", "^"}:
+        return 3
+    if cell in {"*", "+", "="}:
+        return 2
+    if cell in {"|", "!", ":"}:
+        return 1
+    return 0
 
 
 def _fit_lines(lines: list[str], width: int, height: int) -> str:

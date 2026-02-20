@@ -64,12 +64,12 @@ def test_ensure_beat_for_track_uses_requested_analyzer(tmp_path, monkeypatch) ->
         called.append("librosa")
         return BeatAnalysisResult(duration_ms=1000, bpm=112.0, frames=[(0, 200, True)])
 
-    async def _run_blocking(func, *args, **kwargs):  # type: ignore[no-untyped-def]
+    async def _run_cpu_bound(func, *args, **kwargs):  # type: ignore[no-untyped-def]
         return func(*args, **kwargs)
 
     monkeypatch.setattr(app_module, "analyze_track_beats", _native)
     monkeypatch.setattr(app_module, "analyze_track_beats_librosa", _librosa)
-    monkeypatch.setattr(app_module, "run_blocking", _run_blocking)
+    monkeypatch.setattr(app_module, "run_cpu_bound", _run_cpu_bound)
 
     _run(
         app._ensure_beat_for_track(
@@ -100,12 +100,12 @@ def test_ensure_beat_for_track_falls_back_to_native_when_librosa_empty(
         called.append("librosa")
         return None
 
-    async def _run_blocking(func, *args, **kwargs):  # type: ignore[no-untyped-def]
+    async def _run_cpu_bound(func, *args, **kwargs):  # type: ignore[no-untyped-def]
         return func(*args, **kwargs)
 
     monkeypatch.setattr(app_module, "analyze_track_beats", _native)
     monkeypatch.setattr(app_module, "analyze_track_beats_librosa", _librosa)
-    monkeypatch.setattr(app_module, "run_blocking", _run_blocking)
+    monkeypatch.setattr(app_module, "run_cpu_bound", _run_cpu_bound)
     monkeypatch.setattr(app_module, "librosa_available", lambda: True)
 
     _run(

@@ -80,7 +80,7 @@ from .ui.actions_menu import ActionsMenuDismissed, ActionsMenuPopup, ActionsMenu
 from .ui.modals.error import ErrorModal
 from .ui.playlist_pane import PlaylistPane
 from .ui.status_pane import StatusPane
-from .utils.async_utils import run_blocking
+from .utils.async_utils import run_blocking, run_cpu_bound
 from .version import build_help_epilog
 from .visualizers import (
     VisualizerContext,
@@ -994,23 +994,19 @@ class TzPlayerApp(App):
         try:
             if await self.beat_store.has_beats(path, params=params):
                 return
-            result = await run_blocking(
+            result = await run_cpu_bound(
                 analyze_track_beats_librosa
                 if params.analyzer == "librosa"
                 else analyze_track_beats,
                 path,
                 hop_ms=params.hop_ms,
             )
-            if (
-                (result is None or not result.frames)
-                and params.analyzer == "librosa"
-                and librosa_available()
-            ):
+            if (result is None or not result.frames) and params.analyzer == "librosa":
                 logger.info(
                     "Librosa beat analysis produced no frames for %s; retrying native analyzer.",
                     path,
                 )
-                result = await run_blocking(
+                result = await run_cpu_bound(
                     analyze_track_beats,
                     path,
                     hop_ms=params.hop_ms,
