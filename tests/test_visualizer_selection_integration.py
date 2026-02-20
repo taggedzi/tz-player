@@ -120,7 +120,8 @@ def test_visualizer_selection_persists_across_restart(tmp_path, monkeypatch) -> 
             lambda cls,
             *,
             local_plugin_paths=None,
-            plugin_security_mode="warn": registry
+            plugin_security_mode="warn",
+            plugin_runtime_mode="in-process": registry
         ),
     )
 
@@ -173,7 +174,8 @@ def test_unknown_persisted_visualizer_falls_back_and_repersists(
             lambda cls,
             *,
             local_plugin_paths=None,
-            plugin_security_mode="warn": registry
+            plugin_security_mode="warn",
+            plugin_runtime_mode="in-process": registry
         ),
     )
 
@@ -214,7 +216,8 @@ def test_ansi_visualizer_output_does_not_raise_markup_error(
             lambda cls,
             *,
             local_plugin_paths=None,
-            plugin_security_mode="warn": registry
+            plugin_security_mode="warn",
+            plugin_runtime_mode="in-process": registry
         ),
     )
     app = TzPlayerApp(auto_init=False, backend_name="fake")
@@ -315,7 +318,13 @@ def test_cli_visualizer_plugin_paths_override_persisted_state(
     )
     captured_paths: list[str] = []
 
-    def fake_built_in(cls, *, local_plugin_paths=None, plugin_security_mode="warn"):
+    def fake_built_in(
+        cls,
+        *,
+        local_plugin_paths=None,
+        plugin_security_mode="warn",
+        plugin_runtime_mode="in-process",
+    ):
         if local_plugin_paths:
             captured_paths.extend(local_plugin_paths)
         return VisualizerRegistry({"viz.default": VizDefault}, default_id="viz.default")

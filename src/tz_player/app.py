@@ -69,6 +69,7 @@ METADATA_REFRESH_DEBOUNCE = 0.2
 SPEED_MIN = 0.5
 SPEED_MAX = 4.0
 VISUALIZER_PLUGIN_SECURITY_MODES = {"off", "warn", "enforce"}
+VISUALIZER_PLUGIN_RUNTIME_MODES = {"in-process", "isolated"}
 CYBERPUNK_THEME = Theme(
     name="cyberpunk-clean",
     primary="#00D7E6",
@@ -273,6 +274,7 @@ class TzPlayerApp(App):
         visualizer_fps_override: int | None = None,
         visualizer_plugin_paths_override: list[str] | None = None,
         visualizer_plugin_security_mode_override: str | None = None,
+        visualizer_plugin_runtime_mode_override: str | None = None,
     ) -> None:
         """Initialize app state and deferred service dependencies.
 
@@ -292,6 +294,9 @@ class TzPlayerApp(App):
         self._visualizer_plugin_paths_override = visualizer_plugin_paths_override
         self._visualizer_plugin_security_mode_override = (
             visualizer_plugin_security_mode_override
+        )
+        self._visualizer_plugin_runtime_mode_override = (
+            visualizer_plugin_runtime_mode_override
         )
         self.player_service: PlayerService | None = None
         self.player_state = PlayerState()
@@ -368,6 +373,15 @@ class TzPlayerApp(App):
                     if self._visualizer_plugin_security_mode_override is not None
                     else _normalize_visualizer_plugin_security_mode(
                         self.state.visualizer_plugin_security_mode
+                    )
+                ),
+                visualizer_plugin_runtime_mode=(
+                    _normalize_visualizer_plugin_runtime_mode(
+                        self._visualizer_plugin_runtime_mode_override
+                    )
+                    if self._visualizer_plugin_runtime_mode_override is not None
+                    else _normalize_visualizer_plugin_runtime_mode(
+                        self.state.visualizer_plugin_runtime_mode
                     )
                 ),
             )
@@ -904,6 +918,7 @@ class TzPlayerApp(App):
         self.visualizer_registry = VisualizerRegistry.built_in(
             local_plugin_paths=local_plugin_paths,
             plugin_security_mode=self.state.visualizer_plugin_security_mode,
+            plugin_runtime_mode=self.state.visualizer_plugin_runtime_mode,
         )
         registry_notices = self.visualizer_registry.consume_notices()
         if registry_notices:
@@ -1245,6 +1260,13 @@ def _normalize_visualizer_plugin_security_mode(value: str) -> str:
     return "warn"
 
 
+def _normalize_visualizer_plugin_runtime_mode(value: str) -> str:
+    normalized = value.strip().lower()
+    if normalized in VISUALIZER_PLUGIN_RUNTIME_MODES:
+        return normalized
+    return "in-process"
+
+
 def _clamp_int(value: int, min_value: int, max_value: int) -> int:
     return max(min_value, min(value, max_value))
 
@@ -1294,6 +1316,11 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("off", "warn", "enforce"),
         help="Local plugin security policy mode.",
     )
+    parser.add_argument(
+        "--visualizer-plugin-runtime",
+        choices=("in-process", "isolated"),
+        help="Local plugin runtime mode.",
+    )
     return parser
 
 
@@ -1317,6 +1344,7 @@ def main() -> int:
         visualizer_fps = getattr(args, "visualizer_fps", None)
         visualizer_plugin_paths = getattr(args, "visualizer_plugin_paths", None)
         visualizer_plugin_security = getattr(args, "visualizer_plugin_security", None)
+        visualizer_plugin_runtime = getattr(args, "visualizer_plugin_runtime", None)
         app_kwargs: dict[str, object] = {"backend_name": args.backend}
         if visualizer_fps is not None:
             app_kwargs["visualizer_fps_override"] = visualizer_fps
@@ -1325,6 +1353,10 @@ def main() -> int:
         if visualizer_plugin_security is not None:
             app_kwargs["visualizer_plugin_security_mode_override"] = (
                 visualizer_plugin_security
+            )
+        if visualizer_plugin_runtime is not None:
+            app_kwargs["visualizer_plugin_runtime_mode_override"] = (
+                visualizer_plugin_runtime
             )
         app = TzPlayerApp(**cast(dict[str, Any], app_kwargs))
         app.run()

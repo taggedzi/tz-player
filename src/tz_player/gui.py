@@ -59,6 +59,11 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("off", "warn", "enforce"),
         help="Local plugin security policy mode.",
     )
+    parser.add_argument(
+        "--visualizer-plugin-runtime",
+        choices=("in-process", "isolated"),
+        help="Local plugin runtime mode.",
+    )
     return parser
 
 
@@ -78,6 +83,7 @@ def main() -> int:
         visualizer_fps = getattr(args, "visualizer_fps", None)
         visualizer_plugin_paths = getattr(args, "visualizer_plugin_paths", None)
         visualizer_plugin_security = getattr(args, "visualizer_plugin_security", None)
+        visualizer_plugin_runtime = getattr(args, "visualizer_plugin_runtime", None)
         app_kwargs: dict[str, object] = {"backend_name": args.backend}
         if visualizer_fps is not None:
             app_kwargs["visualizer_fps_override"] = visualizer_fps
@@ -86,6 +92,10 @@ def main() -> int:
         if visualizer_plugin_security is not None:
             app_kwargs["visualizer_plugin_security_mode_override"] = (
                 visualizer_plugin_security
+            )
+        if visualizer_plugin_runtime is not None:
+            app_kwargs["visualizer_plugin_runtime_mode_override"] = (
+                visualizer_plugin_runtime
             )
         app = TzPlayerApp(**cast(dict[str, Any], app_kwargs))
         app.run()

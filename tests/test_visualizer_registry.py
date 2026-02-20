@@ -220,3 +220,52 @@ class RiskyViz:
     assert not registry.has_plugin("local.risky")
     notices = registry.consume_notices()
     assert any("Blocked plugin" in notice for notice in notices)
+
+
+def test_registry_isolated_runtime_executes_local_plugin(tmp_path: Path) -> None:
+    plugin_file = tmp_path / "isolated_local.py"
+    plugin_file.write_text(
+        """
+class IsolatedLocalViz:
+    plugin_id = "local.isolated"
+    display_name = "Isolated Local"
+    plugin_api_version = 1
+
+    def on_activate(self, context):
+        return None
+
+    def on_deactivate(self):
+        return None
+
+    def render(self, frame):
+        return f"iso:{frame.status}"
+""".strip(),
+        encoding="utf-8",
+    )
+    registry = VisualizerRegistry.built_in(
+        local_plugin_paths=[str(tmp_path)],
+        plugin_runtime_mode="isolated",
+    )
+    plugin = registry.create("local.isolated")
+    assert plugin is not None
+    plugin.on_activate(VisualizerContext(ansi_enabled=False, unicode_enabled=True))
+    frame = VisualizerFrameInput(
+        frame_index=0,
+        monotonic_s=0.0,
+        width=10,
+        height=3,
+        status="playing",
+        position_s=0.0,
+        duration_s=1.0,
+        volume=1.0,
+        speed=1.0,
+        repeat_mode="off",
+        shuffle=False,
+        track_id=None,
+        track_path=None,
+        title=None,
+        artist=None,
+        album=None,
+    )
+    assert plugin.render(frame) == "iso:playing"
+    plugin.on_deactivate()

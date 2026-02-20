@@ -24,6 +24,7 @@ from .base import VisualizerPlugin
 from .basic import BasicVisualizer
 from .cover_ascii import CoverAsciiMotionVisualizer, CoverAsciiStaticVisualizer
 from .hackscope import HackScopeVisualizer
+from .isolated_runner import IsolatedPluginProxy, PluginSourceSpec
 from .matrix import MatrixBlueVisualizer, MatrixGreenVisualizer, MatrixRedVisualizer
 from .vu import VuReactiveVisualizer
 
@@ -32,6 +33,7 @@ logger = logging.getLogger(__name__)
 PluginFactory = Callable[[], VisualizerPlugin]
 PLUGIN_API_VERSION = 1
 _SECURITY_MODES = {"off", "warn", "enforce"}
+_RUNTIME_MODES = {"in-process", "isolated"}
 _DENY_IMPORT_ENV = "TZ_PLAYER_VIS_PLUGIN_DENY_IMPORT_PREFIXES"
 _ALLOW_IMPORT_ENV = "TZ_PLAYER_VIS_PLUGIN_ALLOW_IMPORT_PREFIXES"
 _MODULE_NAME_RE = re.compile(r"^[A-Za-z0-9_.]+$")
@@ -69,9 +71,29 @@ _RISKY_CALL_NAMES = {
 @dataclass
 class _DiscoveryContext:
     mode: str
+    runtime_mode: str
     notices: list[str]
     allow_import_prefixes: tuple[str, ...]
     deny_import_prefixes: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class _LoadedModule:
+    module: ModuleType
+    source_kind: str
+    source_value: str
+
+
+@dataclass(frozen=True)
+class _LocalPluginCandidate:
+    plugin_type: type[VisualizerPlugin]
+    source: PluginSourceSpec
+
+
+@dataclass(frozen=True)
+class _PluginMetadata:
+    plugin_id: str
+    display_name: str
 
 
 class VisualizerRegistry:
@@ -121,6 +143,7 @@ class VisualizerRegistry:
         *,
         local_plugin_paths: list[str] | None = None,
         plugin_security_mode: str = "warn",
+        plugin_runtime_mode: str = "in-process",
     ) -> VisualizerRegistry:
         plugin_types: list[type[VisualizerPlugin]] = [
             BasicVisualizer,
@@ -132,12 +155,21 @@ class VisualizerRegistry:
             CoverAsciiStaticVisualizer,
             CoverAsciiMotionVisualizer,
         ]
-        context = _make_discovery_context(plugin_security_mode)
-        if local_plugin_paths:
-            plugin_types.extend(
-                _discover_local_plugin_types(local_plugin_paths, context)
-            )
+        context = _make_discovery_context(plugin_security_mode, plugin_runtime_mode)
         factories = _build_factory_map(plugin_types)
+
+        if local_plugin_paths:
+            local_candidates = _discover_local_plugin_candidates(
+                local_plugin_paths, context
+            )
+            if context.runtime_mode == "isolated":
+                local_factories = _build_isolated_local_factory_map(local_candidates)
+            else:
+                local_factories = _build_factory_map(
+                    [candidate.plugin_type for candidate in local_candidates]
+                )
+            _merge_factory_maps(factories, local_factories)
+
         default_id = "basic"
         if default_id not in factories:
             msg = "Built-in visualizers missing required 'basic' plugin."
@@ -151,14 +183,19 @@ class VisualizerRegistry:
                 "local_plugin_paths": local_plugin_paths or [],
                 "default_id": default_id,
                 "plugin_security_mode": context.mode,
+                "plugin_runtime_mode": context.runtime_mode,
                 "plugin_notices": context.notices,
             },
         )
         return cls(factories, default_id=default_id, notices=context.notices)
 
 
-def _make_discovery_context(plugin_security_mode: str) -> _DiscoveryContext:
+def _make_discovery_context(
+    plugin_security_mode: str,
+    plugin_runtime_mode: str,
+) -> _DiscoveryContext:
     mode = plugin_security_mode.strip().lower()
+    runtime_mode = plugin_runtime_mode.strip().lower()
     notices: list[str] = []
     if mode not in _SECURITY_MODES:
         mode = "warn"
@@ -167,10 +204,18 @@ def _make_discovery_context(plugin_security_mode: str) -> _DiscoveryContext:
             "Unknown plugin security mode '%s'; defaulting to 'warn'.",
             plugin_security_mode,
         )
+    if runtime_mode not in _RUNTIME_MODES:
+        runtime_mode = "in-process"
+        notices.append("Invalid visualizer plugin runtime mode; using 'in-process'.")
+        logger.warning(
+            "Unknown plugin runtime mode '%s'; defaulting to 'in-process'.",
+            plugin_runtime_mode,
+        )
     allow_prefixes = _parse_env_prefixes(_ALLOW_IMPORT_ENV)
     deny_prefixes = _parse_env_prefixes(_DENY_IMPORT_ENV)
     return _DiscoveryContext(
         mode=mode,
+        runtime_mode=runtime_mode,
         notices=notices,
         allow_import_prefixes=allow_prefixes,
         deny_import_prefixes=deny_prefixes,
@@ -183,40 +228,49 @@ def _parse_env_prefixes(name: str) -> tuple[str, ...]:
     return tuple(part for part in parts if part)
 
 
-def _discover_local_plugin_types(
+def _discover_local_plugin_candidates(
     import_paths: list[str],
     context: _DiscoveryContext,
-) -> list[type[VisualizerPlugin]]:
+) -> list[_LocalPluginCandidate]:
     """Discover plugin classes from configured file/module import entries."""
-    plugin_types: list[type[VisualizerPlugin]] = []
+    candidates: list[_LocalPluginCandidate] = []
     seen: set[type[VisualizerPlugin]] = set()
     for entry in import_paths:
-        for module in _load_modules_from_entry(entry, context):
-            for candidate in _extract_plugin_types(module):
-                if candidate in seen:
+        for loaded in _load_modules_from_entry(entry, context):
+            for plugin_type in _extract_plugin_types(loaded.module):
+                if plugin_type in seen:
                     continue
-                seen.add(candidate)
-                plugin_types.append(candidate)
-    return plugin_types
+                seen.add(plugin_type)
+                candidates.append(
+                    _LocalPluginCandidate(
+                        plugin_type=plugin_type,
+                        source=PluginSourceSpec(
+                            source_kind=loaded.source_kind,
+                            source_value=loaded.source_value,
+                            class_name=plugin_type.__name__,
+                        ),
+                    )
+                )
+    return candidates
 
 
 def _load_modules_from_entry(
     entry: str, context: _DiscoveryContext
-) -> list[ModuleType]:
+) -> list[_LoadedModule]:
     """Load modules from filesystem path or import path entry."""
     path = Path(entry)
-    modules: list[ModuleType] = []
+    modules: list[_LoadedModule] = []
     if path.exists():
         if path.is_file() and path.suffix.lower() == ".py":
             module = _load_module_from_file(path, context)
             if module is not None:
-                modules.append(module)
+                modules.append(_LoadedModule(module, "file", str(path)))
             return modules
         if path.is_dir():
             if (path / "__init__.py").exists():
                 package = _load_module_from_package_dir(path, context)
                 if package is not None:
-                    modules.append(package)
+                    modules.append(_loaded_from_module(package, fallback_kind="file"))
                     modules.extend(_load_package_children(package, context))
                 return modules
             for child in sorted(path.iterdir()):
@@ -225,11 +279,13 @@ def _load_modules_from_entry(
                 if child.is_file() and child.suffix.lower() == ".py":
                     module = _load_module_from_file(child, context)
                     if module is not None:
-                        modules.append(module)
+                        modules.append(_LoadedModule(module, "file", str(child)))
                 elif child.is_dir() and (child / "__init__.py").exists():
                     package = _load_module_from_package_dir(child, context)
                     if package is not None:
-                        modules.append(package)
+                        modules.append(
+                            _loaded_from_module(package, fallback_kind="file")
+                        )
                         modules.extend(_load_package_children(package, context))
             return modules
         logger.error(
@@ -246,18 +302,34 @@ def _load_modules_from_entry(
     module = _load_module_from_import(entry, context)
     if module is None:
         return modules
-    modules.append(module)
+    modules.append(
+        _loaded_from_module(module, fallback_kind="import", import_name=entry)
+    )
     module_path = getattr(module, "__path__", None)
     if module_path is not None:
         modules.extend(_load_package_children(module, context))
     return modules
 
 
+def _loaded_from_module(
+    module: ModuleType,
+    *,
+    fallback_kind: str,
+    import_name: str | None = None,
+) -> _LoadedModule:
+    if fallback_kind == "import":
+        return _LoadedModule(module, "import", import_name or module.__name__)
+    file_path = getattr(module, "__file__", None)
+    if file_path:
+        return _LoadedModule(module, "file", str(file_path))
+    return _LoadedModule(module, "import", module.__name__)
+
+
 def _load_package_children(
     package: ModuleType,
     context: _DiscoveryContext,
-) -> list[ModuleType]:
-    children: list[ModuleType] = []
+) -> list[_LoadedModule]:
+    children: list[_LoadedModule] = []
     module_path = getattr(package, "__path__", None)
     if module_path is None:
         return children
@@ -265,7 +337,13 @@ def _load_package_children(
     for module_info in pkgutil.iter_modules(module_path, prefix):
         child = _load_module_from_import(module_info.name, context)
         if child is not None:
-            children.append(child)
+            children.append(
+                _loaded_from_module(
+                    child,
+                    fallback_kind="import",
+                    import_name=module_info.name,
+                )
+            )
     return children
 
 
@@ -393,7 +471,6 @@ def _scan_source_for_risky_ops(path: Path, source: str) -> list[str]:
             if call_name == "open" and _open_call_is_write(node):
                 findings.append("call:open(write)")
 
-    # Keep diagnostics short and deterministic.
     deduped = sorted(set(findings))
     return deduped[:10]
 
@@ -475,6 +552,8 @@ def _extract_plugin_types(module: ModuleType) -> list[type[VisualizerPlugin]]:
     for value in vars(module).values():
         if not inspect.isclass(value):
             continue
+        if value.__module__ != module.__name__:
+            continue
         if _looks_like_plugin_type(value):
             plugin_types.append(value)
     return plugin_types
@@ -498,34 +577,95 @@ def _build_factory_map(
     """Instantiate plugin classes once to validate and index by stable ID."""
     factories: dict[str, PluginFactory] = {}
     for plugin_type in plugin_types:
-        try:
-            sample = plugin_type()
-        except Exception as exc:
+        metadata = _validate_plugin_type(plugin_type)
+        if metadata is None:
+            continue
+        if metadata.plugin_id in factories:
             logger.error(
-                "Failed to instantiate visualizer plugin %s: %s", plugin_type, exc
+                "Duplicate visualizer plugin_id '%s'; keeping first plugin",
+                metadata.plugin_id,
             )
             continue
-        plugin_id = getattr(sample, "plugin_id", None)
-        if not isinstance(plugin_id, str) or not plugin_id.strip():
-            logger.error("Visualizer plugin %s has invalid plugin_id", plugin_type)
+        factories[metadata.plugin_id] = plugin_type
+    return factories
+
+
+def _build_isolated_local_factory_map(
+    candidates: list[_LocalPluginCandidate],
+) -> dict[str, PluginFactory]:
+    factories: dict[str, PluginFactory] = {}
+    for candidate in candidates:
+        metadata = _validate_plugin_type(candidate.plugin_type)
+        if metadata is None:
             continue
-        display_name = getattr(sample, "display_name", None)
-        if not isinstance(display_name, str) or not display_name.strip():
-            logger.error("Visualizer plugin %s has invalid display_name", plugin_type)
-            continue
-        api_version = getattr(sample, "plugin_api_version", None)
-        if api_version != PLUGIN_API_VERSION:
+        if metadata.plugin_id in factories:
             logger.error(
-                "Visualizer plugin %s has incompatible plugin_api_version '%s' (expected %s)",
-                plugin_type,
-                api_version,
-                PLUGIN_API_VERSION,
+                "Duplicate visualizer plugin_id '%s'; keeping first plugin",
+                metadata.plugin_id,
             )
             continue
-        if plugin_id in factories:
+        factories[metadata.plugin_id] = _make_isolated_factory(
+            metadata,
+            candidate.source,
+        )
+    return factories
+
+
+def _make_isolated_factory(
+    metadata: _PluginMetadata,
+    source: PluginSourceSpec,
+) -> PluginFactory:
+    def _factory() -> VisualizerPlugin:
+        return IsolatedPluginProxy(
+            plugin_id=metadata.plugin_id,
+            display_name=metadata.display_name,
+            plugin_api_version=PLUGIN_API_VERSION,
+            source=source,
+        )
+
+    return _factory
+
+
+def _validate_plugin_type(
+    plugin_type: type[VisualizerPlugin],
+) -> _PluginMetadata | None:
+    try:
+        sample = plugin_type()
+    except Exception as exc:
+        logger.error("Failed to instantiate visualizer plugin %s: %s", plugin_type, exc)
+        return None
+
+    plugin_id = getattr(sample, "plugin_id", None)
+    if not isinstance(plugin_id, str) or not plugin_id.strip():
+        logger.error("Visualizer plugin %s has invalid plugin_id", plugin_type)
+        return None
+
+    display_name = getattr(sample, "display_name", None)
+    if not isinstance(display_name, str) or not display_name.strip():
+        logger.error("Visualizer plugin %s has invalid display_name", plugin_type)
+        return None
+
+    api_version = getattr(sample, "plugin_api_version", None)
+    if api_version != PLUGIN_API_VERSION:
+        logger.error(
+            "Visualizer plugin %s has incompatible plugin_api_version '%s' (expected %s)",
+            plugin_type,
+            api_version,
+            PLUGIN_API_VERSION,
+        )
+        return None
+
+    return _PluginMetadata(plugin_id=plugin_id, display_name=display_name)
+
+
+def _merge_factory_maps(
+    base: dict[str, PluginFactory],
+    extra: dict[str, PluginFactory],
+) -> None:
+    for plugin_id, factory in extra.items():
+        if plugin_id in base:
             logger.error(
                 "Duplicate visualizer plugin_id '%s'; keeping first plugin", plugin_id
             )
             continue
-        factories[plugin_id] = plugin_type
-    return factories
+        base[plugin_id] = factory

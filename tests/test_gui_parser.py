@@ -43,6 +43,12 @@ def test_gui_parser_accepts_visualizer_plugin_security_mode() -> None:
     assert args.visualizer_plugin_security == "warn"
 
 
+def test_gui_parser_accepts_visualizer_plugin_runtime_mode() -> None:
+    parser = build_parser()
+    args = parser.parse_args(["--visualizer-plugin-runtime", "isolated"])
+    assert args.visualizer_plugin_runtime == "isolated"
+
+
 def test_gui_parser_defaults_visualizer_plugin_paths_to_none() -> None:
     parser = build_parser()
     args = parser.parse_args([])
