@@ -144,6 +144,24 @@ class VizSpectrum:
         return "spectrum"
 
 
+@dataclass
+class VizBeat:
+    """Visualizer stub opting into beat sampling capability."""
+
+    plugin_id: str = "viz.beat"
+    display_name: str = "Viz Beat"
+    requires_beat: bool = True
+
+    def on_activate(self, context: VisualizerContext) -> None:
+        return None
+
+    def on_deactivate(self) -> None:
+        return None
+
+    def render(self, frame: VisualizerFrameInput) -> str:
+        return "beat"
+
+
 def test_visualizer_selection_persists_across_restart(tmp_path, monkeypatch) -> None:
     _setup_dirs(tmp_path, monkeypatch)
     registry = VisualizerRegistry(
@@ -386,6 +404,34 @@ def test_app_spectrum_request_capability_follows_active_visualizer(
             await asyncio.sleep(0)
             assert app.visualizer_host.active_id == "viz.spectrum"
             assert app._active_visualizer_requests_spectrum() is True
+            app.exit()
+
+    _run(run_app())
+
+
+def test_app_beat_request_capability_follows_active_visualizer(
+    tmp_path, monkeypatch
+) -> None:
+    _setup_dirs(tmp_path, monkeypatch)
+    registry = VisualizerRegistry(
+        {"viz.default": VizDefault, "viz.beat": VizBeat},
+        default_id="viz.default",
+    )
+    _stub_registry_built_in(monkeypatch, registry)
+    app = TzPlayerApp(auto_init=False, backend_name="fake")
+
+    async def run_app() -> None:
+        async with app.run_test() as pilot:
+            await asyncio.sleep(0)
+            await app._initialize_state()
+            assert app.visualizer_host is not None
+            assert app.visualizer_host.active_id == "viz.default"
+            assert app._active_visualizer_requests_beat() is False
+
+            await pilot.press("z")
+            await asyncio.sleep(0)
+            assert app.visualizer_host.active_id == "viz.beat"
+            assert app._active_visualizer_requests_beat() is True
             app.exit()
 
     _run(run_app())

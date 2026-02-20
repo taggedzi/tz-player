@@ -76,7 +76,7 @@ def test_schema_migrates_v4_into_playlist_search_fts(tmp_path) -> None:
 
         create_schema(conn)
         version = conn.execute("PRAGMA user_version").fetchone()[0]
-        assert version == 5
+        assert version == 6
 
         row = conn.execute(
             """
