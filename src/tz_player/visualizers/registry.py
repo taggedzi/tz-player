@@ -26,6 +26,7 @@ from .cover_ascii import CoverAsciiMotionVisualizer, CoverAsciiStaticVisualizer
 from .hackscope import HackScopeVisualizer
 from .isolated_runner import IsolatedPluginProxy, PluginSourceSpec
 from .matrix import MatrixBlueVisualizer, MatrixGreenVisualizer, MatrixRedVisualizer
+from .radial import RadialSpectrumVisualizer
 from .reactor import ParticleReactorVisualizer
 from .terrain import AudioTerrainVisualizer
 from .typography import TypographyGlitchVisualizer
@@ -162,6 +163,7 @@ class VisualizerRegistry:
             AudioTerrainVisualizer,
             TypographyGlitchVisualizer,
             ParticleReactorVisualizer,
+            RadialSpectrumVisualizer,
             CoverAsciiStaticVisualizer,
             CoverAsciiMotionVisualizer,
         ]

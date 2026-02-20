@@ -310,7 +310,7 @@ Execution tracker derived from `SPEC.md`.
     - New plugin ID: `viz.spectrum.terrain`.
     - Group FFT bins into width buckets with filled curve rendering.
     - Add optional beat-triggered terrain lift/flash effect.
-  - `T-044C` Radial Spectrum (donut analyzer). Status: `todo`
+  - `T-044C` Radial Spectrum (donut analyzer). Status: `done`
     - New plugin ID: `viz.spectrum.radial`.
     - Render spoke-based radial FFT approximation in terminal grid.
     - Add short peak-hold and beat ring pulse.
