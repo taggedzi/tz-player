@@ -140,6 +140,7 @@ Notes:
 - `viz.particle.ember_field` (`requires_spectrum = True`, `requires_beat = True`)
 - `viz.particle.magnetic_grid` (`requires_spectrum = True`, `requires_beat = True`)
 - `viz.particle.audio_tornado` (`requires_spectrum = True`, `requires_beat = True`)
+- `viz.particle.constellation` (`requires_spectrum = True`, `requires_beat = True`)
 - `viz.spectrum.radial` (`requires_spectrum = True`, `requires_beat = True`)
 - `viz.typography.glitch` (`requires_beat = True`)
 - `viz.waveform.proxy` (`requires_waveform = True`)

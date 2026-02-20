@@ -126,6 +126,7 @@ Built-in visualizer IDs include:
 - `viz.particle.ember_field`
 - `viz.particle.magnetic_grid`
 - `viz.particle.audio_tornado`
+- `viz.particle.constellation`
 - `viz.spectrum.radial`
 - `viz.typography.glitch`
 - `viz.waveform.proxy`

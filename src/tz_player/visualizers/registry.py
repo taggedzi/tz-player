@@ -23,6 +23,7 @@ from types import ModuleType
 from .audio_tornado import AudioTornadoVisualizer
 from .base import VisualizerPlugin
 from .basic import BasicVisualizer
+from .constellation import ConstellationVisualizer
 from .cover_ascii import CoverAsciiMotionVisualizer, CoverAsciiStaticVisualizer
 from .ember_field import EmberFieldVisualizer
 from .gravity_well import GravityWellVisualizer
@@ -180,6 +181,7 @@ class VisualizerRegistry:
             EmberFieldVisualizer,
             MagneticGridVisualizer,
             AudioTornadoVisualizer,
+            ConstellationVisualizer,
             RadialSpectrumVisualizer,
             WaveformProxyVisualizer,
             WaveformNeonVisualizer,

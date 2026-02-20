@@ -33,8 +33,8 @@ Execution tracker derived from `SPEC.md`.
   - `T-048E` `viz.particle.ember_field` (Ember Field). Status: `done`
   - `T-048F` `viz.particle.magnetic_grid` (Magnetic Grid Distortion). Status: `done`
   - `T-048G` `viz.particle.audio_tornado` (Audio Tornado). Status: `done`
-  - `T-048H` `viz.particle.constellation` (Constellation Mode). Status: `in_progress`
-  - `T-048I` `viz.particle.data_core_frag` (Data Core Fragmentation). Status: `todo`
+  - `T-048H` `viz.particle.constellation` (Constellation Mode). Status: `done`
+  - `T-048I` `viz.particle.data_core_frag` (Data Core Fragmentation). Status: `in_progress`
   - `T-048J` `viz.particle.plasma_stream` (Plasma Stream Field). Status: `todo`
   - `T-048K` Registry/docs/perf integration for the full particle suite. Status: `todo`
 - Acceptance:
