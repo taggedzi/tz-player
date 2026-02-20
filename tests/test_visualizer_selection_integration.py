@@ -342,4 +342,6 @@ def test_cli_visualizer_plugin_paths_override_persisted_state(
     persisted = load_state(paths.state_path())
     assert persisted.visualizer_plugin_paths == ("cli.plugins",)
     assert "cli.plugins" in captured_paths
-    assert any(Path(path).parts[-2:] == ("visualizers", "plugins") for path in captured_paths)
+    assert any(
+        Path(path).parts[-2:] == ("visualizers", "plugins") for path in captured_paths
+    )
