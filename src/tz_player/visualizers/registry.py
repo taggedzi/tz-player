@@ -27,6 +27,7 @@ from .ember_field import EmberFieldVisualizer
 from .gravity_well import GravityWellVisualizer
 from .hackscope import HackScopeVisualizer
 from .isolated_runner import IsolatedPluginProxy, PluginSourceSpec
+from .magnetic_grid import MagneticGridVisualizer
 from .matrix import MatrixBlueVisualizer, MatrixGreenVisualizer, MatrixRedVisualizer
 from .orbital_system import OrbitalSystemVisualizer
 from .radial import RadialSpectrumVisualizer
@@ -176,6 +177,7 @@ class VisualizerRegistry:
             ReactiveRainVisualizer,
             OrbitalSystemVisualizer,
             EmberFieldVisualizer,
+            MagneticGridVisualizer,
             RadialSpectrumVisualizer,
             WaveformProxyVisualizer,
             WaveformNeonVisualizer,
