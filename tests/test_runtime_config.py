@@ -7,6 +7,9 @@ from tz_player.cli import build_parser as cli_build_parser
 from tz_player.gui import build_parser as gui_build_parser
 from tz_player.runtime_config import (
     normalize_visualizer_responsiveness_profile,
+    profile_default_beat_hop_ms,
+    profile_default_player_poll_interval_s,
+    profile_default_spectrum_hop_ms,
     profile_default_visualizer_fps,
     resolve_log_level,
 )
@@ -34,3 +37,12 @@ def test_visualizer_responsiveness_profile_normalization_and_defaults() -> None:
     assert profile_default_visualizer_fps("safe") == 10
     assert profile_default_visualizer_fps("balanced") == 16
     assert profile_default_visualizer_fps("aggressive") == 22
+    assert profile_default_spectrum_hop_ms("safe") == 40
+    assert profile_default_spectrum_hop_ms("balanced") == 32
+    assert profile_default_spectrum_hop_ms("aggressive") == 24
+    assert profile_default_beat_hop_ms("safe") == 40
+    assert profile_default_beat_hop_ms("balanced") == 32
+    assert profile_default_beat_hop_ms("aggressive") == 24
+    assert profile_default_player_poll_interval_s("safe") == 0.25
+    assert profile_default_player_poll_interval_s("balanced") == 0.18
+    assert profile_default_player_poll_interval_s("aggressive") == 0.12

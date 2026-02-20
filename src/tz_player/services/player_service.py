@@ -118,6 +118,7 @@ class PlayerService:
         beat_service: BeatService | None = None,
         beat_params: BeatParams | None = None,
         should_sample_beat: Callable[[], bool] | None = None,
+        poll_interval_s: float = 0.25,
         shuffle_random: random.Random | None = None,
         default_duration_ms: int = 180_000,
         initial_state: PlayerState | None = None,
@@ -136,7 +137,7 @@ class PlayerService:
         self._lock = asyncio.Lock()
         self._stop_requested = False
         self._poll_task: asyncio.Task[None] | None = None
-        self._poll_interval = 0.25
+        self._poll_interval = max(0.05, min(1.0, float(poll_interval_s)))
         self._end_handled_item_id: int | None = None
         self._max_position_seen_ms = self._state.position_ms
         self._track_started_monotonic_s: float | None = None

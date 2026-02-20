@@ -69,6 +69,7 @@ Logging and diagnostics:
   - `safe`: lower CPU, conservative responsiveness defaults.
   - `balanced`: recommended default profile.
   - `aggressive`: higher responsiveness, higher CPU cost.
+  - Profiles also tune analysis freshness defaults (FFT/beat hop) and player polling cadence.
   - Precedence for render cadence:
     - `--visualizer-fps` (explicit) overrides profile defaults.
     - without explicit FPS, `--visualizer-responsiveness` sets profile-default FPS.

@@ -340,6 +340,10 @@ def test_cli_visualizer_responsiveness_override_sets_profile_default_fps(
             assert app.state.visualizer_responsiveness_profile == "aggressive"
             assert app.visualizer_host.target_fps == 22
             assert app.state.visualizer_fps == 22
+            assert app._spectrum_params.hop_ms == 24
+            assert app._beat_params.hop_ms == 24
+            assert app.player_service is not None
+            assert app.player_service._poll_interval == 0.12
             app.exit()
 
     _run(run_app())

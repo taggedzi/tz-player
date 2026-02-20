@@ -400,7 +400,7 @@ Execution tracker derived from `SPEC.md`.
     - Set profile-specific visualizer FPS targets.
     - Keep existing hard clamps and fallback safety.
     - Ensure host throttle behavior remains deterministic.
-  - `T-046C` Analysis cadence tuning (scalar/FFT/beat freshness). Status: `todo`
+  - `T-046C` Analysis cadence tuning (scalar/FFT/beat freshness). Status: `done`
     - Tune FFT hop/lookup cadence by profile where practical.
     - Tune scalar update cadence and beat pulse/hold windows.
     - Preserve cache model and non-blocking scheduling.

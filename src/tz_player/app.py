@@ -40,6 +40,9 @@ from .paths import db_path, log_dir, state_path, visualizer_plugin_dir
 from .runtime_config import (
     VISUALIZER_RESPONSIVENESS_PROFILES,
     normalize_visualizer_responsiveness_profile,
+    profile_default_beat_hop_ms,
+    profile_default_player_poll_interval_s,
+    profile_default_spectrum_hop_ms,
     profile_default_visualizer_fps,
     resolve_log_level,
 )
@@ -397,6 +400,11 @@ class TzPlayerApp(App):
                 )
             )
             profile_default_fps = profile_default_visualizer_fps(effective_profile)
+            profile_spectrum_hop_ms = profile_default_spectrum_hop_ms(effective_profile)
+            profile_beat_hop_ms = profile_default_beat_hop_ms(effective_profile)
+            profile_poll_interval_s = profile_default_player_poll_interval_s(
+                effective_profile
+            )
             state_fps = _normalize_persisted_visualizer_fps(
                 self.state.visualizer_fps,
                 default_fps=profile_default_fps,
@@ -435,6 +443,11 @@ class TzPlayerApp(App):
                     )
                 ),
             )
+            self._spectrum_params = SpectrumParams(
+                band_count=48,
+                hop_ms=profile_spectrum_hop_ms,
+            )
+            self._beat_params = BeatParams(hop_ms=profile_beat_hop_ms)
             await run_blocking(save_state, state_path(), self.state)
             try:
                 await self.store.initialize()
@@ -477,6 +490,7 @@ class TzPlayerApp(App):
                 beat_service=self.beat_service,
                 beat_params=self._beat_params,
                 should_sample_beat=self._active_visualizer_requests_beat,
+                poll_interval_s=profile_poll_interval_s,
                 initial_state=self.player_state,
             )
             self.metadata_service = MetadataService(
