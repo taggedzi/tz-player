@@ -42,6 +42,13 @@ Set visualizer responsiveness profile:
 tz-player --visualizer-responsiveness balanced
 ```
 
+Select beat analyzer implementation:
+
+```
+tz-player --beat-analyzer native
+tz-player --beat-analyzer librosa
+```
+
 Notes:
 - Default backend is `vlc`.
 - The VLC backend requires VLC/libVLC installed on your system.
@@ -78,6 +85,10 @@ Logging and diagnostics:
   - Typical default location pattern: `<user_data_dir>/logs/tz-player.log`.
 - TUI/GUI runs write logs to file by default (console log streaming is disabled to avoid drawing over the TUI).
 - The non-TUI `doctor` path still prints diagnostics to stdout.
+- `--beat-analyzer <native|librosa>` selects beat-analysis implementation for lazy beat cache generation.
+  - `native` (default): built-in analyzer path.
+  - `librosa`: optional analyzer path if `librosa` is installed; otherwise app falls back to `native` with a runtime notice.
+- Environment override: `TZ_PLAYER_BEAT_ANALYZER=<native|librosa>` (used when CLI flag is not provided).
 - `doctor` command behavior:
   - `tz-player doctor` checks `tinytag`, `vlc/libvlc`, and `ffmpeg`.
   - Exit code is `0` when required checks pass for the selected backend.

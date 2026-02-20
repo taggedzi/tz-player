@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import math
 import shutil
 import struct
@@ -77,6 +78,132 @@ def analyze_track_beats(
     if not frames:
         return None
     return BeatAnalysisResult(duration_ms=max(1, duration_ms), bpm=bpm, frames=frames)
+
+
+def librosa_available() -> bool:
+    """Return whether librosa can be imported in the current runtime."""
+    try:
+        importlib.import_module("librosa")
+    except Exception:
+        return False
+    return True
+
+
+def analyze_track_beats_librosa(
+    track_path: Path | str,
+    *,
+    hop_ms: int = 40,
+    max_frames: int = 12_000,
+) -> BeatAnalysisResult | None:
+    """Decode track and compute beat timeline using librosa when available."""
+    try:
+        librosa = importlib.import_module("librosa")
+    except Exception:
+        return None
+
+    path = Path(track_path)
+    if not path.exists() or not path.is_file():
+        return None
+    hop_ms = max(10, int(hop_ms))
+
+    decoded = _decode_wave(path)
+    if decoded is None:
+        if path.suffix.lower() in _WAVE_SUFFIXES:
+            return None
+        decoded = _decode_ffmpeg(path)
+    if decoded is None:
+        return None
+    sample_rate, mono_samples = decoded
+    if sample_rate <= 0 or not mono_samples:
+        return None
+
+    hop_samples = max(1, int(sample_rate * (hop_ms / 1000.0)))
+    if not mono_samples:
+        return None
+    try:
+        onset_env = librosa.onset.onset_strength(
+            y=mono_samples,
+            sr=sample_rate,
+            hop_length=hop_samples,
+        )
+        if onset_env is None or len(onset_env) <= 0:
+            return None
+        strengths = _normalize_strengths([float(value) for value in onset_env])
+        onset_frames = librosa.onset.onset_detect(
+            onset_envelope=onset_env,
+            sr=sample_rate,
+            hop_length=hop_samples,
+            units="frames",
+            pre_max=3,
+            post_max=3,
+            pre_avg=3,
+            post_avg=5,
+            delta=0.16,
+            wait=3,
+        )
+        tempo_raw, beat_frames = librosa.beat.beat_track(
+            onset_envelope=onset_env,
+            sr=sample_rate,
+            hop_length=hop_samples,
+            units="frames",
+        )
+    except Exception:
+        return None
+
+    tempo = float(tempo_raw.item()) if hasattr(tempo_raw, "item") else float(tempo_raw)
+    onset_indices = [int(value) for value in onset_frames if int(value) >= 0]
+    if not onset_indices:
+        onset_indices = [int(value) for value in beat_frames if int(value) >= 0]
+    beat_indices = _postprocess_onset_indices(
+        strengths,
+        onset_indices,
+        hop_ms=hop_ms,
+        min_strength=0.25,
+        min_inter_onset_ms=140,
+    )
+    frame_count = min(len(strengths), max_frames)
+    frames: list[tuple[int, int, bool]] = []
+    for idx in range(frame_count):
+        position_ms = int(round((idx * hop_samples * 1000.0) / sample_rate))
+        strength_u8 = int(max(0, min(255, round(strengths[idx] * 255.0))))
+        frames.append((position_ms, strength_u8, idx in beat_indices))
+    if not frames:
+        return None
+    duration_ms = int((len(mono_samples) * 1000) / sample_rate)
+    return BeatAnalysisResult(
+        duration_ms=max(1, duration_ms),
+        bpm=max(0.0, tempo),
+        frames=frames,
+    )
+
+
+def _postprocess_onset_indices(
+    strengths: list[float],
+    onset_indices: list[int],
+    *,
+    hop_ms: int,
+    min_strength: float,
+    min_inter_onset_ms: int,
+) -> set[int]:
+    if not strengths or not onset_indices:
+        return set()
+    min_gap_frames = max(1, int(round(min_inter_onset_ms / max(1, hop_ms))))
+    ordered = sorted({idx for idx in onset_indices if 0 <= idx < len(strengths)})
+    filtered = [idx for idx in ordered if strengths[idx] >= min_strength]
+    if not filtered:
+        return set()
+    selected: list[int] = []
+    for idx in filtered:
+        if not selected:
+            selected.append(idx)
+            continue
+        prev = selected[-1]
+        if idx - prev >= min_gap_frames:
+            selected.append(idx)
+            continue
+        if strengths[idx] > strengths[prev]:
+            selected[-1] = idx
+    return set(selected)
 
 
 def _decode_wave(path: Path) -> tuple[int, list[float]] | None:

@@ -17,6 +17,7 @@ class BeatParams:
     """Beat-analysis parameters that define cache identity."""
 
     hop_ms: int = 40
+    analyzer: str = "native"
 
 
 @dataclass(frozen=True)
@@ -354,7 +355,10 @@ class SqliteBeatStore:
 
 
 def _params_json(params: BeatParams) -> str:
-    payload = {"hop_ms": max(10, int(params.hop_ms))}
+    payload = {
+        "hop_ms": max(10, int(params.hop_ms)),
+        "analyzer": str(params.analyzer or "native").strip().lower(),
+    }
     return json.dumps(payload, sort_keys=True, separators=(",", ":"))
 
 

@@ -6,7 +6,12 @@ import math
 import wave
 from pathlib import Path
 
-from tz_player.services.audio_beat_analysis import analyze_track_beats
+from tz_player.services.audio_beat_analysis import (
+    _postprocess_onset_indices,
+    analyze_track_beats,
+    analyze_track_beats_librosa,
+    librosa_available,
+)
 
 
 def _write_wave(path: Path, *, frames: int = 2_205, sample_rate: int = 44_100) -> None:
@@ -79,3 +84,25 @@ def test_analyze_track_beats_detects_repeating_pulses(tmp_path) -> None:
     assert beat_count >= 8
     max_strength = max(strength for _, strength, _ in result.frames)
     assert max_strength >= 160
+
+
+def test_librosa_availability_probe_returns_bool() -> None:
+    assert isinstance(librosa_available(), bool)
+
+
+def test_analyze_track_beats_librosa_returns_none_for_missing_file(tmp_path) -> None:
+    missing = tmp_path / "missing.wav"
+    assert analyze_track_beats_librosa(missing) is None
+
+
+def test_postprocess_onset_indices_applies_strength_and_gap_filters() -> None:
+    strengths = [0.05, 0.30, 0.72, 0.64, 0.22, 0.90, 0.31]
+    raw = [1, 2, 3, 5, 6]
+    filtered = _postprocess_onset_indices(
+        strengths,
+        raw,
+        hop_ms=40,
+        min_strength=0.25,
+        min_inter_onset_ms=120,
+    )
+    assert filtered == {2, 5}

@@ -57,6 +57,12 @@ def test_app_parser_accepts_visualizer_plugin_runtime_mode() -> None:
     assert args.visualizer_plugin_runtime == "isolated"
 
 
+def test_app_parser_accepts_beat_analyzer_mode() -> None:
+    parser = build_parser()
+    args = parser.parse_args(["--beat-analyzer", "librosa"])
+    assert args.beat_analyzer == "librosa"
+
+
 def test_app_parser_allows_unclamped_visualizer_fps_for_runtime_clamping() -> None:
     parser = build_parser()
     args = parser.parse_args(["--visualizer-fps", "31"])

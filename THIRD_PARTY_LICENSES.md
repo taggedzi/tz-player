@@ -26,6 +26,10 @@ This summary is informational and not legal advice.
   - License: HPND (historical PIL license)
   - Source: https://pypi.org/project/Pillow/
 
+- librosa (optional beat-analysis spike dependency)
+  - License: ISC
+  - Source: https://pypi.org/project/librosa/
+
 ## Optional External Tools
 
 - VLC/libVLC (system-installed for real playback backend)
