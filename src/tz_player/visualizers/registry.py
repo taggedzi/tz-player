@@ -32,6 +32,7 @@ from .terrain import AudioTerrainVisualizer
 from .typography import TypographyGlitchVisualizer
 from .vu import VuReactiveVisualizer
 from .waterfall import SpectrogramWaterfallVisualizer
+from .waveproxy import WaveformProxyVisualizer
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +102,7 @@ class _PluginMetadata:
     display_name: str
     requires_spectrum: bool
     requires_beat: bool
+    requires_waveform: bool
 
 
 class VisualizerRegistry:
@@ -164,6 +166,7 @@ class VisualizerRegistry:
             TypographyGlitchVisualizer,
             ParticleReactorVisualizer,
             RadialSpectrumVisualizer,
+            WaveformProxyVisualizer,
             CoverAsciiStaticVisualizer,
             CoverAsciiMotionVisualizer,
         ]
@@ -634,6 +637,7 @@ def _make_isolated_factory(
             plugin_api_version=PLUGIN_API_VERSION,
             requires_spectrum=metadata.requires_spectrum,
             requires_beat=metadata.requires_beat,
+            requires_waveform=metadata.requires_waveform,
             source=source,
         )
 
@@ -671,11 +675,13 @@ def _validate_plugin_type(
 
     requires_spectrum = bool(getattr(sample, "requires_spectrum", False))
     requires_beat = bool(getattr(sample, "requires_beat", False))
+    requires_waveform = bool(getattr(sample, "requires_waveform", False))
     return _PluginMetadata(
         plugin_id=plugin_id,
         display_name=display_name,
         requires_spectrum=requires_spectrum,
         requires_beat=requires_beat,
+        requires_waveform=requires_waveform,
     )
 
 

@@ -45,6 +45,12 @@ class VisualizerFrameInput:
     spectrum_bands: bytes | None = None
     spectrum_source: str | None = None
     spectrum_status: str | None = None
+    waveform_min_left: float | None = None
+    waveform_max_left: float | None = None
+    waveform_min_right: float | None = None
+    waveform_max_right: float | None = None
+    waveform_source: str | None = None
+    waveform_status: str | None = None
     beat_strength: float | None = None
     beat_is_onset: bool | None = None
     beat_bpm: float | None = None

@@ -10,7 +10,7 @@ import hashlib
 import json
 import sqlite3
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 _SCALAR_DEFAULT_PARAMS_JSON = json.dumps(
     {"bucket_ms": 50}, sort_keys=True, separators=(",", ":")
 )
@@ -103,6 +103,10 @@ def create_schema(conn: sqlite3.Connection) -> None:
         version = 5
     if version == 5:
         _migrate_v5_to_v6(conn)
+        conn.execute("PRAGMA user_version = 6")
+        version = 6
+    if version == 6:
+        _migrate_v6_to_v7(conn)
         conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
 
 
@@ -341,6 +345,29 @@ def _migrate_v5_to_v6(conn: sqlite3.Connection) -> None:
     )
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_analysis_beat_pos ON analysis_beat_frames(entry_id, position_ms)"
+    )
+
+
+def _migrate_v6_to_v7(conn: sqlite3.Connection) -> None:
+    """Add waveform-proxy cache table for PCM-like min/max envelope frames."""
+    _begin_immediate(conn)
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS analysis_waveform_proxy_frames (
+            entry_id INTEGER NOT NULL,
+            frame_idx INTEGER NOT NULL,
+            position_ms INTEGER NOT NULL,
+            min_left_i8 INTEGER NOT NULL,
+            max_left_i8 INTEGER NOT NULL,
+            min_right_i8 INTEGER NOT NULL,
+            max_right_i8 INTEGER NOT NULL,
+            PRIMARY KEY (entry_id, frame_idx),
+            FOREIGN KEY(entry_id) REFERENCES analysis_cache_entries(id) ON DELETE CASCADE
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_analysis_waveform_proxy_pos ON analysis_waveform_proxy_frames(entry_id, position_ms)"
     )
 
 

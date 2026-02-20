@@ -96,6 +96,22 @@ class BeatPlugin:
         return "ok"
 
 
+@dataclass
+class WaveformPlugin:
+    plugin_id: str = "waveform"
+    display_name: str = "waveform"
+    requires_waveform: bool = True
+
+    def on_activate(self, context: VisualizerContext) -> None:
+        return None
+
+    def on_deactivate(self) -> None:
+        return None
+
+    def render(self, frame: VisualizerFrameInput) -> str:
+        return "ok"
+
+
 def _frame() -> VisualizerFrameInput:
     """Build minimal frame payload for host-render tests."""
     return VisualizerFrameInput(
@@ -212,6 +228,22 @@ def test_active_requires_beat_defaults_false_for_legacy_plugins() -> None:
     context = VisualizerContext(ansi_enabled=True, unicode_enabled=True)
     host.activate("good", context)
     assert host.active_requires_beat is False
+
+
+def test_active_requires_waveform_reflects_plugin_capability() -> None:
+    registry = VisualizerRegistry({"waveform": WaveformPlugin}, default_id="waveform")
+    host = VisualizerHost(registry)
+    context = VisualizerContext(ansi_enabled=True, unicode_enabled=True)
+    host.activate("waveform", context)
+    assert host.active_requires_waveform is True
+
+
+def test_active_requires_waveform_defaults_false_for_legacy_plugins() -> None:
+    registry = VisualizerRegistry({"good": GoodPlugin}, default_id="good")
+    host = VisualizerHost(registry)
+    context = VisualizerContext(ansi_enabled=True, unicode_enabled=True)
+    host.activate("good", context)
+    assert host.active_requires_waveform is False
 
 
 def test_overrun_and_throttle_emit_observability_events(caplog, monkeypatch) -> None:

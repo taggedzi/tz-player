@@ -121,11 +121,12 @@ Built-in visualizer IDs include:
 - `viz.reactor.particles`
 - `viz.spectrum.radial`
 - `viz.typography.glitch`
+- `viz.waveform.proxy`
 - `cover.ascii.static`, `cover.ascii.motion` (embedded artwork ASCII; requires embedded cover art in media files)
   - Fallback lookup is local-only and also checks sidecar files in the same directory (`cover.*`, `folder.*`, `front.*`, `album.*`, `artwork.*`, `<track-stem>.*`).
 
 Lazy analysis cache notes:
-- Scalar level, FFT/spectrum, and beat analysis are computed only when requested by visualizer flows.
+- Scalar level, FFT/spectrum, waveform-proxy, and beat analysis are computed only when requested by visualizer flows.
 - Computed analysis is persisted in SQLite cache and reused across restarts.
 - Visualizers may expose analysis state labels such as `READY`, `LOADING`, or `MISSING` while cache fills.
 

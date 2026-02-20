@@ -68,6 +68,12 @@ class VisualizerFrameInput:
     spectrum_bands: bytes | None = None
     spectrum_source: str | None = None  # cache|fallback
     spectrum_status: str | None = None  # ready|loading|missing|error
+    waveform_min_left: float | None = None
+    waveform_max_left: float | None = None
+    waveform_min_right: float | None = None
+    waveform_max_right: float | None = None
+    waveform_source: str | None = None  # cache|fallback
+    waveform_status: str | None = None  # ready|loading|missing|error
     beat_strength: float | None = None
     beat_is_onset: bool | None = None
     beat_bpm: float | None = None
@@ -81,6 +87,7 @@ class VisualizerPlugin(Protocol):
     plugin_api_version: int
     requires_spectrum: bool  # optional, defaults to False when omitted
     requires_beat: bool  # optional, defaults to False when omitted
+    requires_waveform: bool  # optional, defaults to False when omitted
 
     def on_activate(self, context: VisualizerContext) -> None: ...
     def on_deactivate(self) -> None: ...
@@ -109,6 +116,9 @@ Notes:
 - Beat analysis scheduling is host-managed and keyed by plugin capability:
   - `requires_beat = True` opts in.
   - Omitted/False means no beat sampling work is triggered.
+- Waveform-proxy analysis scheduling is host-managed and keyed by plugin capability:
+  - `requires_waveform = True` opts in.
+  - Omitted/False means no waveform-proxy sampling work is triggered.
 
 ## Built-In Visualizer IDs (Current)
 
@@ -125,6 +135,7 @@ Notes:
 - `viz.reactor.particles` (`requires_spectrum = True`, `requires_beat = True`)
 - `viz.spectrum.radial` (`requires_spectrum = True`, `requires_beat = True`)
 - `viz.typography.glitch` (`requires_beat = True`)
+- `viz.waveform.proxy` (`requires_waveform = True`)
 
 Fallback/capability semantics:
 - Missing analysis data is expected during warmup and must render safely using state text such as `LOADING`, `MISSING`, or `ERROR`.
@@ -302,6 +313,7 @@ class BeatPulsePlugin:
 Authoring patterns for scalar/FFT/beat:
 - Scalar (`level_left`/`level_right`): treat missing values as normal; use deterministic fallback animation only if needed.
 - FFT (`spectrum_bands`): prefer width-bucket aggregation to reduce jitter and keep CPU bounded.
+- Waveform-proxy (`waveform_min_*`/`waveform_max_*`): treat as PCM-like envelope ranges, not true live sample vectors.
 - Beat (`beat_is_onset`, `beat_strength`): use short accents (single-frame flash/pulse), not long blocking transitions.
 - Never do DB reads, subprocess calls, filesystem scans, or network calls from `render`.
 

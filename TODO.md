@@ -433,7 +433,7 @@ Execution tracker derived from `SPEC.md`.
 
 ### T-047 Waveform-Proxy Cache for PCM-Like Visualizer Signals
 - Spec Ref: Section `5` (analysis services), Section `6` (visualizer/plugin contract), Section `7` (persistence), Section `8` (non-blocking reliability), `WF-06`
-- Status: `todo`
+- Status: `done`
 - Goal:
   - Add a lightweight waveform-proxy analysis/cache that provides PCM-like shape data for visualizers without storing raw PCM.
   - Keep storage and CPU bounded while preserving lazy/on-demand analysis behavior.
@@ -445,39 +445,41 @@ Execution tracker derived from `SPEC.md`.
   - True live PCM sample stream contract (remains tracked by `T-045`).
   - Storing full PCM payloads in DB.
 - Design decisions required before implementation:
-  - `T-047D.1` Proxy frame schema density defaults. Status: `todo`
-    - Choose default proxy cadence (`50 Hz` vs `100 Hz` vs `200 Hz`).
-    - Choose quantization type (`int8`/`uint8` vs `int16`) and channel payload fields.
-  - `T-047D.2` Interpolation/render policy. Status: `todo`
-    - Choose nearest-neighbor vs linear interpolation for proxy lookup.
-    - Define plugin-facing guidance for deterministic usage under different visualizer FPS settings.
+  - `T-047D.1` Proxy frame schema density defaults. Status: `done`
+    - Chosen defaults:
+      - cadence: profile-tuned hop (`safe=30ms`, `balanced=20ms`, `aggressive=10ms`)
+      - quantization: signed `int8` min/max channel extrema (`min_l/max_l/min_r/max_r`)
+  - `T-047D.2` Interpolation/render policy. Status: `done`
+    - Chosen policy:
+      - store nearest frame buckets and resolve playback lookup via nearest-neighbor frame selection
+      - plugin guidance documents proxy as PCM-like envelope ranges, not sample-accurate vectors
 - Tasks:
-  - `T-047A` Define waveform-proxy data contract. Status: `todo`
+  - `T-047A` Define waveform-proxy data contract. Status: `done`
     - Add request/response model for proxy reads (source/status tokens aligned with existing analysis services).
     - Define normalized value ranges and timestamp semantics.
-  - `T-047B` Add persistent schema + migration for proxy cache. Status: `todo`
+  - `T-047B` Add persistent schema + migration for proxy cache. Status: `done`
     - Add cache entry type and per-frame proxy table keyed by track fingerprint + params hash.
     - Add indexes for efficient position-based lookup.
     - Add migration tests for schema upgrades.
-  - `T-047C` Implement proxy analysis generator. Status: `todo`
+  - `T-047C` Implement proxy analysis generator. Status: `done`
     - Reuse existing decode inputs and derive per-window extrema/features.
     - Keep work off UI loop and bounded by `max_frames`/time-window controls.
-  - `T-047D` Implement `WaveformProxyService` (lazy, async, cache-first). Status: `todo`
+  - `T-047D` Implement `WaveformProxyService` (lazy, async, cache-first). Status: `done`
     - Cache hit: return ready proxy frame for playback position.
     - Cache miss: schedule background analysis and return fallback/loading token.
     - Preserve deterministic behavior on missing/error paths.
-  - `T-047E` Wire player/runtime state and visualizer contract. Status: `todo`
+  - `T-047E` Wire player/runtime state and visualizer contract. Status: `done`
     - Add optional proxy fields to player/visualizer frame input.
     - Keep backward compatibility for existing plugins.
     - Add at least one built-in visualizer path that consumes proxy data (or adapter in existing pseudo-wave plugin).
-  - `T-047F` Retention + observability integration. Status: `todo`
+  - `T-047F` Retention + observability integration. Status: `done`
     - Ensure proxy cache participates in global analysis retention/pruning.
     - Add structured logs for proxy cache hit/miss/schedule/prune activity.
-  - `T-047G` Performance/reliability validation at scale. Status: `todo`
+  - `T-047G` Performance/reliability validation at scale. Status: `done`
     - Add tests for large playlist scenarios and bounded storage growth.
     - Add opt-in perf checks to verify no keyboard responsiveness regressions.
     - Validate no per-frame blocking I/O in visualizer render paths.
-  - `T-047H` Docs and acceptance mapping updates. Status: `todo`
+  - `T-047H` Docs and acceptance mapping updates. Status: `done`
     - Update `docs/visualizations.md` and `docs/usage.md` with proxy capability and limitations.
     - Update `docs/workflow-acceptance.md` mapping for new proxy service/tests.
 - Acceptance:

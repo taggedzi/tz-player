@@ -162,6 +162,24 @@ class VizBeat:
         return "beat"
 
 
+@dataclass
+class VizWaveform:
+    """Visualizer stub opting into waveform-proxy sampling capability."""
+
+    plugin_id: str = "viz.waveform"
+    display_name: str = "Viz Waveform"
+    requires_waveform: bool = True
+
+    def on_activate(self, context: VisualizerContext) -> None:
+        return None
+
+    def on_deactivate(self) -> None:
+        return None
+
+    def render(self, frame: VisualizerFrameInput) -> str:
+        return "waveform"
+
+
 def test_visualizer_selection_persists_across_restart(tmp_path, monkeypatch) -> None:
     _setup_dirs(tmp_path, monkeypatch)
     registry = VisualizerRegistry(
@@ -501,6 +519,37 @@ def test_app_beat_request_capability_follows_active_visualizer(
             await asyncio.sleep(0)
             assert app.visualizer_host.active_id == "viz.beat"
             assert app._active_visualizer_requests_beat() is True
+            app.exit()
+
+    _run(run_app())
+
+
+def test_app_waveform_request_capability_follows_active_visualizer(
+    tmp_path, monkeypatch
+) -> None:
+    _setup_dirs(tmp_path, monkeypatch)
+    registry = VisualizerRegistry(
+        {
+            "viz.default": VizDefault,
+            "viz.waveform": VizWaveform,
+        },
+        default_id="viz.default",
+    )
+    _stub_registry_built_in(monkeypatch, registry)
+    app = TzPlayerApp(auto_init=False, backend_name="fake")
+
+    async def run_app() -> None:
+        async with app.run_test() as pilot:
+            await asyncio.sleep(0)
+            await app._initialize_state()
+            assert app.visualizer_host is not None
+            assert app.visualizer_host.active_id == "viz.default"
+            assert app._active_visualizer_requests_waveform() is False
+
+            await pilot.press("z")
+            await asyncio.sleep(0)
+            assert app.visualizer_host.active_id == "viz.waveform"
+            assert app._active_visualizer_requests_waveform() is True
             app.exit()
 
     _run(run_app())

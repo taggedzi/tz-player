@@ -52,6 +52,13 @@ class VisualizerHost:
             return False
         return bool(getattr(plugin, "requires_beat", False))
 
+    @property
+    def active_requires_waveform(self) -> bool:
+        plugin = self._active_plugin
+        if plugin is None:
+            return False
+        return bool(getattr(plugin, "requires_waveform", False))
+
     def activate(self, plugin_id: str | None, context: VisualizerContext) -> str:
         """Activate requested plugin, falling back to default on failure/missing."""
         requested = plugin_id or self._registry.default_id
