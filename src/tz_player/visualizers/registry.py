@@ -20,14 +20,24 @@ from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
 
+from .audio_tornado import AudioTornadoVisualizer
 from .base import VisualizerPlugin
 from .basic import BasicVisualizer
+from .constellation import ConstellationVisualizer
 from .cover_ascii import CoverAsciiMotionVisualizer, CoverAsciiStaticVisualizer
+from .data_core_frag import DataCoreFragVisualizer
+from .ember_field import EmberFieldVisualizer
+from .gravity_well import GravityWellVisualizer
 from .hackscope import HackScopeVisualizer
 from .isolated_runner import IsolatedPluginProxy, PluginSourceSpec
+from .magnetic_grid import MagneticGridVisualizer
 from .matrix import MatrixBlueVisualizer, MatrixGreenVisualizer, MatrixRedVisualizer
+from .orbital_system import OrbitalSystemVisualizer
+from .plasma_stream import PlasmaStreamVisualizer
 from .radial import RadialSpectrumVisualizer
+from .rain_reactive import ReactiveRainVisualizer
 from .reactor import ParticleReactorVisualizer
+from .shockwave_rings import ShockwaveRingsVisualizer
 from .terrain import AudioTerrainVisualizer
 from .typography import TypographyGlitchVisualizer
 from .vu import VuReactiveVisualizer
@@ -166,6 +176,16 @@ class VisualizerRegistry:
             AudioTerrainVisualizer,
             TypographyGlitchVisualizer,
             ParticleReactorVisualizer,
+            GravityWellVisualizer,
+            ShockwaveRingsVisualizer,
+            ReactiveRainVisualizer,
+            OrbitalSystemVisualizer,
+            EmberFieldVisualizer,
+            MagneticGridVisualizer,
+            AudioTornadoVisualizer,
+            ConstellationVisualizer,
+            DataCoreFragVisualizer,
+            PlasmaStreamVisualizer,
             RadialSpectrumVisualizer,
             WaveformProxyVisualizer,
             WaveformNeonVisualizer,

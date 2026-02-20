@@ -13,7 +13,34 @@ Execution tracker derived from `SPEC.md`.
 
 ## Active Backlog
 
-- No active implementation tasks currently queued.
+### T-048 Particle Visualizer Expansion Pack (FFT/Beat/RMS Reactive)
+- Spec Ref: Section `6` (visualizer/plugin model), Section `8` (reliability/performance), `WF-06`
+- Status: `in_progress`
+- Goal:
+  - Add a new suite of advanced particle-style built-in visualizers that build on the `viz.reactor.particles` style and explicitly embrace raw FFT texture + beat events.
+- Scope:
+  - Implement one plugin per concept with deterministic, non-blocking render behavior.
+  - Keep each plugin capability-gated (`requires_spectrum` / `requires_beat`) and resilient to missing analysis data.
+  - Ensure each plugin scales reasonably with dynamic pane height and constrained width layouts.
+- Non-goals:
+  - Live PCM sample-stream requirement.
+  - Per-frame blocking I/O or heavy CPU simulation loops.
+- Tasks:
+  - `T-048A` `viz.particle.gravity_well` (Gravity Well Reactor). Status: `done`
+  - `T-048B` `viz.particle.shockwave_rings` (Audio Shockwave Rings). Status: `done`
+  - `T-048C` `viz.particle.rain_reactive` (Particle Rain / reverse-matrix reactive). Status: `done`
+  - `T-048D` `viz.particle.orbital_system` (Audio Solar System). Status: `done`
+  - `T-048E` `viz.particle.ember_field` (Ember Field). Status: `done`
+  - `T-048F` `viz.particle.magnetic_grid` (Magnetic Grid Distortion). Status: `done`
+  - `T-048G` `viz.particle.audio_tornado` (Audio Tornado). Status: `done`
+  - `T-048H` `viz.particle.constellation` (Constellation Mode). Status: `done`
+  - `T-048I` `viz.particle.data_core_frag` (Data Core Fragmentation). Status: `done`
+  - `T-048J` `viz.particle.plasma_stream` (Plasma Stream Field). Status: `done`
+  - `T-048K` Registry/docs/perf integration for the full particle suite. Status: `done`
+- Acceptance:
+  - Each plugin is independently selectable via registry and visualizer cycling.
+  - Plugins remain deterministic for same frame inputs and degrade safely when data is loading/missing.
+  - Full quality gates pass after each delivered plugin change set.
 
 ## Archived Recent Work
 
