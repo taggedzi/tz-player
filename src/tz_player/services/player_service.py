@@ -21,6 +21,8 @@ from tz_player.services.audio_level_service import (
     AudioLevelService,
     EnvelopeLevelProvider,
 )
+from tz_player.services.beat_service import BeatReading, BeatService
+from tz_player.services.beat_store import BeatParams
 from tz_player.services.playback_backend import (
     BackendError,
     BackendEvent,
@@ -86,6 +88,11 @@ class PlayerState:
     spectrum_bands: bytes | None = None
     spectrum_source: str | None = None
     spectrum_status: str | None = None
+    beat_strength: float | None = None
+    beat_is_onset: bool | None = None
+    beat_bpm: float | None = None
+    beat_source: str | None = None
+    beat_status: str | None = None
     error: str | None = None
 
 
@@ -108,6 +115,9 @@ class PlayerService:
         spectrum_service: SpectrumService | None = None,
         spectrum_params: SpectrumParams | None = None,
         should_sample_spectrum: Callable[[], bool] | None = None,
+        beat_service: BeatService | None = None,
+        beat_params: BeatParams | None = None,
+        should_sample_beat: Callable[[], bool] | None = None,
         shuffle_random: random.Random | None = None,
         default_duration_ms: int = 180_000,
         initial_state: PlayerState | None = None,
@@ -141,6 +151,9 @@ class PlayerService:
         self._spectrum_service = spectrum_service
         self._spectrum_params = spectrum_params
         self._should_sample_spectrum = should_sample_spectrum
+        self._beat_service = beat_service
+        self._beat_params = beat_params
+        self._should_sample_beat = should_sample_beat
         self._current_track_path: str | None = None
         self._backend.set_event_handler(self._handle_backend_event)
 
@@ -184,6 +197,11 @@ class PlayerService:
                 spectrum_bands=None,
                 spectrum_source=None,
                 spectrum_status=None,
+                beat_strength=None,
+                beat_is_onset=None,
+                beat_bpm=None,
+                beat_source=None,
+                beat_status=None,
                 error=None,
             )
             # A stale manual-stop latch must never suppress natural track-end advance.
@@ -278,6 +296,11 @@ class PlayerService:
                 spectrum_bands=None,
                 spectrum_source=None,
                 spectrum_status=None,
+                beat_strength=None,
+                beat_is_onset=None,
+                beat_bpm=None,
+                beat_source=None,
+                beat_status=None,
             )
             self._end_handled_item_id = None
             self._max_position_seen_ms = 0
@@ -718,6 +741,7 @@ class PlayerService:
                         track_path=self._current_track_path,
                     )
                     spectrum_reading = await self._sample_spectrum_if_enabled(position)
+                    beat_reading = await self._sample_beat_if_enabled(position)
                 except Exception:  # pragma: no cover - backend safety net
                     continue
                 emit = False
@@ -798,6 +822,39 @@ class PlayerService:
                             spectrum_status=spectrum_status,
                         )
                         emit = True
+                    beat_strength: float | None
+                    beat_is_onset: bool | None
+                    beat_bpm: float | None
+                    beat_source: str | None
+                    beat_status: str | None
+                    if beat_reading is not None:
+                        beat_strength = beat_reading.strength
+                        beat_is_onset = beat_reading.is_beat
+                        beat_bpm = beat_reading.bpm
+                        beat_source = beat_reading.source
+                        beat_status = beat_reading.status
+                    else:
+                        beat_strength = None
+                        beat_is_onset = None
+                        beat_bpm = None
+                        beat_source = None
+                        beat_status = None
+                    if (
+                        beat_strength != self._state.beat_strength
+                        or beat_is_onset != self._state.beat_is_onset
+                        or beat_bpm != self._state.beat_bpm
+                        or beat_source != self._state.beat_source
+                        or beat_status != self._state.beat_status
+                    ):
+                        self._state = replace(
+                            self._state,
+                            beat_strength=beat_strength,
+                            beat_is_onset=beat_is_onset,
+                            beat_bpm=beat_bpm,
+                            beat_source=beat_source,
+                            beat_status=beat_status,
+                        )
+                        emit = True
                     if (
                         backend_state in {"stopped", "idle"}
                         and not self._stop_requested
@@ -860,6 +917,22 @@ class PlayerService:
                 track_path=self._current_track_path,
                 position_ms=max(0, position_ms),
                 params=self._spectrum_params,
+            )
+        except Exception:
+            return None
+
+    async def _sample_beat_if_enabled(self, position_ms: int) -> BeatReading | None:
+        if self._beat_service is None or self._beat_params is None:
+            return None
+        if self._current_track_path is None:
+            return None
+        if self._should_sample_beat is not None and not self._should_sample_beat():
+            return None
+        try:
+            return await self._beat_service.sample(
+                track_path=self._current_track_path,
+                position_ms=max(0, position_ms),
+                params=self._beat_params,
             )
         except Exception:
             return None

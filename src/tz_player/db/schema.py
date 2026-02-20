@@ -10,7 +10,7 @@ import hashlib
 import json
 import sqlite3
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 _SCALAR_DEFAULT_PARAMS_JSON = json.dumps(
     {"bucket_ms": 50}, sort_keys=True, separators=(",", ":")
 )
@@ -99,6 +99,10 @@ def create_schema(conn: sqlite3.Connection) -> None:
         version = 4
     if version == 4:
         _migrate_v4_to_v5(conn)
+        conn.execute("PRAGMA user_version = 5")
+        version = 5
+    if version == 5:
+        _migrate_v5_to_v6(conn)
         conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
 
 
@@ -316,6 +320,28 @@ def _migrate_v4_to_v5(conn: sqlite3.Connection) -> None:
     """Add FTS-backed playlist search index and synchronization triggers."""
     _begin_immediate(conn)
     _create_playlist_search_fts(conn)
+
+
+def _migrate_v5_to_v6(conn: sqlite3.Connection) -> None:
+    """Add beat-analysis cache table for lazy beat/onset reads."""
+    _begin_immediate(conn)
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS analysis_beat_frames (
+            entry_id INTEGER NOT NULL,
+            frame_idx INTEGER NOT NULL,
+            position_ms INTEGER NOT NULL,
+            strength_u8 INTEGER NOT NULL,
+            is_beat INTEGER NOT NULL DEFAULT 0,
+            bpm REAL NOT NULL DEFAULT 0.0,
+            PRIMARY KEY (entry_id, frame_idx),
+            FOREIGN KEY(entry_id) REFERENCES analysis_cache_entries(id) ON DELETE CASCADE
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_analysis_beat_pos ON analysis_beat_frames(entry_id, position_ms)"
+    )
 
 
 def _create_playlist_search_fts(conn: sqlite3.Connection) -> bool:
