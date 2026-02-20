@@ -293,3 +293,39 @@ def test_add_tracks_failure_rolls_back_transaction(tmp_path, monkeypatch) -> Non
     assert _run(store.count(playlist_id)) == 0
     rows = _run(store.fetch_window(playlist_id, 0, 10))
     assert rows == []
+
+
+def test_get_random_item_id_uses_count_offset_selection(tmp_path, monkeypatch) -> None:
+    db_path = tmp_path / "library.sqlite"
+    store = PlaylistStore(db_path)
+    _run(store.initialize())
+    playlist_id = _run(store.create_playlist("Random"))
+
+    track_paths = [tmp_path / f"track_{idx}.mp3" for idx in range(4)]
+    for path in track_paths:
+        _touch(path)
+    _run(store.add_tracks(playlist_id, track_paths))
+    rows = _run(store.fetch_window(playlist_id, 0, 10))
+
+    monkeypatch.setattr(playlist_store_module.random, "randrange", lambda n: 2)
+    selected = _run(store.get_random_item_id(playlist_id))
+    assert selected == rows[2].item_id
+
+
+def test_get_random_item_id_honors_exclusion(tmp_path, monkeypatch) -> None:
+    db_path = tmp_path / "library.sqlite"
+    store = PlaylistStore(db_path)
+    _run(store.initialize())
+    playlist_id = _run(store.create_playlist("RandomExclude"))
+
+    track_paths = [tmp_path / f"track_{idx}.mp3" for idx in range(3)]
+    for path in track_paths:
+        _touch(path)
+    _run(store.add_tracks(playlist_id, track_paths))
+    rows = _run(store.fetch_window(playlist_id, 0, 10))
+    excluded = rows[0].item_id
+
+    monkeypatch.setattr(playlist_store_module.random, "randrange", lambda n: 0)
+    selected = _run(store.get_random_item_id(playlist_id, exclude_item_id=excluded))
+    assert selected in {rows[1].item_id, rows[2].item_id}
+    assert selected != excluded
