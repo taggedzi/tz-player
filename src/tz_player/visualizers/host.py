@@ -38,6 +38,13 @@ class VisualizerHost:
     def active_id(self) -> str:
         return self._active_id
 
+    @property
+    def active_requires_spectrum(self) -> bool:
+        plugin = self._active_plugin
+        if plugin is None:
+            return False
+        return bool(getattr(plugin, "requires_spectrum", False))
+
     def activate(self, plugin_id: str | None, context: VisualizerContext) -> str:
         """Activate requested plugin, falling back to default on failure/missing."""
         requested = plugin_id or self._registry.default_id

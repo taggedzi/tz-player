@@ -94,6 +94,7 @@ class _LocalPluginCandidate:
 class _PluginMetadata:
     plugin_id: str
     display_name: str
+    requires_spectrum: bool
 
 
 class VisualizerRegistry:
@@ -620,6 +621,7 @@ def _make_isolated_factory(
             plugin_id=metadata.plugin_id,
             display_name=metadata.display_name,
             plugin_api_version=PLUGIN_API_VERSION,
+            requires_spectrum=metadata.requires_spectrum,
             source=source,
         )
 
@@ -655,7 +657,12 @@ def _validate_plugin_type(
         )
         return None
 
-    return _PluginMetadata(plugin_id=plugin_id, display_name=display_name)
+    requires_spectrum = bool(getattr(sample, "requires_spectrum", False))
+    return _PluginMetadata(
+        plugin_id=plugin_id,
+        display_name=display_name,
+        requires_spectrum=requires_spectrum,
+    )
 
 
 def _merge_factory_maps(

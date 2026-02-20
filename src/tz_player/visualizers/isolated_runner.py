@@ -44,6 +44,7 @@ class IsolatedPluginProxy:
         plugin_id: str,
         display_name: str,
         plugin_api_version: int,
+        requires_spectrum: bool,
         source: PluginSourceSpec,
         timeout_s: float = 0.25,
         startup_timeout_s: float = 2.0,
@@ -51,6 +52,7 @@ class IsolatedPluginProxy:
         self.plugin_id = plugin_id
         self.display_name = display_name
         self.plugin_api_version = plugin_api_version
+        self.requires_spectrum = requires_spectrum
         self._source = source
         self._timeout_s = timeout_s
         self._startup_timeout_s = startup_timeout_s

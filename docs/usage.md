@@ -104,6 +104,11 @@ Built-in visualizer IDs include:
 - `cover.ascii.static`, `cover.ascii.motion` (embedded artwork ASCII; requires embedded cover art in media files)
   - Fallback lookup is local-only and also checks sidecar files in the same directory (`cover.*`, `folder.*`, `front.*`, `album.*`, `artwork.*`, `<track-stem>.*`).
 
+Lazy analysis cache notes:
+- Scalar level and FFT/spectrum analysis are computed only when requested by visualizer flows.
+- Computed analysis is persisted in SQLite cache and reused across restarts.
+- Visualizers may expose analysis state labels such as `READY`, `LOADING`, or `MISSING` while cache fills.
+
 Drop-in local plugin folder:
 - `tz-player` always scans the user plugin folder:
   - `<user_config_dir>/visualizers/plugins`

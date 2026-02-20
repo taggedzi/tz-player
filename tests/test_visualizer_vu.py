@@ -50,6 +50,11 @@ def test_vu_plugin_is_registered_built_in() -> None:
     assert registry.has_plugin("vu.reactive")
 
 
+def test_vu_plugin_declares_spectrum_requirement() -> None:
+    plugin = VuReactiveVisualizer()
+    assert plugin.requires_spectrum is True
+
+
 def test_vu_render_uses_live_levels_when_available() -> None:
     plugin = VuReactiveVisualizer()
     plugin.on_activate(VisualizerContext(ansi_enabled=False, unicode_enabled=True))
@@ -67,6 +72,7 @@ def test_vu_render_uses_live_levels_when_available() -> None:
     assert "SRC LIVE LEVELS" in output
     assert "L [" in output
     assert "R [" in output
+    assert "FFT" in output
 
 
 def test_vu_render_falls_back_when_levels_unavailable() -> None:
@@ -142,7 +148,7 @@ def test_vu_render_history_block_is_multiline() -> None:
     for idx in range(6):
         output = plugin.render(
             _frame(
-                width=50, height=10, frame_index=idx, level_left=0.8, level_right=0.7
+                width=50, height=12, frame_index=idx, level_left=0.8, level_right=0.7
             )
         )
     lines = output.splitlines()
@@ -192,6 +198,39 @@ def test_vu_render_shows_envelope_source_when_provided() -> None:
     )
     assert "VU REACTIVE [ENVELOPE]" in output
     assert "SRC ENVELOPE CACHE" in output
+
+
+def test_vu_render_shows_fft_ready_when_bands_available() -> None:
+    plugin = VuReactiveVisualizer()
+    plugin.on_activate(VisualizerContext(ansi_enabled=False, unicode_enabled=True))
+    output = plugin.render(
+        VisualizerFrameInput(
+            frame_index=1,
+            monotonic_s=0.0,
+            width=72,
+            height=10,
+            status="playing",
+            position_s=2.0,
+            duration_s=120.0,
+            volume=73.0,
+            speed=1.0,
+            repeat_mode="OFF",
+            shuffle=False,
+            track_id=1,
+            track_path="/tmp/track.mp3",
+            title="Neon Shadow",
+            artist="Proxy Unit",
+            album="Gridline",
+            level_left=0.5,
+            level_right=0.5,
+            level_source="live",
+            spectrum_bands=bytes([0, 32, 96, 192, 255]),
+            spectrum_source="cache",
+            spectrum_status="ready",
+        )
+    )
+    assert "FFT READY [CACHE]" in output
+    assert "F [" in output
 
 
 def test_vu_low_levels_are_visibly_normalized() -> None:

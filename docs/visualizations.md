@@ -61,12 +61,20 @@ class VisualizerFrameInput:
     title: str | None
     artist: str | None
     album: str | None
+    level_left: float | None = None
+    level_right: float | None = None
+    level_source: str | None = None  # live|envelope|fallback
+    level_status: str | None = None  # ready|loading|missing|error
+    spectrum_bands: bytes | None = None
+    spectrum_source: str | None = None  # cache|fallback
+    spectrum_status: str | None = None  # ready|loading|missing|error
 
 
 class VisualizerPlugin(Protocol):
     plugin_id: str
     display_name: str
     plugin_api_version: int
+    requires_spectrum: bool  # optional, defaults to False when omitted
 
     def on_activate(self, context: VisualizerContext) -> None: ...
     def on_deactivate(self) -> None: ...
@@ -78,6 +86,19 @@ Notes:
 - `render` should be deterministic for the same `VisualizerFrameInput`.
 - No blocking file/db/network calls in `on_activate` or `render`.
 - `plugin_api_version` must match the app-supported plugin API version.
+- Backward compatibility: plugins that do not define `requires_spectrum` and ignore new frame fields continue to work unchanged.
+- Current contract choice: API version remains `1` and new fields are additive/optional.
+
+## Lazy Analysis Contract
+
+- Scalar levels and spectrum data are lazy and cache-backed.
+- Analysis only computes when a visualizer path requests it.
+- Once computed, analysis is persisted in SQLite cache and reused across restarts.
+- `render` must treat `loading|missing|error` as normal states.
+- `render` must never schedule blocking compute or DB work.
+- Spectrum analysis scheduling is host-managed and keyed by plugin capability:
+  - `requires_spectrum = True` opts in.
+  - Omitted/False means no spectrum sampling work is triggered.
 
 ## Local Plugin Security Modes
 
@@ -137,8 +158,9 @@ Checklist:
 3. Implement `on_activate`, `on_deactivate`, and `render`.
 4. Return bounded-width/height text for the current pane dimensions.
 5. Handle `idle`, `paused`, and missing-duration states explicitly.
-6. Place plugin file/package in the drop-in folder or pass an explicit plugin path.
-7. Add tests for activation, rendering, and fallback behavior.
+6. If using scalar/spectrum analysis data, handle `loading|missing|error` explicitly.
+7. Place plugin file/package in the drop-in folder or pass an explicit plugin path.
+8. Add tests for activation, rendering, and fallback behavior.
 
 Minimal example:
 
@@ -151,6 +173,8 @@ class BasicBarsPlugin:
     plugin_id: str = "bars.basic"
     display_name: str = "Bars (Basic)"
     plugin_api_version: int = 1
+    # Optional capability flags default to False when omitted.
+    requires_spectrum: bool = False
     _ansi_enabled: bool = True
 
     def on_activate(self, context) -> None:
@@ -169,6 +193,28 @@ class BasicBarsPlugin:
             progress = min(max(frame.position_s / frame.duration_s, 0.0), 1.0)
         bars = int(progress * max(frame.width - 2, 1))
         return "[" + ("#" * bars).ljust(max(frame.width - 2, 1), "-") + "]"
+```
+
+FFT-aware example sketch:
+
+```python
+class SpectrumBarsPlugin:
+    plugin_id = "bars.spectrum"
+    display_name = "Bars (Spectrum)"
+    plugin_api_version = 1
+    requires_spectrum = True
+
+    def on_activate(self, context) -> None:
+        self._ansi_enabled = context.ansi_enabled
+
+    def on_deactivate(self) -> None:
+        return None
+
+    def render(self, frame) -> str:
+        if frame.spectrum_status != "ready" or not frame.spectrum_bands:
+            return f"FFT {frame.spectrum_status or 'missing'}"
+        # Render cache-provided quantized uint8 bands.
+        return " ".join(f"{value:03d}" for value in frame.spectrum_bands[:16])
 ```
 
 ## Testing Expectations
@@ -225,6 +271,8 @@ This section documents planned extra-scope visualizers before implementation.
 - Contract:
   - consume normalized levels from shared `AudioLevelService`
   - service source priority: `live backend` -> `envelope cache` -> `fallback`
+  - opt in to lazy spectrum sampling with `requires_spectrum = True`
+  - consume optional quantized spectrum bands with explicit `ready|loading|missing|error` handling
   - smoothing and clipping to avoid jitter/spikes
   - explicit source labeling in UI output (`LIVE`, `ENVELOPE`, `FALLBACK`)
   - graceful fallback when signal stream unavailable

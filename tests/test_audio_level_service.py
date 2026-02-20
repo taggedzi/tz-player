@@ -32,6 +32,16 @@ class _EnvelopeProvider:
         return LevelSample(left=0.4, right=0.5)
 
 
+class _MissingEnvelopeProvider:
+    """Envelope provider stub that simulates cache miss."""
+
+    async def get_level_at(
+        self, track_path: str, position_ms: int
+    ) -> LevelSample | None:
+        del track_path, position_ms
+        return None
+
+
 class _NonFiniteLiveProvider:
     """Live provider stub returning non-finite levels for sanitization tests."""
 
@@ -62,6 +72,7 @@ def test_audio_level_service_prefers_live_source() -> None:
         assert reading.source == "live"
         assert 0.0 <= reading.left <= 1.0
         assert 0.0 <= reading.right <= 1.0
+        assert reading.status == "ready"
 
     _run(run())
 
@@ -84,6 +95,7 @@ def test_audio_level_service_uses_envelope_when_live_unavailable() -> None:
         assert reading.source == "envelope"
         assert reading.left == 0.4
         assert reading.right == 0.5
+        assert reading.status == "ready"
 
     _run(run())
 
@@ -103,6 +115,7 @@ def test_audio_level_service_uses_fallback_when_no_live_or_envelope() -> None:
         assert reading.source == "fallback"
         assert 0.0 <= reading.left <= 1.0
         assert 0.0 <= reading.right <= 1.0
+        assert reading.status == "missing"
 
     _run(run())
 
@@ -141,5 +154,34 @@ def test_audio_level_service_sanitizes_non_finite_live_levels() -> None:
         assert reading.source == "live"
         assert reading.left == 0.0
         assert reading.right == 0.0
+        assert reading.status == "ready"
+
+    _run(run())
+
+
+def test_audio_level_service_reports_loading_when_schedule_hook_is_used() -> None:
+    async def run() -> None:
+        scheduled: list[str] = []
+
+        async def _schedule(track_path: str) -> None:
+            scheduled.append(track_path)
+
+        service = AudioLevelService(
+            live_provider=_NoLiveProvider(),
+            envelope_provider=_MissingEnvelopeProvider(),
+            schedule_envelope_analysis=_schedule,
+        )
+        reading = await service.sample(
+            status="playing",
+            position_ms=1000,
+            duration_ms=5000,
+            volume=60,
+            speed=1.0,
+            track_path="/tmp/song.mp3",
+        )
+        assert reading is not None
+        assert reading.source == "fallback"
+        assert reading.status == "loading"
+        assert scheduled == ["/tmp/song.mp3"]
 
     _run(run())

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import math
 import os
 import sqlite3
@@ -9,17 +11,27 @@ from pathlib import Path
 
 from tz_player.services.audio_level_service import EnvelopeLevelProvider
 from tz_player.services.playback_backend import LevelSample
+from tz_player.utils.async_utils import run_blocking
 
 
 class SqliteEnvelopeStore(EnvelopeLevelProvider):
     """Stores and resolves timestamped level envelopes in the app SQLite DB."""
 
-    def __init__(self, db_path: Path, *, analysis_version: int = 1) -> None:
+    ANALYSIS_TYPE = "scalar"
+
+    def __init__(
+        self,
+        db_path: Path,
+        *,
+        analysis_version: int = 1,
+        bucket_ms: int = 50,
+    ) -> None:
         self._db_path = Path(db_path)
         self._analysis_version = analysis_version
+        self._bucket_ms = max(10, int(bucket_ms))
 
     async def initialize(self) -> None:
-        self._initialize_sync()
+        await run_blocking(self._initialize_sync)
 
     async def upsert_envelope(
         self,
@@ -28,15 +40,19 @@ class SqliteEnvelopeStore(EnvelopeLevelProvider):
         *,
         duration_ms: int,
     ) -> None:
-        self._upsert_envelope_sync(Path(track_path), points, duration_ms)
+        await run_blocking(
+            self._upsert_envelope_sync, Path(track_path), points, duration_ms
+        )
 
     async def get_level_at(
         self, track_path: str, position_ms: int
     ) -> LevelSample | None:
-        return self._get_level_at_sync(Path(track_path), position_ms)
+        return await run_blocking(
+            self._get_level_at_sync, Path(track_path), position_ms
+        )
 
     async def has_envelope(self, track_path: Path | str) -> bool:
-        return self._has_envelope_sync(Path(track_path))
+        return await run_blocking(self._has_envelope_sync, Path(track_path))
 
     def _connect(self) -> sqlite3.Connection:
         """Create SQLite connection configured for envelope lookups/writes."""
@@ -46,39 +62,46 @@ class SqliteEnvelopeStore(EnvelopeLevelProvider):
         return conn
 
     def _initialize_sync(self) -> None:
-        """Create envelope cache tables/indexes when missing."""
+        """Create scalar-analysis cache tables/indexes when missing."""
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as conn:
             conn.execute(
                 """
-                CREATE TABLE IF NOT EXISTS audio_envelopes (
+                CREATE TABLE IF NOT EXISTS analysis_cache_entries (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    path_norm TEXT NOT NULL UNIQUE,
+                    analysis_type TEXT NOT NULL,
+                    path_norm TEXT NOT NULL,
                     mtime_ns INTEGER,
                     size_bytes INTEGER,
-                    duration_ms INTEGER NOT NULL,
                     analysis_version INTEGER NOT NULL,
-                    computed_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+                    params_hash TEXT NOT NULL,
+                    params_json TEXT NOT NULL,
+                    duration_ms INTEGER NOT NULL,
+                    frame_count INTEGER NOT NULL DEFAULT 0,
+                    byte_size INTEGER NOT NULL DEFAULT 0,
+                    computed_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+                    last_accessed_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+                    UNIQUE(path_norm, mtime_ns, size_bytes, analysis_type, analysis_version, params_hash)
                 )
                 """
             )
             conn.execute(
                 """
-                CREATE TABLE IF NOT EXISTS audio_envelope_points (
-                    envelope_id INTEGER NOT NULL,
+                CREATE TABLE IF NOT EXISTS analysis_scalar_frames (
+                    entry_id INTEGER NOT NULL,
                     position_ms INTEGER NOT NULL,
                     level_left REAL NOT NULL,
                     level_right REAL NOT NULL,
-                    PRIMARY KEY (envelope_id, position_ms),
-                    FOREIGN KEY(envelope_id) REFERENCES audio_envelopes(id) ON DELETE CASCADE
+                    PRIMARY KEY (entry_id, position_ms),
+                    FOREIGN KEY(entry_id) REFERENCES analysis_cache_entries(id) ON DELETE CASCADE
                 )
                 """
             )
             conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_audio_envelopes_path_norm ON audio_envelopes(path_norm)"
+                "CREATE INDEX IF NOT EXISTS idx_analysis_cache_lookup ON analysis_cache_entries(analysis_type, path_norm, analysis_version, params_hash)"
             )
             conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_audio_points_envelope_pos ON audio_envelope_points(envelope_id, position_ms)"
+                "CREATE INDEX IF NOT EXISTS idx_analysis_scalar_pos ON analysis_scalar_frames(entry_id, position_ms)"
             )
 
     def _upsert_envelope_sync(
@@ -92,53 +115,96 @@ class SqliteEnvelopeStore(EnvelopeLevelProvider):
             return
         path_norm = _normalize_path(track_path)
         mtime_ns, size_bytes = _stat_path(track_path)
+        params_json = _params_json(self._bucket_ms)
+        params_hash = _params_hash(params_json)
+        normalized_points = [
+            (
+                max(0, int(position_ms)),
+                _clamp(level_left),
+                _clamp(level_right),
+            )
+            for position_ms, level_left, level_right in points
+        ]
         with self._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
             conn.execute(
                 """
-                INSERT INTO audio_envelopes (
-                    path_norm, mtime_ns, size_bytes, duration_ms, analysis_version, computed_at
-                ) VALUES (?, ?, ?, ?, ?, strftime('%s','now'))
-                ON CONFLICT(path_norm) DO UPDATE SET
-                    mtime_ns = excluded.mtime_ns,
-                    size_bytes = excluded.size_bytes,
-                    duration_ms = excluded.duration_ms,
-                    analysis_version = excluded.analysis_version,
-                    computed_at = excluded.computed_at
-                """,
-                (
+                INSERT INTO analysis_cache_entries (
+                    analysis_type,
                     path_norm,
                     mtime_ns,
                     size_bytes,
-                    max(1, int(duration_ms)),
+                    analysis_version,
+                    params_hash,
+                    params_json,
+                    duration_ms,
+                    frame_count,
+                    byte_size,
+                    computed_at,
+                    last_accessed_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s','now'), strftime('%s','now'))
+                ON CONFLICT(path_norm, mtime_ns, size_bytes, analysis_type, analysis_version, params_hash)
+                DO UPDATE SET
+                    params_json = excluded.params_json,
+                    duration_ms = excluded.duration_ms,
+                    frame_count = excluded.frame_count,
+                    byte_size = excluded.byte_size,
+                    computed_at = excluded.computed_at,
+                    last_accessed_at = excluded.last_accessed_at
+                """,
+                (
+                    self.ANALYSIS_TYPE,
+                    path_norm,
+                    mtime_ns,
+                    size_bytes,
                     self._analysis_version,
+                    params_hash,
+                    params_json,
+                    max(1, int(duration_ms)),
+                    len(normalized_points),
+                    len(normalized_points) * 24,
                 ),
             )
             row = conn.execute(
-                "SELECT id FROM audio_envelopes WHERE path_norm = ? LIMIT 1",
-                (path_norm,),
+                """
+                SELECT id
+                FROM analysis_cache_entries
+                WHERE analysis_type = ?
+                  AND path_norm = ?
+                  AND analysis_version = ?
+                  AND params_hash = ?
+                  AND mtime_ns IS ?
+                  AND size_bytes IS ?
+                LIMIT 1
+                """,
+                (
+                    self.ANALYSIS_TYPE,
+                    path_norm,
+                    self._analysis_version,
+                    params_hash,
+                    mtime_ns,
+                    size_bytes,
+                ),
             ).fetchone()
             if row is None:
                 return
-            envelope_id = int(row["id"])
+            entry_id = int(row["id"])
             conn.execute(
-                "DELETE FROM audio_envelope_points WHERE envelope_id = ?",
-                (envelope_id,),
+                "DELETE FROM analysis_scalar_frames WHERE entry_id = ?",
+                (entry_id,),
             )
             conn.executemany(
                 """
-                INSERT INTO audio_envelope_points (
-                    envelope_id, position_ms, level_left, level_right
+                INSERT INTO analysis_scalar_frames (
+                    entry_id,
+                    position_ms,
+                    level_left,
+                    level_right
                 ) VALUES (?, ?, ?, ?)
                 """,
                 [
-                    (
-                        envelope_id,
-                        max(0, int(position_ms)),
-                        _clamp(level_left),
-                        _clamp(level_right),
-                    )
-                    for position_ms, level_left, level_right in points
+                    (entry_id, position_ms, level_left, level_right)
+                    for position_ms, level_left, level_right in normalized_points
                 ],
             )
 
@@ -148,42 +214,56 @@ class SqliteEnvelopeStore(EnvelopeLevelProvider):
         """Lookup and interpolate envelope level at requested playback position."""
         path_norm = _normalize_path(track_path)
         mtime_ns, size_bytes = _stat_path(track_path)
+        params_hash = _params_hash(_params_json(self._bucket_ms))
         with self._connect() as conn:
-            envelope = conn.execute(
+            row = conn.execute(
                 """
                 SELECT id
-                FROM audio_envelopes
-                WHERE path_norm = ?
+                FROM analysis_cache_entries
+                WHERE analysis_type = ?
+                  AND path_norm = ?
                   AND analysis_version = ?
+                  AND params_hash = ?
                   AND mtime_ns IS ?
                   AND size_bytes IS ?
                 LIMIT 1
                 """,
-                (path_norm, self._analysis_version, mtime_ns, size_bytes),
+                (
+                    self.ANALYSIS_TYPE,
+                    path_norm,
+                    self._analysis_version,
+                    params_hash,
+                    mtime_ns,
+                    size_bytes,
+                ),
             ).fetchone()
-            if envelope is None:
+            if row is None:
                 return None
-            envelope_id = int(envelope["id"])
+            entry_id = int(row["id"])
+            conn.execute(
+                "UPDATE analysis_cache_entries SET last_accessed_at = strftime('%s','now') WHERE id = ?",
+                (entry_id,),
+            )
             pos = max(0, int(position_ms))
             prev_row = conn.execute(
                 """
                 SELECT position_ms, level_left, level_right
-                FROM audio_envelope_points
-                WHERE envelope_id = ? AND position_ms <= ?
+                FROM analysis_scalar_frames
+                WHERE entry_id = ? AND position_ms <= ?
                 ORDER BY position_ms DESC
                 LIMIT 1
                 """,
-                (envelope_id, pos),
+                (entry_id, pos),
             ).fetchone()
             next_row = conn.execute(
                 """
                 SELECT position_ms, level_left, level_right
-                FROM audio_envelope_points
-                WHERE envelope_id = ? AND position_ms >= ?
+                FROM analysis_scalar_frames
+                WHERE entry_id = ? AND position_ms >= ?
                 ORDER BY position_ms ASC
                 LIMIT 1
                 """,
-                (envelope_id, pos),
+                (entry_id, pos),
             ).fetchone()
             if prev_row is None and next_row is None:
                 return None
@@ -215,25 +295,44 @@ class SqliteEnvelopeStore(EnvelopeLevelProvider):
         """Return whether valid envelope cache exists for current file fingerprint."""
         path_norm = _normalize_path(track_path)
         mtime_ns, size_bytes = _stat_path(track_path)
+        params_hash = _params_hash(_params_json(self._bucket_ms))
         with self._connect() as conn:
             row = conn.execute(
                 """
                 SELECT 1
-                FROM audio_envelopes AS e
-                WHERE e.path_norm = ?
+                FROM analysis_cache_entries AS e
+                WHERE e.analysis_type = ?
+                  AND e.path_norm = ?
                   AND e.analysis_version = ?
+                  AND e.params_hash = ?
                   AND e.mtime_ns IS ?
                   AND e.size_bytes IS ?
                   AND EXISTS (
                       SELECT 1
-                      FROM audio_envelope_points AS p
-                      WHERE p.envelope_id = e.id
+                      FROM analysis_scalar_frames AS p
+                      WHERE p.entry_id = e.id
                   )
                 LIMIT 1
                 """,
-                (path_norm, self._analysis_version, mtime_ns, size_bytes),
+                (
+                    self.ANALYSIS_TYPE,
+                    path_norm,
+                    self._analysis_version,
+                    params_hash,
+                    mtime_ns,
+                    size_bytes,
+                ),
             ).fetchone()
             return row is not None
+
+
+def _params_json(bucket_ms: int) -> str:
+    payload = {"bucket_ms": int(bucket_ms)}
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"))
+
+
+def _params_hash(params_json: str) -> str:
+    return hashlib.sha1(params_json.encode("utf-8")).hexdigest()
 
 
 def _normalize_path(path: Path) -> str:

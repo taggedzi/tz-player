@@ -126,6 +126,24 @@ class VizAnsi:
         return "\x1b[1;92mANSI\x1b[0m"
 
 
+@dataclass
+class VizSpectrum:
+    """Visualizer stub opting into spectrum sampling capability."""
+
+    plugin_id: str = "viz.spectrum"
+    display_name: str = "Viz Spectrum"
+    requires_spectrum: bool = True
+
+    def on_activate(self, context: VisualizerContext) -> None:
+        return None
+
+    def on_deactivate(self) -> None:
+        return None
+
+    def render(self, frame: VisualizerFrameInput) -> str:
+        return "spectrum"
+
+
 def test_visualizer_selection_persists_across_restart(tmp_path, monkeypatch) -> None:
     _setup_dirs(tmp_path, monkeypatch)
     registry = VisualizerRegistry(
@@ -343,3 +361,31 @@ def test_cli_visualizer_plugin_paths_override_persisted_state(
     assert any(
         Path(path).parts[-2:] == ("visualizers", "plugins") for path in captured_paths
     )
+
+
+def test_app_spectrum_request_capability_follows_active_visualizer(
+    tmp_path, monkeypatch
+) -> None:
+    _setup_dirs(tmp_path, monkeypatch)
+    registry = VisualizerRegistry(
+        {"viz.default": VizDefault, "viz.spectrum": VizSpectrum},
+        default_id="viz.default",
+    )
+    _stub_registry_built_in(monkeypatch, registry)
+    app = TzPlayerApp(auto_init=False, backend_name="fake")
+
+    async def run_app() -> None:
+        async with app.run_test() as pilot:
+            await asyncio.sleep(0)
+            await app._initialize_state()
+            assert app.visualizer_host is not None
+            assert app.visualizer_host.active_id == "viz.default"
+            assert app._active_visualizer_requests_spectrum() is False
+
+            await pilot.press("z")
+            await asyncio.sleep(0)
+            assert app.visualizer_host.active_id == "viz.spectrum"
+            assert app._active_visualizer_requests_spectrum() is True
+            app.exit()
+
+    _run(run_app())

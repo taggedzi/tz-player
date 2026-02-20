@@ -18,6 +18,7 @@ class VuReactiveVisualizer:
     plugin_id: str = "vu.reactive"
     display_name: str = "VU Meter (Reactive)"
     plugin_api_version: int = 1
+    requires_spectrum: bool = True
     _ansi_enabled: bool = True
     _left_smooth: float = 0.0
     _right_smooth: float = 0.0
@@ -64,6 +65,8 @@ class VuReactiveVisualizer:
             _meter_line("L", self._left_smooth, meter_width, self._ansi_enabled),
             _meter_line("R", self._right_smooth, meter_width, self._ansi_enabled),
             _meter_line("M", mono, meter_width, self._ansi_enabled),
+            _spectrum_status_line(frame),
+            _spectrum_bar_line(frame, meter_width, self._ansi_enabled),
             _status_line(frame),
         ]
         lines.extend(_history_block(self._history, width, self._ansi_enabled, rows=4))
@@ -162,12 +165,62 @@ def _status_line(frame: VisualizerFrameInput) -> str:
     )
 
 
+def _spectrum_status_line(frame: VisualizerFrameInput) -> str:
+    status = (frame.spectrum_status or "missing").upper()
+    source = (frame.spectrum_source or "fallback").upper()
+    return f"FFT {status} [{source}]"
+
+
+def _spectrum_bar_line(
+    frame: VisualizerFrameInput,
+    width: int,
+    ansi_enabled: bool,
+) -> str:
+    bands = frame.spectrum_bands
+    if not bands:
+        return "F [" + ("-" * width) + "]"
+    # Collapse arbitrary band count into current width by max-pooling per bucket.
+    columns: list[int] = []
+    for idx in range(width):
+        start = int((idx * len(bands)) / width)
+        end = int(((idx + 1) * len(bands)) / width)
+        if end <= start:
+            end = min(len(bands), start + 1)
+        peak = max(bands[start:end]) if start < len(bands) else 0
+        columns.append(int(peak))
+    if ansi_enabled:
+        cells = "".join(_fft_color_cell(value) for value in columns)
+    else:
+        cells = "".join(_fft_ascii_cell(value) for value in columns)
+    return f"F [{cells}]"
+
+
 def _source_line(source: str) -> str:
     if source == "LIVE":
         return "SRC LIVE LEVELS"
     if source == "ENVELOPE":
         return "SRC ENVELOPE CACHE"
     return "SRC SIMULATED FALLBACK"
+
+
+def _fft_ascii_cell(level_u8: int) -> str:
+    if level_u8 >= 192:
+        return "#"
+    if level_u8 >= 96:
+        return "="
+    if level_u8 >= 32:
+        return "-"
+    return "."
+
+
+def _fft_color_cell(level_u8: int) -> str:
+    if level_u8 < 32:
+        return "."
+    if level_u8 < 96:
+        return "\x1b[38;2;53;230;138m-\x1b[0m"
+    if level_u8 < 192:
+        return "\x1b[38;2;242;201;76m=\x1b[0m"
+    return "\x1b[38;2;255;90;54m#\x1b[0m"
 
 
 def _source_token(level_source: str | None) -> str:

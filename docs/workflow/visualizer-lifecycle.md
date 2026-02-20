@@ -93,6 +93,7 @@ Local discovery supports:
 Plugin interface contract:
 
 - `plugin_id`, `display_name`
+- optional capability flags such as `requires_spectrum`
 - `on_activate(context)`, `on_deactivate()`, `render(frame) -> str`
 - `src/tz_player/visualizers/base.py:46`
 
@@ -104,7 +105,8 @@ Timer callback path:
 - Layout size (`pane.size.width/height`)
 - Playback transport state (`status`, `position`, `duration`, `volume`, `speed`, repeat/shuffle)
 - Current track metadata (`path`, `title`, `artist`, `album`)
-- Audio levels (`level_left`, `level_right`, `level_source`)
+- Audio levels (`level_left`, `level_right`, `level_source`, `level_status`)
+- Spectrum snapshot (`spectrum_bands`, `spectrum_source`, `spectrum_status`)
 - `src/tz_player/app.py:929`
 
 2. Call host:
@@ -168,6 +170,13 @@ Visualizer frame levels come from `PlayerState`:
 - `PlayerService._poll_position()` samples level source via `AudioLevelService.sample(...)`
 - Updates `level_left/right/source` in state and emits `PlayerStateChanged`
 - `src/tz_player/services/player_service.py:690`
+
+## 9. Lazy Spectrum Feeding Visualizers
+
+- `PlayerService` samples spectrum only when the active visualizer requests it (`requires_spectrum = True`).
+- Spectrum reads are cache-first through `SpectrumService`; misses schedule async analysis.
+- Analysis runs off-loop and persists into SQLite cache for later reuse.
+- Render paths consume cached frame payload only and do not trigger blocking compute.
 - `src/tz_player/services/player_service.py:730`
 
 App then forwards these values into each `VisualizerFrameInput`.
