@@ -21,15 +21,18 @@ class BeatScopeVisualizer:
     _ansi_enabled: bool = True
     _track_key: str = ""
     _flash_frames: int = 0
+    _last_onset_active: bool = False
     _onset_history: list[bool] = field(default_factory=list)
 
     def on_activate(self, context: VisualizerContext) -> None:
         self._ansi_enabled = context.ansi_enabled
         self._flash_frames = 0
+        self._last_onset_active = False
         self._onset_history.clear()
 
     def on_deactivate(self) -> None:
         self._flash_frames = 0
+        self._last_onset_active = False
         self._onset_history.clear()
 
     def render(self, frame: VisualizerFrameInput) -> str:
@@ -41,12 +44,15 @@ class BeatScopeVisualizer:
         if track_key != self._track_key:
             self._track_key = track_key
             self._flash_frames = 0
+            self._last_onset_active = False
             self._onset_history.clear()
 
-        if onset:
+        onset_edge = onset and not self._last_onset_active
+        if onset_edge:
             self._flash_frames = 4
         elif self._flash_frames > 0:
             self._flash_frames -= 1
+        self._last_onset_active = onset
 
         history_len = max(8, width - 14)
         self._onset_history.append(onset)

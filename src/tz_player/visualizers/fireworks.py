@@ -48,7 +48,7 @@ class FireworksVisualizer:
     _ansi_enabled: bool = True
     _track_key: str = ""
     _rng_state: int = 1
-    _last_beat_frame: int = -1
+    _beat_active: bool = False
     _last_launch_frame: int = -1
     _rockets: list[_Rocket] = field(default_factory=list)
     _particles: list[_Particle] = field(default_factory=list)
@@ -76,7 +76,7 @@ class FireworksVisualizer:
         if track_key != self._track_key:
             self._track_key = track_key
             self._rng_state = _stable_seed(track_key)
-            self._last_beat_frame = -1
+            self._beat_active = False
             self._last_launch_frame = -1
             self._rockets.clear()
             self._particles.clear()
@@ -85,8 +85,8 @@ class FireworksVisualizer:
         energy = _launch_energy(vu=vu, bass=bass, mids=mids, highs=highs)
         did_launch = False
 
-        if beat_onset and frame.frame_index != self._last_beat_frame:
-            self._last_beat_frame = frame.frame_index
+        beat_edge = beat_onset and not self._beat_active
+        if beat_edge:
             did_launch = True
             launches = 2 if (vu > 0.74 and (bass > 0.55 or beat_strength > 0.62)) else 1
             for _ in range(launches):
@@ -109,6 +109,7 @@ class FireworksVisualizer:
 
         if did_launch:
             self._last_launch_frame = frame.frame_index
+        self._beat_active = beat_onset
 
         self._update_rockets(rows=field_rows, vu=vu, bass=bass, mids=mids, highs=highs)
         self._update_particles(rows=field_rows, cols=width, crackle=crackle)

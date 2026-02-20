@@ -129,6 +129,18 @@ def analyze_track_beats_librosa(
         if onset_env is None or len(onset_env) <= 0:
             return None
         strengths = _normalize_strengths([float(value) for value in onset_env])
+        onset_frames = librosa.onset.onset_detect(
+            onset_envelope=onset_env,
+            sr=sample_rate,
+            hop_length=hop_samples,
+            units="frames",
+            pre_max=3,
+            post_max=3,
+            pre_avg=3,
+            post_avg=5,
+            delta=0.16,
+            wait=3,
+        )
         tempo_raw, beat_frames = librosa.beat.beat_track(
             onset_envelope=onset_env,
             sr=sample_rate,
@@ -139,7 +151,16 @@ def analyze_track_beats_librosa(
         return None
 
     tempo = float(tempo_raw.item()) if hasattr(tempo_raw, "item") else float(tempo_raw)
-    beat_indices = {int(value) for value in beat_frames if int(value) >= 0}
+    onset_indices = [int(value) for value in onset_frames if int(value) >= 0]
+    if not onset_indices:
+        onset_indices = [int(value) for value in beat_frames if int(value) >= 0]
+    beat_indices = _postprocess_onset_indices(
+        strengths,
+        onset_indices,
+        hop_ms=hop_ms,
+        min_strength=0.25,
+        min_inter_onset_ms=140,
+    )
     frame_count = min(len(strengths), max_frames)
     frames: list[tuple[int, int, bool]] = []
     for idx in range(frame_count):
@@ -154,6 +175,35 @@ def analyze_track_beats_librosa(
         bpm=max(0.0, tempo),
         frames=frames,
     )
+
+
+def _postprocess_onset_indices(
+    strengths: list[float],
+    onset_indices: list[int],
+    *,
+    hop_ms: int,
+    min_strength: float,
+    min_inter_onset_ms: int,
+) -> set[int]:
+    if not strengths or not onset_indices:
+        return set()
+    min_gap_frames = max(1, int(round(min_inter_onset_ms / max(1, hop_ms))))
+    ordered = sorted({idx for idx in onset_indices if 0 <= idx < len(strengths)})
+    filtered = [idx for idx in ordered if strengths[idx] >= min_strength]
+    if not filtered:
+        return set()
+    selected: list[int] = []
+    for idx in filtered:
+        if not selected:
+            selected.append(idx)
+            continue
+        prev = selected[-1]
+        if idx - prev >= min_gap_frames:
+            selected.append(idx)
+            continue
+        if strengths[idx] > strengths[prev]:
+            selected[-1] = idx
+    return set(selected)
 
 
 def _decode_wave(path: Path) -> tuple[int, list[float]] | None:
