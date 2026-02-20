@@ -122,6 +122,7 @@ Built-in visualizer IDs include:
 - `viz.particle.gravity_well`
 - `viz.particle.shockwave_rings`
 - `viz.particle.rain_reactive`
+- `viz.particle.orbital_system`
 - `viz.spectrum.radial`
 - `viz.typography.glitch`
 - `viz.waveform.proxy`

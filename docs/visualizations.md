@@ -136,6 +136,7 @@ Notes:
 - `viz.particle.gravity_well` (`requires_spectrum = True`, `requires_beat = True`)
 - `viz.particle.shockwave_rings` (`requires_spectrum = True`, `requires_beat = True`)
 - `viz.particle.rain_reactive` (`requires_spectrum = True`, `requires_beat = True`)
+- `viz.particle.orbital_system` (`requires_spectrum = True`, `requires_beat = True`)
 - `viz.spectrum.radial` (`requires_spectrum = True`, `requires_beat = True`)
 - `viz.typography.glitch` (`requires_beat = True`)
 - `viz.waveform.proxy` (`requires_waveform = True`)
