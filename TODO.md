@@ -379,7 +379,7 @@ Execution tracker derived from `SPEC.md`.
 
 ### T-046 Visualizer Responsiveness Tuning Profiles (Safe/Balanced/Aggressive)
 - Spec Ref: Section `6` (visualizer rendering), Section `8` (performance/reliability), `WF-06`, `WF-07`
-- Status: `todo`
+- Status: `in_progress`
 - Goal:
   - Improve perceived visualizer responsiveness while preserving keyboard-first responsiveness and non-blocking guarantees.
 - Scope:
@@ -390,13 +390,13 @@ Execution tracker derived from `SPEC.md`.
   - Live PCM sample stream contract changes (tracked separately in `T-045`).
   - Rewriting visualizer architecture.
 - Tasks:
-  - `T-046A` Add responsiveness profiles and runtime config wiring. Status: `todo`
+  - `T-046A` Add responsiveness profiles and runtime config wiring. Status: `done`
     - Define profile presets:
       - `safe`: low CPU / conservative cadence
       - `balanced`: recommended default
       - `aggressive`: high responsiveness / higher CPU
     - Wire profile selection via runtime config and CLI with clear precedence docs.
-  - `T-046B` Render cadence tuning (host FPS targets). Status: `todo`
+  - `T-046B` Render cadence tuning (host FPS targets). Status: `done`
     - Set profile-specific visualizer FPS targets.
     - Keep existing hard clamps and fallback safety.
     - Ensure host throttle behavior remains deterministic.

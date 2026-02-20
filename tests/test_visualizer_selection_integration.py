@@ -305,13 +305,47 @@ def test_invalid_persisted_visualizer_fps_recovers_to_default(
             await asyncio.sleep(0)
             await app._initialize_state()
             assert app.visualizer_host is not None
-            assert app.visualizer_host.target_fps == 10
-            assert app.state.visualizer_fps == 10
+            assert app.visualizer_host.target_fps == 16
+            assert app.state.visualizer_fps == 16
             app.exit()
 
     _run(run_app())
     persisted = load_state(paths.state_path())
-    assert persisted.visualizer_fps == 10
+    assert persisted.visualizer_fps == 16
+
+
+def test_cli_visualizer_responsiveness_override_sets_profile_default_fps(
+    tmp_path, monkeypatch
+) -> None:
+    _setup_dirs(tmp_path, monkeypatch)
+    save_state(
+        paths.state_path(),
+        AppState(
+            playback_backend="fake",
+            visualizer_fps=12,
+            visualizer_responsiveness_profile="safe",
+        ),
+    )
+    app = TzPlayerApp(
+        auto_init=False,
+        backend_name="fake",
+        visualizer_responsiveness_profile_override="aggressive",
+    )
+
+    async def run_app() -> None:
+        async with app.run_test():
+            await asyncio.sleep(0)
+            await app._initialize_state()
+            assert app.visualizer_host is not None
+            assert app.state.visualizer_responsiveness_profile == "aggressive"
+            assert app.visualizer_host.target_fps == 22
+            assert app.state.visualizer_fps == 22
+            app.exit()
+
+    _run(run_app())
+    persisted = load_state(paths.state_path())
+    assert persisted.visualizer_responsiveness_profile == "aggressive"
+    assert persisted.visualizer_fps == 22
 
 
 def test_cli_visualizer_fps_override_is_clamped(tmp_path, monkeypatch) -> None:

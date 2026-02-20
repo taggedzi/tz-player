@@ -36,6 +36,12 @@ Set local plugin runtime mode:
 tz-player --visualizer-plugin-runtime isolated
 ```
 
+Set visualizer responsiveness profile:
+
+```
+tz-player --visualizer-responsiveness balanced
+```
+
 Notes:
 - Default backend is `vlc`.
 - The VLC backend requires VLC/libVLC installed on your system.
@@ -59,6 +65,14 @@ Logging and diagnostics:
 - `--visualizer-plugin-runtime <in-process|isolated>` controls how local plugins execute.
   - `in-process` (default): local plugins run in the app process.
   - `isolated`: local plugins run in a subprocess with RPC timeouts and fail-closed fallback behavior.
+- `--visualizer-responsiveness <safe|balanced|aggressive>` selects profile defaults for visualizer responsiveness.
+  - `safe`: lower CPU, conservative responsiveness defaults.
+  - `balanced`: recommended default profile.
+  - `aggressive`: higher responsiveness, higher CPU cost.
+  - Precedence for render cadence:
+    - `--visualizer-fps` (explicit) overrides profile defaults.
+    - without explicit FPS, `--visualizer-responsiveness` sets profile-default FPS.
+    - persisted FPS is used only when no CLI FPS/profile override is provided.
 - Without `--log-file`, logs are written to the app log directory as `tz-player.log`.
   - Typical default location pattern: `<user_data_dir>/logs/tz-player.log`.
 - TUI/GUI runs write logs to file by default (console log streaming is disabled to avoid drawing over the TUI).

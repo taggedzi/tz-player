@@ -20,6 +20,7 @@ def test_state_roundtrip(tmp_path) -> None:
         shuffle=True,
         playback_backend="vlc",
         visualizer_id="bars",
+        visualizer_responsiveness_profile="aggressive",
         ansi_enabled=False,
         log_level="DEBUG",
     )

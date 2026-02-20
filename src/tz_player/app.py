@@ -37,7 +37,12 @@ from .doctor import render_report, run_doctor
 from .events import PlayerStateChanged, TrackChanged
 from .logging_utils import setup_logging
 from .paths import db_path, log_dir, state_path, visualizer_plugin_dir
-from .runtime_config import resolve_log_level
+from .runtime_config import (
+    VISUALIZER_RESPONSIVENESS_PROFILES,
+    normalize_visualizer_responsiveness_profile,
+    profile_default_visualizer_fps,
+    resolve_log_level,
+)
 from .services.analysis_cache_pruner import SqliteAnalysisCachePruner
 from .services.audio_beat_analysis import analyze_track_beats
 from .services.audio_envelope_analysis import (
@@ -283,6 +288,7 @@ class TzPlayerApp(App):
         auto_init: bool = True,
         backend_name: str | None = None,
         visualizer_fps_override: int | None = None,
+        visualizer_responsiveness_profile_override: str | None = None,
         visualizer_plugin_paths_override: list[str] | None = None,
         visualizer_plugin_security_mode_override: str | None = None,
         visualizer_plugin_runtime_mode_override: str | None = None,
@@ -302,6 +308,9 @@ class TzPlayerApp(App):
         self._auto_init = auto_init
         self._backend_name = backend_name
         self._visualizer_fps_override = visualizer_fps_override
+        self._visualizer_responsiveness_profile_override = (
+            visualizer_responsiveness_profile_override
+        )
         self._visualizer_plugin_paths_override = visualizer_plugin_paths_override
         self._visualizer_plugin_security_mode_override = (
             visualizer_plugin_security_mode_override
@@ -374,16 +383,36 @@ class TzPlayerApp(App):
             backend_name = _resolve_backend_name(
                 self._backend_name, self.state.playback_backend
             )
-            state_fps = _normalize_persisted_visualizer_fps(self.state.visualizer_fps)
+            has_profile_override = (
+                self._visualizer_responsiveness_profile_override is not None
+            )
+            profile_override = self._visualizer_responsiveness_profile_override
+            effective_profile = (
+                normalize_visualizer_responsiveness_profile(
+                    profile_override if profile_override is not None else "balanced"
+                )
+                if has_profile_override
+                else normalize_visualizer_responsiveness_profile(
+                    self.state.visualizer_responsiveness_profile
+                )
+            )
+            profile_default_fps = profile_default_visualizer_fps(effective_profile)
+            state_fps = _normalize_persisted_visualizer_fps(
+                self.state.visualizer_fps,
+                default_fps=profile_default_fps,
+            )
             effective_fps = (
                 _clamp_int(self._visualizer_fps_override, 2, 30)
                 if self._visualizer_fps_override is not None
+                else profile_default_fps
+                if has_profile_override
                 else state_fps
             )
             self.state = replace(
                 self.state,
                 playback_backend=backend_name,
                 visualizer_fps=effective_fps,
+                visualizer_responsiveness_profile=effective_profile,
                 visualizer_plugin_paths=tuple(self._visualizer_plugin_paths_override)
                 if self._visualizer_plugin_paths_override is not None
                 else self.state.visualizer_plugin_paths,
@@ -1494,10 +1523,10 @@ def _build_backend(name: str) -> FakePlaybackBackend | VLCPlaybackBackend:
     return FakePlaybackBackend()
 
 
-def _normalize_persisted_visualizer_fps(value: int) -> int:
+def _normalize_persisted_visualizer_fps(value: int, *, default_fps: int) -> int:
     if 2 <= value <= 30:
         return value
-    return 10
+    return _clamp_int(default_fps, 2, 30)
 
 
 def _normalize_visualizer_plugin_security_mode(value: str) -> str:
@@ -1553,6 +1582,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Visualizer render cadence (clamped to 2-30 FPS).",
     )
     parser.add_argument(
+        "--visualizer-responsiveness",
+        choices=VISUALIZER_RESPONSIVENESS_PROFILES,
+        help="Visualizer responsiveness profile (safe|balanced|aggressive).",
+    )
+    parser.add_argument(
         "--visualizer-plugin-path",
         action="append",
         dest="visualizer_plugin_paths",
@@ -1589,12 +1623,17 @@ def main() -> int:
             return report.exit_code
         logging.getLogger(__name__).info("Starting tz-player TUI")
         visualizer_fps = getattr(args, "visualizer_fps", None)
+        visualizer_responsiveness = getattr(args, "visualizer_responsiveness", None)
         visualizer_plugin_paths = getattr(args, "visualizer_plugin_paths", None)
         visualizer_plugin_security = getattr(args, "visualizer_plugin_security", None)
         visualizer_plugin_runtime = getattr(args, "visualizer_plugin_runtime", None)
         app_kwargs: dict[str, object] = {"backend_name": args.backend}
         if visualizer_fps is not None:
             app_kwargs["visualizer_fps_override"] = visualizer_fps
+        if visualizer_responsiveness is not None:
+            app_kwargs["visualizer_responsiveness_profile_override"] = (
+                visualizer_responsiveness
+            )
         if visualizer_plugin_paths is not None:
             app_kwargs["visualizer_plugin_paths_override"] = visualizer_plugin_paths
         if visualizer_plugin_security is not None:

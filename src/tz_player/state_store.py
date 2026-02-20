@@ -29,6 +29,7 @@ class AppState:
     playback_backend: str = "vlc"
     visualizer_id: str | None = None
     visualizer_fps: int = 10
+    visualizer_responsiveness_profile: str = "balanced"
     visualizer_plugin_paths: tuple[str, ...] = ()
     visualizer_plugin_security_mode: str = "warn"
     visualizer_plugin_runtime_mode: str = "in-process"
@@ -89,6 +90,9 @@ def _coerce_state(data: dict[str, Any]) -> AppState:
         if isinstance(data.get("visualizer_id"), str)
         else None,
         visualizer_fps=_int_or_default(data.get("visualizer_fps"), 10),
+        visualizer_responsiveness_profile=_str_or_default(
+            data.get("visualizer_responsiveness_profile"), "balanced"
+        ),
         visualizer_plugin_paths=tuple(
             value
             for value in data.get("visualizer_plugin_paths", [])
