@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import os
+import random
 import sqlite3
 import time
 from dataclasses import dataclass
@@ -18,6 +19,7 @@ from tz_player.db.schema import create_schema
 from tz_player.utils.async_utils import run_blocking
 
 POS_STEP = 10_000
+_PERF_WARN_MS = 50.0
 logger = logging.getLogger(__name__)
 
 
@@ -252,6 +254,7 @@ class PlaylistStore:
         if not paths:
             return 0
 
+        start = time.perf_counter()
         added = 0
         with self._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
@@ -286,6 +289,13 @@ class PlaylistStore:
                 )
                 next_pos += POS_STEP
                 added += 1
+        _log_slow_db_op(
+            "add_tracks",
+            start=start,
+            playlist_id=playlist_id,
+            requested=len(paths),
+            added=added,
+        )
         return added
 
     def _remove_items_sync(self, playlist_id: int, item_ids: set[int]) -> int:
@@ -314,6 +324,7 @@ class PlaylistStore:
     def _fetch_window_sync(
         self, playlist_id: int, offset: int, limit: int
     ) -> list[PlaylistRow]:
+        start = time.perf_counter()
         with self._connect() as conn:
             rows = conn.execute(
                 """
@@ -338,7 +349,7 @@ class PlaylistStore:
                 """,
                 (playlist_id, limit, offset),
             ).fetchall()
-        return [
+        result = [
             PlaylistRow(
                 item_id=int(row["item_id"]),
                 track_id=int(row["track_id"]),
@@ -354,6 +365,15 @@ class PlaylistStore:
             )
             for row in rows
         ]
+        _log_slow_db_op(
+            "fetch_window",
+            start=start,
+            playlist_id=playlist_id,
+            offset=offset,
+            limit=limit,
+            rows=len(result),
+        )
+        return result
 
     def _get_item_row_sync(self, playlist_id: int, item_id: int) -> PlaylistRow | None:
         with self._connect() as conn:
@@ -498,6 +518,7 @@ class PlaylistStore:
         self, playlist_id: int, query: str, limit: int
     ) -> list[int]:
         """Search playlist rows by tokenized AND matching across metadata/path."""
+        start = time.perf_counter()
         tokens = [token.strip().lower() for token in query.split() if token.strip()]
         if not tokens:
             return []
@@ -532,7 +553,16 @@ class PlaylistStore:
                 """,
                 params,
             ).fetchall()
-        return [int(row["item_id"]) for row in rows]
+        result = [int(row["item_id"]) for row in rows]
+        _log_slow_db_op(
+            "search_item_ids",
+            start=start,
+            playlist_id=playlist_id,
+            token_count=len(tokens),
+            limit=limit,
+            rows=len(result),
+        )
+        return result
 
     def _get_next_item_id_sync(
         self, playlist_id: int, item_id: int, wrap: bool
@@ -725,6 +755,7 @@ class PlaylistStore:
         return int(count_row["count"])
 
     def _list_item_ids_sync(self, playlist_id: int) -> list[int]:
+        start = time.perf_counter()
         with self._connect() as conn:
             rows = conn.execute(
                 """
@@ -735,37 +766,77 @@ class PlaylistStore:
                 """,
                 (playlist_id,),
             ).fetchall()
-        return [int(row["id"]) for row in rows]
+        result = [int(row["id"]) for row in rows]
+        _log_slow_db_op(
+            "list_item_ids",
+            start=start,
+            playlist_id=playlist_id,
+            rows=len(result),
+        )
+        return result
 
     def _get_random_item_id_sync(
         self, playlist_id: int, exclude_item_id: int | None
     ) -> int | None:
+        start = time.perf_counter()
         with self._connect() as conn:
             if exclude_item_id is None:
+                count_row = conn.execute(
+                    """
+                    SELECT COUNT(*) AS count
+                    FROM playlist_items
+                    WHERE playlist_id = ?
+                    """,
+                    (playlist_id,),
+                ).fetchone()
+                total = int(count_row["count"]) if count_row is not None else 0
+                if total <= 0:
+                    return None
+                random_offset = random.randrange(total)
                 row = conn.execute(
                     """
                     SELECT id
                     FROM playlist_items
                     WHERE playlist_id = ?
-                    ORDER BY RANDOM()
-                    LIMIT 1
+                    ORDER BY pos_key ASC
+                    LIMIT 1 OFFSET ?
                     """,
-                    (playlist_id,),
+                    (playlist_id, random_offset),
                 ).fetchone()
             else:
+                count_row = conn.execute(
+                    """
+                    SELECT COUNT(*) AS count
+                    FROM playlist_items
+                    WHERE playlist_id = ? AND id != ?
+                    """,
+                    (playlist_id, exclude_item_id),
+                ).fetchone()
+                total = int(count_row["count"]) if count_row is not None else 0
+                if total <= 0:
+                    return None
+                random_offset = random.randrange(total)
                 row = conn.execute(
                     """
                     SELECT id
                     FROM playlist_items
                     WHERE playlist_id = ? AND id != ?
-                    ORDER BY RANDOM()
-                    LIMIT 1
+                    ORDER BY pos_key ASC
+                    LIMIT 1 OFFSET ?
                     """,
-                    (playlist_id, exclude_item_id),
+                    (playlist_id, exclude_item_id, random_offset),
                 ).fetchone()
         if row is None:
             return None
-        return int(row["id"])
+        result = int(row["id"])
+        _log_slow_db_op(
+            "get_random_item_id",
+            start=start,
+            playlist_id=playlist_id,
+            excluded=exclude_item_id,
+            selected=result,
+        )
+        return result
 
     def _invalidate_metadata_sync(self, track_ids: set[int] | None) -> None:
         with self._connect() as conn:
@@ -954,6 +1025,21 @@ def _coerce_meta_valid(value: int | None) -> bool | None:
     if value is None:
         return None
     return bool(int(value))
+
+
+def _log_slow_db_op(op: str, *, start: float, **context: object) -> None:
+    elapsed_ms = (time.perf_counter() - start) * 1000.0
+    if elapsed_ms < _PERF_WARN_MS:
+        return
+    logger.info(
+        "PlaylistStore operation exceeded perf threshold",
+        extra={
+            "event": "playlist_store_slow_query",
+            "operation": op,
+            "elapsed_ms": round(elapsed_ms, 2),
+            **context,
+        },
+    )
 
 
 def _get_track_id(conn: sqlite3.Connection, path_norm: str) -> int | None:
