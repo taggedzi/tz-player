@@ -9,8 +9,13 @@ Execution tracker derived from `SPEC.md`.
 - `in_progress`: actively being worked
 - `done`: implemented, validated, and committed
 - `blocked`: requires decision or external dependency
+- `deferred`: intentionally postponed by project decision
 
 ## Active Backlog
+
+- No active implementation tasks currently queued.
+
+## Archived Recent Work
 
 ### T-038 User Drop-In Visualizer Plugins + Security Hardening
 - Spec Ref: Section `6` (Plugin discovery/lifecycle), Section `8` (reliability/error handling), `WF-06`, `WF-07`
@@ -365,13 +370,15 @@ Execution tracker derived from `SPEC.md`.
 
 ### T-045 Live Sample Stream Capability for True Waveform/Phase Visualizers
 - Spec Ref: Section `5` (analysis/service model), Section `6` (visualizer/plugin contract), Section `8` (non-blocking reliability)
-- Status: `blocked`
+- Status: `deferred`
 - Goal:
   - Introduce an explicit live sample stream capability so true oscilloscope and stereo Lissajous visualizers can be implemented with signal-accurate inputs.
 - Blockers:
   - Backend abstraction does not currently expose bounded live sample windows.
   - `VisualizerFrameInput` does not currently carry waveform/stereo phase sample vectors.
   - Perf/observability budgets for high-rate sample consumers are not yet defined.
+- Deferral note:
+  - Deferred by decision in favor of the cached waveform-proxy approach implemented in `T-047` for v1 scope.
 - Required decision inputs:
   - Which backends must support live samples for v1/v1.1 target.
   - Sample window format/rate/channel model for plugin-facing contract.
