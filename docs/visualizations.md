@@ -131,6 +131,35 @@ Fallback/capability semantics:
 - Visualizers without capability flags continue to receive base frame fields and run unchanged.
 - Capability flags only opt-in scheduler behavior; they do not guarantee immediate `ready` data on first frames.
 
+## Oscilloscope / Lissajous Feasibility Gate
+
+Current constraint summary:
+- The current playback backend abstraction does not provide a guaranteed live time-domain sample stream for visualizers.
+- The current visualizer frame contract does not provide stereo left/right sample vectors or explicit phase data.
+- Existing lazy analysis services provide scalar levels, quantized FFT bands, and beat markers only.
+
+Decision for v1:
+- True oscilloscope and true stereo XY/Lissajous renderers are deferred.
+- These variants are blocked until a dedicated live-sample capability is added to backend and frame contracts.
+
+Practical fallback designs (supported now):
+- Oscilloscope-style approximation:
+  - derive a pseudo-wave from grouped FFT band envelopes plus scalar level
+  - render persistence trails as stylized motion, clearly documented as non-waveform-accurate
+- Lissajous-style approximation:
+  - map low/mid grouped energies to X/Y trajectories
+  - optionally use beat pulses to drive bloom/density changes
+- Both fallback styles must preserve:
+  - deterministic render output for same input frame
+  - non-blocking render path
+  - explicit handling of `loading|missing|error` analysis states
+
+Live-sample expansion requirements (future task):
+- Backend-facing service for bounded live sample chunks (mono and optional stereo variants).
+- Contract extension for visualizer input fields carrying sample windows and sampling metadata.
+- Capability flag(s) for sample-demanding plugins, with cache/fallback behavior defined.
+- Perf/observability budgets to protect UI responsiveness under high refresh rates.
+
 ## Local Plugin Security Modes
 
 - `off`: disable static preflight checks.
@@ -338,6 +367,14 @@ Authoring patterns for scalar/FFT/beat:
   - spectrum-only: waterfall, terrain
   - spectrum+beat: reactor, radial
   - beat-only: typography
+
+### 5) Deferred True-Signal Modes
+
+- Deferred modes:
+  - true oscilloscope (time-domain waveform from live samples)
+  - true stereo phase scope / Lissajous (left/right sample stream)
+- Status:
+  - blocked pending live-sample capability task and contract expansion
 - Contract:
   - consume normalized levels from shared `AudioLevelService`
   - service source priority: `live backend` -> `envelope cache` -> `fallback`

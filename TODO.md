@@ -291,7 +291,7 @@ Execution tracker derived from `SPEC.md`.
 
 ### T-044 Advanced Visualizer Plugin Pack (Practical + Capability-Gated)
 - Spec Ref: Section `6` (visualizer/plugin model), Section `8` (reliability/error handling), `WF-06`, `WF-07`
-- Status: `in_progress`
+- Status: `done`
 - Goal:
   - Add a curated set of advanced built-in visualizer plugins inspired by the proposed concepts, while preserving non-blocking render constraints and graceful capability fallback behavior.
 - Scope:
@@ -322,7 +322,7 @@ Execution tracker derived from `SPEC.md`.
     - New plugin ID: `viz.typography.glitch`.
     - Render title/artist-centered layout with subtle RMS/FFT modulation.
     - Apply beat-triggered brief glitch/border pulse effects with readability guardrails.
-  - `T-044F` Oscilloscope/Persistence and Lissajous feasibility gate. Status: `todo`
+  - `T-044F` Oscilloscope/Persistence and Lissajous feasibility gate. Status: `done`
     - Document current constraints for true oscilloscope and stereo XY:
       - no guaranteed live time-domain sample stream in current backend abstraction
       - no reliable stereo phase/L-R sample feed for visualizer frame contract
@@ -362,6 +362,20 @@ Execution tracker derived from `SPEC.md`.
   - `.ubuntu-venv/bin/python -m ruff format --check .`
   - `.ubuntu-venv/bin/python -m mypy src`
   - `.ubuntu-venv/bin/python -m pytest`
+
+### T-045 Live Sample Stream Capability for True Waveform/Phase Visualizers
+- Spec Ref: Section `5` (analysis/service model), Section `6` (visualizer/plugin contract), Section `8` (non-blocking reliability)
+- Status: `blocked`
+- Goal:
+  - Introduce an explicit live sample stream capability so true oscilloscope and stereo Lissajous visualizers can be implemented with signal-accurate inputs.
+- Blockers:
+  - Backend abstraction does not currently expose bounded live sample windows.
+  - `VisualizerFrameInput` does not currently carry waveform/stereo phase sample vectors.
+  - Perf/observability budgets for high-rate sample consumers are not yet defined.
+- Required decision inputs:
+  - Which backends must support live samples for v1/v1.1 target.
+  - Sample window format/rate/channel model for plugin-facing contract.
+  - Scheduling/backpressure policy to prevent UI starvation.
 
 ### DOC-001 Internal Documentation Campaign (All Project Files)
 - Status: `done`

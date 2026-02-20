@@ -80,6 +80,11 @@ Built-ins include:
 - `matrix.*`
 - `ops.hackscope`
 - `vu.reactive`
+- `viz.spectrogram.waterfall`
+- `viz.spectrum.terrain`
+- `viz.reactor.particles`
+- `viz.spectrum.radial`
+- `viz.typography.glitch`
 - `cover.ascii.*`
 - `src/tz_player/visualizers/registry.py:64`
 
@@ -93,7 +98,7 @@ Local discovery supports:
 Plugin interface contract:
 
 - `plugin_id`, `display_name`
-- optional capability flags such as `requires_spectrum`
+- optional capability flags such as `requires_spectrum` and `requires_beat`
 - `on_activate(context)`, `on_deactivate()`, `render(frame) -> str`
 - `src/tz_player/visualizers/base.py:46`
 
@@ -181,7 +186,22 @@ Visualizer frame levels come from `PlayerState`:
 
 App then forwards these values into each `VisualizerFrameInput`.
 
-## 9. Shutdown Path
+## 10. Lazy Beat Feeding Visualizers
+
+- `PlayerService` samples beat data only when the active visualizer requests it (`requires_beat = True`).
+- Beat reads are cache-first through `BeatService`; misses schedule async analysis.
+- Beat analysis runs off-loop and persists into SQLite cache for later reuse.
+- Render paths consume cached beat payload only and do not trigger blocking compute.
+
+## 11. Oscilloscope/Lissajous Capability Gate (Current)
+
+- True oscilloscope and stereo phase/Lissajous visualizers are currently deferred.
+- Reason:
+  - no guaranteed live time-domain sample stream in backend abstraction
+  - no stereo sample/phase vectors in `VisualizerFrameInput`
+- Current advanced visualizers use scalar/spectrum/beat caches and deterministic fallback rendering only.
+
+## 12. Shutdown Path
 
 On app unmount:
 
@@ -193,7 +213,7 @@ On app unmount:
 - `src/tz_player/app.py:912`
 - `src/tz_player/visualizers/host.py:109`
 
-## 10. Practical Notes
+## 13. Practical Notes
 
 - Visualizer selection persists (`state.visualizer_id`), so fallback can rewrite persisted ID to a valid plugin.
 - Frame cadence is bounded even if persisted/CLI values are out of range.
