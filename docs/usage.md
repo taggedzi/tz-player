@@ -101,6 +101,11 @@ Built-in visualizer IDs include:
 - `matrix.green`, `matrix.blue`, `matrix.red`
 - `ops.hackscope`
 - `vu.reactive`
+- `viz.spectrogram.waterfall`
+- `viz.spectrum.terrain`
+- `viz.reactor.particles`
+- `viz.spectrum.radial`
+- `viz.typography.glitch`
 - `cover.ascii.static`, `cover.ascii.motion` (embedded artwork ASCII; requires embedded cover art in media files)
   - Fallback lookup is local-only and also checks sidecar files in the same directory (`cover.*`, `folder.*`, `front.*`, `album.*`, `artwork.*`, `<track-stem>.*`).
 

@@ -110,6 +110,27 @@ Notes:
   - `requires_beat = True` opts in.
   - Omitted/False means no beat sampling work is triggered.
 
+## Built-In Visualizer IDs (Current)
+
+- `basic`
+- `matrix.green`
+- `matrix.blue`
+- `matrix.red`
+- `ops.hackscope`
+- `vu.reactive`
+- `cover.ascii.static`
+- `cover.ascii.motion`
+- `viz.spectrogram.waterfall` (`requires_spectrum = True`)
+- `viz.spectrum.terrain` (`requires_spectrum = True`)
+- `viz.reactor.particles` (`requires_spectrum = True`, `requires_beat = True`)
+- `viz.spectrum.radial` (`requires_spectrum = True`, `requires_beat = True`)
+- `viz.typography.glitch` (`requires_beat = True`)
+
+Fallback/capability semantics:
+- Missing analysis data is expected during warmup and must render safely using state text such as `LOADING`, `MISSING`, or `ERROR`.
+- Visualizers without capability flags continue to receive base frame fields and run unchanged.
+- Capability flags only opt-in scheduler behavior; they do not guarantee immediate `ready` data on first frames.
+
 ## Local Plugin Security Modes
 
 - `off`: disable static preflight checks.
@@ -171,6 +192,7 @@ Checklist:
 6. If using scalar/spectrum analysis data, handle `loading|missing|error` explicitly.
 7. Place plugin file/package in the drop-in folder or pass an explicit plugin path.
 8. Add tests for activation, rendering, and fallback behavior.
+9. Keep render-path work bounded: precompute constants, avoid large allocations, and avoid dynamic imports in `render`.
 
 Minimal example:
 
@@ -227,6 +249,33 @@ class SpectrumBarsPlugin:
         return " ".join(f"{value:03d}" for value in frame.spectrum_bands[:16])
 ```
 
+Beat-aware example sketch:
+
+```python
+class BeatPulsePlugin:
+    plugin_id = "pulse.beat"
+    display_name = "Pulse (Beat)"
+    plugin_api_version = 1
+    requires_beat = True
+
+    def on_activate(self, context) -> None:
+        self._ansi_enabled = context.ansi_enabled
+
+    def on_deactivate(self) -> None:
+        return None
+
+    def render(self, frame) -> str:
+        if frame.beat_status != "ready":
+            return f"BEAT {frame.beat_status or 'missing'}"
+        return "PULSE!" if frame.beat_is_onset else "..."
+```
+
+Authoring patterns for scalar/FFT/beat:
+- Scalar (`level_left`/`level_right`): treat missing values as normal; use deterministic fallback animation only if needed.
+- FFT (`spectrum_bands`): prefer width-bucket aggregation to reduce jitter and keep CPU bounded.
+- Beat (`beat_is_onset`, `beat_strength`): use short accents (single-frame flash/pulse), not long blocking transitions.
+- Never do DB reads, subprocess calls, filesystem scans, or network calls from `render`.
+
 ## Testing Expectations
 
 - Unit tests for registry duplicate ID handling and default fallback.
@@ -234,9 +283,7 @@ class SpectrumBarsPlugin:
 - Unit tests for plugin exceptions during activation/render.
 - UI integration test proving visualization failures do not block keyboard transport controls.
 
-## Planned Plugin Pack (Next Phase)
-
-This section documents planned extra-scope visualizers before implementation.
+## Plugin Pack Notes
 
 ### 1) Matrix Rain (Non-Reactive)
 
@@ -278,6 +325,19 @@ This section documents planned extra-scope visualizers before implementation.
 - Goal: level-based meter tied to real playback energy when signal data exists.
 - Implemented ID:
   - `vu.reactive`
+
+### 4) Advanced Analysis-Reactive Pack
+
+- Implemented IDs:
+  - `viz.spectrogram.waterfall`
+  - `viz.spectrum.terrain`
+  - `viz.reactor.particles`
+  - `viz.spectrum.radial`
+  - `viz.typography.glitch`
+- Data capability model:
+  - spectrum-only: waterfall, terrain
+  - spectrum+beat: reactor, radial
+  - beat-only: typography
 - Contract:
   - consume normalized levels from shared `AudioLevelService`
   - service source priority: `live backend` -> `envelope cache` -> `fallback`

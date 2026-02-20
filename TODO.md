@@ -328,7 +328,7 @@ Execution tracker derived from `SPEC.md`.
       - no reliable stereo phase/L-R sample feed for visualizer frame contract
     - Define practical fallback designs that can run on FFT+scalar only (stylized approximation mode).
     - Mark true waveform/phase variants as blocked until a live-sample capability task is approved.
-  - `T-044G` Visualizer contract/docs updates for new effects. Status: `todo`
+  - `T-044G` Visualizer contract/docs updates for new effects. Status: `done`
     - Ensure `docs/visualizations.md` lists new plugin IDs, capability requirements, and fallback semantics.
     - Add concise plugin-author guidance for effect patterns using scalar/FFT/beat without blocking render.
     - Confirm compatibility statement for existing plugins remains unchanged.
