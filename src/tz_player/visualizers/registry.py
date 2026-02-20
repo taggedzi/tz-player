@@ -25,6 +25,7 @@ from .base import VisualizerPlugin
 from .basic import BasicVisualizer
 from .constellation import ConstellationVisualizer
 from .cover_ascii import CoverAsciiMotionVisualizer, CoverAsciiStaticVisualizer
+from .data_core_frag import DataCoreFragVisualizer
 from .ember_field import EmberFieldVisualizer
 from .gravity_well import GravityWellVisualizer
 from .hackscope import HackScopeVisualizer
@@ -182,6 +183,7 @@ class VisualizerRegistry:
             MagneticGridVisualizer,
             AudioTornadoVisualizer,
             ConstellationVisualizer,
+            DataCoreFragVisualizer,
             RadialSpectrumVisualizer,
             WaveformProxyVisualizer,
             WaveformNeonVisualizer,
