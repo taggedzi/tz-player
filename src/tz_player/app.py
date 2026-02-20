@@ -448,6 +448,17 @@ class TzPlayerApp(App):
                 hop_ms=profile_spectrum_hop_ms,
             )
             self._beat_params = BeatParams(hop_ms=profile_beat_hop_ms)
+            logger.info(
+                "Visualizer responsiveness profile applied",
+                extra={
+                    "event": "visualizer_responsiveness_profile_applied",
+                    "profile": effective_profile,
+                    "visualizer_fps": effective_fps,
+                    "spectrum_hop_ms": profile_spectrum_hop_ms,
+                    "beat_hop_ms": profile_beat_hop_ms,
+                    "player_poll_interval_s": profile_poll_interval_s,
+                },
+            )
             await run_blocking(save_state, state_path(), self.state)
             try:
                 await self.store.initialize()

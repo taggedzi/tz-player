@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 import pytest
 
+import tz_player.visualizers.host as host_module
 from tz_player.visualizers.base import VisualizerContext, VisualizerFrameInput
 from tz_player.visualizers.host import VisualizerHost
 from tz_player.visualizers.registry import VisualizerRegistry
@@ -211,3 +212,39 @@ def test_active_requires_beat_defaults_false_for_legacy_plugins() -> None:
     context = VisualizerContext(ansi_enabled=True, unicode_enabled=True)
     host.activate("good", context)
     assert host.active_requires_beat is False
+
+
+def test_overrun_and_throttle_emit_observability_events(caplog, monkeypatch) -> None:
+    caplog.set_level(logging.INFO, logger="tz_player.visualizers.host")
+    registry = VisualizerRegistry({"good": GoodPlugin}, default_id="good")
+    host = VisualizerHost(registry, target_fps=10)
+    context = VisualizerContext(ansi_enabled=True, unicode_enabled=True)
+    host.activate("good", context)
+
+    moments = iter([0.0, 0.20, 1.0, 1.20, 2.0, 2.20])
+    monkeypatch.setattr(host_module.time, "monotonic", lambda: next(moments))
+
+    host.render_frame(_frame(), context)
+    host.render_frame(_frame(), context)
+    host.render_frame(_frame(), context)
+    throttled = host.render_frame(_frame(), context)
+
+    assert throttled == "Visualizer throttled"
+    overrun_events = [
+        record
+        for record in caplog.records
+        if getattr(record, "event", None) == "visualizer_render_overrun"
+    ]
+    assert len(overrun_events) >= 3
+    throttle_events = [
+        record
+        for record in caplog.records
+        if getattr(record, "event", None) == "visualizer_throttle_engaged"
+    ]
+    assert throttle_events
+    skip_events = [
+        record
+        for record in caplog.records
+        if getattr(record, "event", None) == "visualizer_throttle_skip"
+    ]
+    assert skip_events

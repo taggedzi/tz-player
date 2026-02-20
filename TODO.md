@@ -408,7 +408,7 @@ Execution tracker derived from `SPEC.md`.
     - Reduce smoothing/hold constants where latency feel is excessive.
     - Keep readability and stability for paused/low-signal states.
     - Validate deterministic output remains intact for same inputs.
-  - `T-046E` Observability for responsiveness/throttle detection. Status: `todo`
+  - `T-046E` Observability for responsiveness/throttle detection. Status: `done`
     - Add/expand structured logs for:
       - render overruns
       - skipped/throttled frames

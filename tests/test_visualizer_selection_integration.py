@@ -352,6 +352,37 @@ def test_cli_visualizer_responsiveness_override_sets_profile_default_fps(
     assert persisted.visualizer_fps == 22
 
 
+def test_startup_logs_visualizer_responsiveness_profile_event(
+    tmp_path, monkeypatch, caplog
+) -> None:
+    _setup_dirs(tmp_path, monkeypatch)
+    caplog.set_level("INFO", logger="tz_player.app")
+    app = TzPlayerApp(
+        auto_init=False,
+        backend_name="fake",
+        visualizer_responsiveness_profile_override="safe",
+    )
+
+    async def run_app() -> None:
+        async with app.run_test():
+            await asyncio.sleep(0)
+            await app._initialize_state()
+            app.exit()
+
+    _run(run_app())
+    events = [
+        record
+        for record in caplog.records
+        if getattr(record, "event", None) == "visualizer_responsiveness_profile_applied"
+    ]
+    assert events
+    event = events[-1]
+    assert getattr(event, "profile", None) == "safe"
+    assert getattr(event, "visualizer_fps", None) == 10
+    assert getattr(event, "spectrum_hop_ms", None) == 40
+    assert getattr(event, "beat_hop_ms", None) == 40
+
+
 def test_cli_visualizer_fps_override_is_clamped(tmp_path, monkeypatch) -> None:
     _setup_dirs(tmp_path, monkeypatch)
     app = TzPlayerApp(auto_init=False, backend_name="fake", visualizer_fps_override=99)
