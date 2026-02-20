@@ -306,7 +306,7 @@ Execution tracker derived from `SPEC.md`.
     - New plugin ID: `viz.spectrogram.waterfall`.
     - Use FFT bands with rolling history buffer and intensity glyph ramps.
     - Add optional beat pulse accent on newest row.
-  - `T-044B` Audio Terrain (spectral landscape). Status: `todo`
+  - `T-044B` Audio Terrain (spectral landscape). Status: `done`
     - New plugin ID: `viz.spectrum.terrain`.
     - Group FFT bins into width buckets with filled curve rendering.
     - Add optional beat-triggered terrain lift/flash effect.

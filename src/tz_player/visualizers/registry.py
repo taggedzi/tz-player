@@ -26,6 +26,7 @@ from .cover_ascii import CoverAsciiMotionVisualizer, CoverAsciiStaticVisualizer
 from .hackscope import HackScopeVisualizer
 from .isolated_runner import IsolatedPluginProxy, PluginSourceSpec
 from .matrix import MatrixBlueVisualizer, MatrixGreenVisualizer, MatrixRedVisualizer
+from .terrain import AudioTerrainVisualizer
 from .typography import TypographyGlitchVisualizer
 from .vu import VuReactiveVisualizer
 from .waterfall import SpectrogramWaterfallVisualizer
@@ -157,6 +158,7 @@ class VisualizerRegistry:
             HackScopeVisualizer,
             VuReactiveVisualizer,
             SpectrogramWaterfallVisualizer,
+            AudioTerrainVisualizer,
             TypographyGlitchVisualizer,
             CoverAsciiStaticVisualizer,
             CoverAsciiMotionVisualizer,
