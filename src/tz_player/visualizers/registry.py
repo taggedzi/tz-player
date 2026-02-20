@@ -33,6 +33,7 @@ from .isolated_runner import IsolatedPluginProxy, PluginSourceSpec
 from .magnetic_grid import MagneticGridVisualizer
 from .matrix import MatrixBlueVisualizer, MatrixGreenVisualizer, MatrixRedVisualizer
 from .orbital_system import OrbitalSystemVisualizer
+from .plasma_stream import PlasmaStreamVisualizer
 from .radial import RadialSpectrumVisualizer
 from .rain_reactive import ReactiveRainVisualizer
 from .reactor import ParticleReactorVisualizer
@@ -184,6 +185,7 @@ class VisualizerRegistry:
             AudioTornadoVisualizer,
             ConstellationVisualizer,
             DataCoreFragVisualizer,
+            PlasmaStreamVisualizer,
             RadialSpectrumVisualizer,
             WaveformProxyVisualizer,
             WaveformNeonVisualizer,
