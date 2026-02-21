@@ -14,6 +14,63 @@ Please see `AGENTS.md` for more instructions.
 
 ## Active Backlog
 
+### T-049 Async/UI Non-Blocking Hardening (Post-#16 Recovery)
+- Spec Ref: Section `5` (analysis/service model), Section `6` (visualizer/plugin contract), Section `7` (persistence), Section `8` (non-blocking reliability), `WF-02`, `WF-06`, `WF-07`
+- Status: `todo`
+- Goal:
+  - Eliminate remaining UI lag/hang vectors by separating heavy CPU analysis from DB/file I/O pathways and by reducing high-frequency await chains on UI event handlers.
+- Audit Findings (current `main`):
+  - Shared executor contention: one thread pool handles both DB/file operations and CPU-heavy analysis workloads (`src/tz_player/utils/async_utils.py`).
+  - Synchronous visualizer rendering on UI timer path (`src/tz_player/app.py`, `src/tz_player/visualizers/host.py`).
+  - Repeated DB index lookups in transport-control refresh on frequent player-state updates (`src/tz_player/ui/playlist_pane.py`, `src/tz_player/app.py`).
+  - Synchronous plugin discovery/import/preflight during startup (`src/tz_player/app.py`, `src/tz_player/visualizers/registry.py`).
+  - SQLite lock waits can be long under write contention (`src/tz_player/services/playlist_store.py` and analysis stores using `timeout=30` + `BEGIN IMMEDIATE`).
+- Scope:
+  - Tighten async boundaries so the Textual event loop never performs expensive CPU/import/DB work directly.
+  - Add bounded scheduling/backpressure for analysis and DB mutation workloads.
+  - Add regression tests proving UI responsiveness under concurrent analysis and lock contention.
+- Non-goals:
+  - Removing existing playback backends.
+  - Replacing SQLite.
+  - Adding remote processing/services.
+- Tasks:
+  - `T-049A` Executor isolation and API split. Status: `todo`
+    - Introduce `run_cpu_bound(...)` separate from `run_blocking(...)`.
+    - Route spectrum/beat/waveform/envelope analysis workloads to CPU-bound executor.
+    - Keep DB/file metadata operations on IO executor.
+    - Add tests validating correct routing and non-callable argument handling.
+  - `T-049B` Analysis scheduling/backpressure controls. Status: `todo`
+    - Add global per-analysis-type concurrency caps and queue depth protections.
+    - Coalesce duplicate analysis requests across poll ticks and rapid track changes.
+    - Add cancellation semantics for stale analysis jobs when context changes.
+  - `T-049C` Visualizer render path hardening. Status: `todo`
+    - Ensure frame timer callback remains lightweight and never waits on DB/IO.
+    - Add frame-drop/coalescing policy when previous render overruns budget.
+    - Add render-time observability metrics and slow-frame warnings for active plugin IDs.
+  - `T-049D` UI transport refresh DB-read reduction. Status: `todo`
+    - Remove per-state-update repeated `get_item_index` calls from hot path.
+    - Introduce cached index map or incremental index tracking for cursor/playing rows.
+    - Debounce/coalesce transport refresh updates while preserving correctness.
+  - `T-049E` Startup/plugin discovery off-loop safeguards. Status: `todo`
+    - Move plugin discovery/import/preflight scanning off the UI loop.
+    - Add timeout/fallback behavior for slow local plugin paths.
+    - Preserve current diagnostics and security-policy behavior.
+  - `T-049F` SQLite contention mitigation. Status: `todo`
+    - Add bounded retry/jitter strategy for `database is locked` operational errors.
+    - Revisit connection timeout strategy and write batching for mutation-heavy flows.
+    - Add stress tests with simulated lock contention while user actions continue.
+  - `T-049G` ffmpeg/tool probing cache. Status: `todo`
+    - Cache ffmpeg-availability checks per session to avoid repeated path lookups in hot UI paths.
+    - Keep explicit refresh path for diagnostics if needed.
+  - `T-049H` Non-blocking regression suite expansion. Status: `todo`
+    - Add focused tests for: rapid key input during active analysis, DB lock contention, large folder ingest, and visualizer overrun conditions.
+    - Add timing assertions/events to ensure event-loop responsiveness remains within target budget.
+- Validation (per implementation change set):
+  - `.ubuntu-venv/bin/python -m ruff check .`
+  - `.ubuntu-venv/bin/python -m ruff format --check .`
+  - `.ubuntu-venv/bin/python -m mypy src`
+  - `.ubuntu-venv/bin/python -m pytest`
+
 ### T-048 Particle Visualizer Expansion Pack (FFT/Beat/RMS Reactive)
 - Spec Ref: Section `6` (visualizer/plugin model), Section `8` (reliability/performance), `WF-06`
 - Status: `in_progress`
