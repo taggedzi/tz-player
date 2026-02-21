@@ -9,6 +9,7 @@ import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 
+from tz_player.services.sqlite_retry import run_with_sqlite_lock_retry
 from tz_player.utils.async_utils import run_blocking
 
 
@@ -159,85 +160,88 @@ class SqliteSpectrumStore:
         params_hash = _params_hash(params_json)
         total_bytes = sum(len(payload) for _pos, payload in normalized_frames)
 
-        with self._connect() as conn:
-            conn.execute("BEGIN IMMEDIATE")
-            conn.execute(
-                """
-                INSERT INTO analysis_cache_entries (
-                    analysis_type,
-                    path_norm,
-                    mtime_ns,
-                    size_bytes,
-                    analysis_version,
-                    params_hash,
-                    params_json,
-                    duration_ms,
-                    frame_count,
-                    byte_size,
-                    computed_at,
-                    last_accessed_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s','now'), strftime('%s','now'))
-                ON CONFLICT(path_norm, mtime_ns, size_bytes, analysis_type, analysis_version, params_hash)
-                DO UPDATE SET
-                    params_json = excluded.params_json,
-                    duration_ms = excluded.duration_ms,
-                    frame_count = excluded.frame_count,
-                    byte_size = excluded.byte_size,
-                    computed_at = excluded.computed_at,
-                    last_accessed_at = excluded.last_accessed_at
-                """,
-                (
-                    self.ANALYSIS_TYPE,
-                    path_norm,
-                    mtime_ns,
-                    size_bytes,
-                    self._analysis_version,
-                    params_hash,
-                    params_json,
-                    max(1, int(duration_ms)),
-                    len(normalized_frames),
-                    total_bytes,
-                ),
-            )
-            row = conn.execute(
-                """
-                SELECT id
-                FROM analysis_cache_entries
-                WHERE analysis_type = ?
-                  AND path_norm = ?
-                  AND analysis_version = ?
-                  AND params_hash = ?
-                  AND mtime_ns IS ?
-                  AND size_bytes IS ?
-                LIMIT 1
-                """,
-                (
-                    self.ANALYSIS_TYPE,
-                    path_norm,
-                    self._analysis_version,
-                    params_hash,
-                    mtime_ns,
-                    size_bytes,
-                ),
-            ).fetchone()
-            if row is None:
-                return
-            entry_id = int(row["id"])
-            conn.execute(
-                "DELETE FROM analysis_spectrum_frames WHERE entry_id = ?",
-                (entry_id,),
-            )
-            conn.executemany(
-                """
-                INSERT INTO analysis_spectrum_frames (
-                    entry_id, frame_idx, position_ms, bands
-                ) VALUES (?, ?, ?, ?)
-                """,
-                [
-                    (entry_id, idx, position_ms, payload)
-                    for idx, (position_ms, payload) in enumerate(normalized_frames)
-                ],
-            )
+        def _op() -> None:
+            with self._connect() as conn:
+                conn.execute("BEGIN IMMEDIATE")
+                conn.execute(
+                    """
+                    INSERT INTO analysis_cache_entries (
+                        analysis_type,
+                        path_norm,
+                        mtime_ns,
+                        size_bytes,
+                        analysis_version,
+                        params_hash,
+                        params_json,
+                        duration_ms,
+                        frame_count,
+                        byte_size,
+                        computed_at,
+                        last_accessed_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s','now'), strftime('%s','now'))
+                    ON CONFLICT(path_norm, mtime_ns, size_bytes, analysis_type, analysis_version, params_hash)
+                    DO UPDATE SET
+                        params_json = excluded.params_json,
+                        duration_ms = excluded.duration_ms,
+                        frame_count = excluded.frame_count,
+                        byte_size = excluded.byte_size,
+                        computed_at = excluded.computed_at,
+                        last_accessed_at = excluded.last_accessed_at
+                    """,
+                    (
+                        self.ANALYSIS_TYPE,
+                        path_norm,
+                        mtime_ns,
+                        size_bytes,
+                        self._analysis_version,
+                        params_hash,
+                        params_json,
+                        max(1, int(duration_ms)),
+                        len(normalized_frames),
+                        total_bytes,
+                    ),
+                )
+                row = conn.execute(
+                    """
+                    SELECT id
+                    FROM analysis_cache_entries
+                    WHERE analysis_type = ?
+                      AND path_norm = ?
+                      AND analysis_version = ?
+                      AND params_hash = ?
+                      AND mtime_ns IS ?
+                      AND size_bytes IS ?
+                    LIMIT 1
+                    """,
+                    (
+                        self.ANALYSIS_TYPE,
+                        path_norm,
+                        self._analysis_version,
+                        params_hash,
+                        mtime_ns,
+                        size_bytes,
+                    ),
+                ).fetchone()
+                if row is None:
+                    return
+                entry_id = int(row["id"])
+                conn.execute(
+                    "DELETE FROM analysis_spectrum_frames WHERE entry_id = ?",
+                    (entry_id,),
+                )
+                conn.executemany(
+                    """
+                    INSERT INTO analysis_spectrum_frames (
+                        entry_id, frame_idx, position_ms, bands
+                    ) VALUES (?, ?, ?, ?)
+                    """,
+                    [
+                        (entry_id, idx, position_ms, payload)
+                        for idx, (position_ms, payload) in enumerate(normalized_frames)
+                    ],
+                )
+
+        run_with_sqlite_lock_retry(_op, op_name="spectrum.upsert")
 
     def _has_spectrum_sync(self, track_path: Path, params: SpectrumParams) -> bool:
         path_norm = _normalize_path(track_path)
@@ -349,77 +353,83 @@ class SqliteSpectrumStore:
         max_cache_bytes = max(0, int(max_cache_bytes))
         max_age_days = max(1, int(max_age_days))
         min_recent_tracks_protected = max(0, int(min_recent_tracks_protected))
-        with self._connect() as conn:
-            conn.execute("BEGIN IMMEDIATE")
-            pruned = 0
 
-            # Age-based prune first, preserving most recent protected entries.
-            conn.execute(
-                """
-                DELETE FROM analysis_cache_entries
-                WHERE analysis_type = ?
-                  AND id NOT IN (
-                      SELECT id
-                      FROM analysis_cache_entries
-                      WHERE analysis_type = ?
-                      ORDER BY last_accessed_at DESC
-                      LIMIT ?
-                  )
-                  AND computed_at < (strftime('%s','now') - (? * 86400))
-                """,
-                (
-                    self.ANALYSIS_TYPE,
-                    self.ANALYSIS_TYPE,
-                    min_recent_tracks_protected,
-                    max_age_days,
-                ),
-            )
-            pruned += conn.total_changes
+        def _op() -> int:
+            with self._connect() as conn:
+                conn.execute("BEGIN IMMEDIATE")
+                pruned = 0
 
-            total_row = conn.execute(
-                "SELECT COALESCE(SUM(byte_size), 0) AS total_bytes FROM analysis_cache_entries WHERE analysis_type = ?",
-                (self.ANALYSIS_TYPE,),
-            ).fetchone()
-            total_bytes = int(total_row["total_bytes"]) if total_row is not None else 0
-            if total_bytes <= max_cache_bytes:
-                return pruned
-
-            rows = conn.execute(
-                """
-                SELECT id, byte_size
-                FROM analysis_cache_entries
-                WHERE analysis_type = ?
-                ORDER BY last_accessed_at ASC
-                """,
-                (self.ANALYSIS_TYPE,),
-            ).fetchall()
-            protected_ids = {
-                int(row["id"])
-                for row in conn.execute(
+                # Age-based prune first, preserving most recent protected entries.
+                conn.execute(
                     """
-                    SELECT id
+                    DELETE FROM analysis_cache_entries
+                    WHERE analysis_type = ?
+                      AND id NOT IN (
+                          SELECT id
+                          FROM analysis_cache_entries
+                          WHERE analysis_type = ?
+                          ORDER BY last_accessed_at DESC
+                          LIMIT ?
+                      )
+                      AND computed_at < (strftime('%s','now') - (? * 86400))
+                    """,
+                    (
+                        self.ANALYSIS_TYPE,
+                        self.ANALYSIS_TYPE,
+                        min_recent_tracks_protected,
+                        max_age_days,
+                    ),
+                )
+                pruned += conn.total_changes
+
+                total_row = conn.execute(
+                    "SELECT COALESCE(SUM(byte_size), 0) AS total_bytes FROM analysis_cache_entries WHERE analysis_type = ?",
+                    (self.ANALYSIS_TYPE,),
+                ).fetchone()
+                total_bytes = (
+                    int(total_row["total_bytes"]) if total_row is not None else 0
+                )
+                if total_bytes <= max_cache_bytes:
+                    return pruned
+
+                rows = conn.execute(
+                    """
+                    SELECT id, byte_size
                     FROM analysis_cache_entries
                     WHERE analysis_type = ?
-                    ORDER BY last_accessed_at DESC
-                    LIMIT ?
+                    ORDER BY last_accessed_at ASC
                     """,
-                    (self.ANALYSIS_TYPE, min_recent_tracks_protected),
+                    (self.ANALYSIS_TYPE,),
                 ).fetchall()
-            }
-            for row in rows:
-                if total_bytes <= max_cache_bytes:
-                    break
-                entry_id = int(row["id"])
-                if entry_id in protected_ids:
-                    continue
-                reclaimed = int(row["byte_size"])
-                conn.execute(
-                    "DELETE FROM analysis_cache_entries WHERE id = ?",
-                    (entry_id,),
-                )
-                pruned += 1
-                total_bytes = max(0, total_bytes - reclaimed)
-            return pruned
+                protected_ids = {
+                    int(row["id"])
+                    for row in conn.execute(
+                        """
+                        SELECT id
+                        FROM analysis_cache_entries
+                        WHERE analysis_type = ?
+                        ORDER BY last_accessed_at DESC
+                        LIMIT ?
+                        """,
+                        (self.ANALYSIS_TYPE, min_recent_tracks_protected),
+                    ).fetchall()
+                }
+                for row in rows:
+                    if total_bytes <= max_cache_bytes:
+                        break
+                    entry_id = int(row["id"])
+                    if entry_id in protected_ids:
+                        continue
+                    reclaimed = int(row["byte_size"])
+                    conn.execute(
+                        "DELETE FROM analysis_cache_entries WHERE id = ?",
+                        (entry_id,),
+                    )
+                    pruned += 1
+                    total_bytes = max(0, total_bytes - reclaimed)
+                return pruned
+
+        return run_with_sqlite_lock_retry(_op, op_name="spectrum.prune")
 
 
 def _params_json(params: SpectrumParams) -> str:

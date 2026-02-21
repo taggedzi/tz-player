@@ -113,3 +113,57 @@ def test_state_save_tmp_write_failure_keeps_previous_file(
 
     loaded = load_state(path)
     assert loaded == original
+
+
+def test_state_save_retries_replace_on_transient_windows_lock(
+    tmp_path, monkeypatch
+) -> None:
+    path = tmp_path / "state.json"
+    original = AppState(playback_backend="fake", visualizer_id="basic")
+    save_state(path, original)
+    updated = AppState(playback_backend="vlc", visualizer_id="viz.one")
+
+    attempts = {"count": 0}
+    original_replace = Path.replace
+
+    def flaky_replace(self: Path, target: Path):  # type: ignore[no-untyped-def]
+        attempts["count"] += 1
+        if self.suffix == ".tmp" and attempts["count"] < 3:
+            err = PermissionError("used by another process")
+            err.winerror = 32  # type: ignore[attr-defined]
+            raise err
+        return original_replace(self, target)
+
+    monkeypatch.setattr(Path, "replace", flaky_replace)
+
+    save_state(path, updated)
+    loaded = load_state(path)
+    assert loaded == updated
+    assert attempts["count"] == 3
+
+
+def test_state_save_retries_when_replace_reports_missing_tmp_on_windows(
+    tmp_path, monkeypatch
+) -> None:
+    path = tmp_path / "state.json"
+    original = AppState(playback_backend="fake", visualizer_id="basic")
+    save_state(path, original)
+    updated = AppState(playback_backend="vlc", visualizer_id="viz.two")
+
+    attempts = {"count": 0}
+    original_replace = Path.replace
+
+    def flaky_replace(self: Path, target: Path):  # type: ignore[no-untyped-def]
+        attempts["count"] += 1
+        if attempts["count"] < 3:
+            err = FileNotFoundError("tmp missing during replace")
+            err.winerror = 2  # type: ignore[attr-defined]
+            raise err
+        return original_replace(self, target)
+
+    monkeypatch.setattr(Path, "replace", flaky_replace)
+
+    save_state(path, updated)
+    loaded = load_state(path)
+    assert loaded == updated
+    assert attempts["count"] == 3

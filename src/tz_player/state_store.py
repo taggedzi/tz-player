@@ -9,9 +9,12 @@ from __future__ import annotations
 import json
 import logging
 import math
+import time
+from contextlib import suppress
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 logger = logging.getLogger(__name__)
 
@@ -159,7 +162,32 @@ def load_state(path: Path) -> AppState:
 def save_state(path: Path, state: AppState) -> None:
     """Persist state atomically to disk via write-then-replace."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp_path = path.with_suffix(path.suffix + ".tmp")
+    tmp_path = path.with_name(f"{path.name}.{uuid4().hex}.tmp")
     payload = json.dumps(asdict(state), indent=2, sort_keys=True)
-    tmp_path.write_text(payload, encoding="utf-8")
-    tmp_path.replace(path)
+    delay_s = 0.02
+    try:
+        for attempt in range(4):
+            tmp_path.write_text(payload, encoding="utf-8")
+            try:
+                tmp_path.replace(path)
+                return
+            except OSError as exc:
+                if not _is_retryable_windows_replace_error(exc) or attempt >= 3:
+                    raise
+                time.sleep(delay_s)
+                delay_s = min(0.25, delay_s * 2.0)
+    finally:
+        with suppress(OSError):
+            tmp_path.unlink()
+
+
+def _is_retryable_windows_replace_error(exc: OSError) -> bool:
+    """Return whether an atomic replace failure is likely transient on Windows."""
+    winerror = getattr(exc, "winerror", None)
+    if winerror in {32, 5, 2}:
+        return True
+    errno = getattr(exc, "errno", None)
+    if errno in {13, 16}:
+        return True
+    text = str(exc).lower()
+    return "used by another process" in text or "permission denied" in text

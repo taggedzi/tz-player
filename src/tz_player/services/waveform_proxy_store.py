@@ -9,6 +9,7 @@ import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 
+from tz_player.services.sqlite_retry import run_with_sqlite_lock_retry
 from tz_player.utils.async_utils import run_blocking
 
 
@@ -166,10 +167,11 @@ class SqliteWaveformProxyStore:
         params_hash = _params_hash(params_json)
         total_bytes = len(normalized_frames) * 8
 
-        with self._connect() as conn:
-            conn.execute("BEGIN IMMEDIATE")
-            conn.execute(
-                """
+        def _op() -> None:
+            with self._connect() as conn:
+                conn.execute("BEGIN IMMEDIATE")
+                conn.execute(
+                    """
                 INSERT INTO analysis_cache_entries (
                     analysis_type,
                     path_norm,
@@ -193,21 +195,21 @@ class SqliteWaveformProxyStore:
                     computed_at = excluded.computed_at,
                     last_accessed_at = excluded.last_accessed_at
                 """,
-                (
-                    self.ANALYSIS_TYPE,
-                    path_norm,
-                    mtime_ns,
-                    size_bytes,
-                    self._analysis_version,
-                    params_hash,
-                    params_json,
-                    max(1, int(duration_ms)),
-                    len(normalized_frames),
-                    total_bytes,
-                ),
-            )
-            row = conn.execute(
-                """
+                    (
+                        self.ANALYSIS_TYPE,
+                        path_norm,
+                        mtime_ns,
+                        size_bytes,
+                        self._analysis_version,
+                        params_hash,
+                        params_json,
+                        max(1, int(duration_ms)),
+                        len(normalized_frames),
+                        total_bytes,
+                    ),
+                )
+                row = conn.execute(
+                    """
                 SELECT id
                 FROM analysis_cache_entries
                 WHERE analysis_type = ?
@@ -218,24 +220,24 @@ class SqliteWaveformProxyStore:
                   AND size_bytes IS ?
                 LIMIT 1
                 """,
-                (
-                    self.ANALYSIS_TYPE,
-                    path_norm,
-                    self._analysis_version,
-                    params_hash,
-                    mtime_ns,
-                    size_bytes,
-                ),
-            ).fetchone()
-            if row is None:
-                return
-            entry_id = int(row["id"])
-            conn.execute(
-                "DELETE FROM analysis_waveform_proxy_frames WHERE entry_id = ?",
-                (entry_id,),
-            )
-            conn.executemany(
-                """
+                    (
+                        self.ANALYSIS_TYPE,
+                        path_norm,
+                        self._analysis_version,
+                        params_hash,
+                        mtime_ns,
+                        size_bytes,
+                    ),
+                ).fetchone()
+                if row is None:
+                    return
+                entry_id = int(row["id"])
+                conn.execute(
+                    "DELETE FROM analysis_waveform_proxy_frames WHERE entry_id = ?",
+                    (entry_id,),
+                )
+                conn.executemany(
+                    """
                 INSERT INTO analysis_waveform_proxy_frames (
                     entry_id,
                     frame_idx,
@@ -246,25 +248,27 @@ class SqliteWaveformProxyStore:
                     max_right_i8
                 ) VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                [
-                    (
-                        entry_id,
-                        idx,
-                        position_ms,
-                        min_left_i8,
-                        max_left_i8,
-                        min_right_i8,
-                        max_right_i8,
-                    )
-                    for idx, (
-                        position_ms,
-                        min_left_i8,
-                        max_left_i8,
-                        min_right_i8,
-                        max_right_i8,
-                    ) in enumerate(normalized_frames)
-                ],
-            )
+                    [
+                        (
+                            entry_id,
+                            idx,
+                            position_ms,
+                            min_left_i8,
+                            max_left_i8,
+                            min_right_i8,
+                            max_right_i8,
+                        )
+                        for idx, (
+                            position_ms,
+                            min_left_i8,
+                            max_left_i8,
+                            min_right_i8,
+                            max_right_i8,
+                        ) in enumerate(normalized_frames)
+                    ],
+                )
+
+        run_with_sqlite_lock_retry(_op, op_name="waveform_proxy.upsert")
 
     def _has_waveform_proxy_sync(
         self,

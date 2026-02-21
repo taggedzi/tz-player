@@ -9,6 +9,7 @@ from .base import VisualizerContext, VisualizerFrameInput, VisualizerPlugin
 from .registry import VisualizerRegistry
 
 logger = logging.getLogger(__name__)
+_THROTTLE_MAX_SKIP_FRAMES = 8
 
 
 class VisualizerHost:
@@ -198,21 +199,27 @@ class VisualizerHost:
                 },
             )
             if self._overrun_streak >= 3:
+                overrun_ratio = max(1.0, elapsed / self._budget_s)
+                throttle_frames = max(
+                    1,
+                    min(_THROTTLE_MAX_SKIP_FRAMES, int(overrun_ratio) - 1),
+                )
                 logger.warning(
-                    "Visualizer '%s' render overrun %.3fs > %.3fs; throttling one frame",
+                    "Visualizer '%s' render overrun %.3fs > %.3fs; throttling %d frame(s)",
                     self._active_id,
                     elapsed,
                     self._budget_s,
+                    throttle_frames,
                     extra={
                         "event": "visualizer_throttle_engaged",
                         "active_plugin_id": self._active_id,
                         "elapsed_s": elapsed,
                         "budget_s": self._budget_s,
                         "target_fps": self._target_fps,
-                        "throttle_frames": 1,
+                        "throttle_frames": throttle_frames,
                     },
                 )
-                self._skip_frames = 1
+                self._skip_frames = max(self._skip_frames, throttle_frames)
                 self._overrun_streak = 0
         else:
             self._overrun_streak = 0

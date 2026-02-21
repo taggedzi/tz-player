@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Literal
 
 from tz_player.db.schema import create_schema
+from tz_player.services.sqlite_retry import run_with_sqlite_lock_retry
 from tz_player.utils.async_utils import run_blocking
 
 POS_STEP = 10_000
@@ -203,9 +204,8 @@ class PlaylistStore:
 
     def _connect(self) -> sqlite3.Connection:
         """Create a fresh SQLite connection configured for concurrent app usage."""
-        conn = sqlite3.connect(self._db_path, timeout=30)
+        conn = sqlite3.connect(self._db_path, timeout=10)
         conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA foreign_keys=ON")
         conn.execute("PRAGMA synchronous=NORMAL")
         return conn
@@ -213,6 +213,8 @@ class PlaylistStore:
     def _initialize_sync(self) -> None:
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as conn:
+            # WAL mode is persisted at the DB-file level; set once at startup.
+            conn.execute("PRAGMA journal_mode=WAL")
             create_schema(conn)
             journal_mode = conn.execute("PRAGMA journal_mode").fetchone()[0]
             foreign_keys = conn.execute("PRAGMA foreign_keys").fetchone()[0]
@@ -243,11 +245,14 @@ class PlaylistStore:
             return int(cursor.lastrowid)
 
     def _clear_playlist_sync(self, playlist_id: int) -> None:
-        with self._connect() as conn:
-            conn.execute("BEGIN IMMEDIATE")
-            conn.execute(
-                "DELETE FROM playlist_items WHERE playlist_id = ?", (playlist_id,)
-            )
+        def _op() -> None:
+            with self._connect() as conn:
+                conn.execute("BEGIN IMMEDIATE")
+                conn.execute(
+                    "DELETE FROM playlist_items WHERE playlist_id = ?", (playlist_id,)
+                )
+
+        run_with_sqlite_lock_retry(_op, op_name="playlist.clear_playlist")
 
     def _add_tracks_sync(self, playlist_id: int, paths: list[Path]) -> int:
         """Insert track references and append playlist items in stable order."""
@@ -256,39 +261,44 @@ class PlaylistStore:
 
         start = time.perf_counter()
         added = 0
-        with self._connect() as conn:
-            conn.execute("BEGIN IMMEDIATE")
-            cursor = conn.execute(
-                "SELECT COALESCE(MAX(pos_key), 0) FROM playlist_items WHERE playlist_id = ?",
-                (playlist_id,),
-            )
-            next_pos = int(cursor.fetchone()[0]) + POS_STEP
-            # `pos_key` spacing allows cheap local reorders without global renumber.
-            for path in paths:
-                path_value = str(path)
-                path_norm = _normalize_path(path)
-                track_id = _get_track_id(conn, path_norm)
-                if track_id is None:
-                    mtime_ns, size_bytes = _stat_path(path)
+
+        def _op() -> None:
+            nonlocal added
+            with self._connect() as conn:
+                conn.execute("BEGIN IMMEDIATE")
+                cursor = conn.execute(
+                    "SELECT COALESCE(MAX(pos_key), 0) FROM playlist_items WHERE playlist_id = ?",
+                    (playlist_id,),
+                )
+                next_pos = int(cursor.fetchone()[0]) + POS_STEP
+                # `pos_key` spacing allows cheap local reorders without global renumber.
+                for path in paths:
+                    path_value = str(path)
+                    path_norm = _normalize_path(path)
+                    track_id = _get_track_id(conn, path_norm)
+                    if track_id is None:
+                        mtime_ns, size_bytes = _stat_path(path)
+                        conn.execute(
+                            """
+                            INSERT OR IGNORE INTO tracks (path, path_norm, mtime_ns, size_bytes)
+                            VALUES (?, ?, ?, ?)
+                            """,
+                            (path_value, path_norm, mtime_ns, size_bytes),
+                        )
+                        track_id = _get_track_id(conn, path_norm)
+                    if track_id is None:
+                        continue
                     conn.execute(
                         """
-                        INSERT OR IGNORE INTO tracks (path, path_norm, mtime_ns, size_bytes)
-                        VALUES (?, ?, ?, ?)
+                        INSERT INTO playlist_items (playlist_id, track_id, pos_key)
+                        VALUES (?, ?, ?)
                         """,
-                        (path_value, path_norm, mtime_ns, size_bytes),
+                        (playlist_id, track_id, next_pos),
                     )
-                    track_id = _get_track_id(conn, path_norm)
-                if track_id is None:
-                    continue
-                conn.execute(
-                    """
-                    INSERT INTO playlist_items (playlist_id, track_id, pos_key)
-                    VALUES (?, ?, ?)
-                    """,
-                    (playlist_id, track_id, next_pos),
-                )
-                next_pos += POS_STEP
-                added += 1
+                    next_pos += POS_STEP
+                    added += 1
+
+        run_with_sqlite_lock_retry(_op, op_name="playlist.add_tracks")
         _log_slow_db_op(
             "add_tracks",
             start=start,
@@ -699,56 +709,60 @@ class PlaylistStore:
         if not selection_ids:
             return
 
-        with self._connect() as conn:
-            conn.execute("BEGIN IMMEDIATE")
-            rows = conn.execute(
-                """
-                SELECT id, pos_key
-                FROM playlist_items
-                WHERE playlist_id = ?
-                ORDER BY pos_key
-                """,
-                (playlist_id,),
-            ).fetchall()
-            if not rows:
-                return
-            item_ids = [int(row["id"]) for row in rows]
-            pos_keys = [int(row["pos_key"]) for row in rows]
+        def _op() -> None:
+            with self._connect() as conn:
+                conn.execute("BEGIN IMMEDIATE")
+                rows = conn.execute(
+                    """
+                    SELECT id, pos_key
+                    FROM playlist_items
+                    WHERE playlist_id = ?
+                    ORDER BY pos_key
+                    """,
+                    (playlist_id,),
+                ).fetchall()
+                if not rows:
+                    return
+                item_ids = [int(row["id"]) for row in rows]
+                pos_keys = [int(row["pos_key"]) for row in rows]
 
-            if direction == "up":
-                # Scan top->bottom so each selected row swaps at most once.
-                for index in range(1, len(item_ids)):
-                    if (
-                        item_ids[index] in selection_ids
-                        and item_ids[index - 1] not in selection_ids
-                    ):
-                        item_ids[index - 1], item_ids[index] = (
-                            item_ids[index],
-                            item_ids[index - 1],
-                        )
-            else:
-                # Scan bottom->top for symmetric one-step downward moves.
-                for index in range(len(item_ids) - 2, -1, -1):
-                    if (
-                        item_ids[index] in selection_ids
-                        and item_ids[index + 1] not in selection_ids
-                    ):
-                        item_ids[index + 1], item_ids[index] = (
-                            item_ids[index],
-                            item_ids[index + 1],
-                        )
+                if direction == "up":
+                    # Scan top->bottom so each selected row swaps at most once.
+                    for index in range(1, len(item_ids)):
+                        if (
+                            item_ids[index] in selection_ids
+                            and item_ids[index - 1] not in selection_ids
+                        ):
+                            item_ids[index - 1], item_ids[index] = (
+                                item_ids[index],
+                                item_ids[index - 1],
+                            )
+                else:
+                    # Scan bottom->top for symmetric one-step downward moves.
+                    for index in range(len(item_ids) - 2, -1, -1):
+                        if (
+                            item_ids[index] in selection_ids
+                            and item_ids[index + 1] not in selection_ids
+                        ):
+                            item_ids[index + 1], item_ids[index] = (
+                                item_ids[index],
+                                item_ids[index + 1],
+                            )
 
-            updates = [
-                (pos_keys[i], playlist_id, item_ids[i]) for i in range(len(item_ids))
-            ]
-            conn.executemany(
-                """
-                UPDATE playlist_items
-                SET pos_key = ?
-                WHERE playlist_id = ? AND id = ?
-                """,
-                updates,
-            )
+                updates = [
+                    (pos_keys[i], playlist_id, item_ids[i])
+                    for i in range(len(item_ids))
+                ]
+                conn.executemany(
+                    """
+                    UPDATE playlist_items
+                    SET pos_key = ?
+                    WHERE playlist_id = ? AND id = ?
+                    """,
+                    updates,
+                )
+
+        run_with_sqlite_lock_retry(_op, op_name="playlist.move_selection")
 
     def _get_track_id_for_item_sync(self, playlist_id: int, item_id: int) -> int | None:
         with self._connect() as conn:
@@ -890,30 +904,34 @@ class PlaylistStore:
 
     def _renumber_playlist_sync(self, playlist_id: int) -> None:
         """Compact `pos_key` values back to evenly spaced increments."""
-        with self._connect() as conn:
-            conn.execute("BEGIN IMMEDIATE")
-            rows = conn.execute(
-                """
-                SELECT id
-                FROM playlist_items
-                WHERE playlist_id = ?
-                ORDER BY pos_key
-                """,
-                (playlist_id,),
-            ).fetchall()
-            updates = []
-            next_pos = POS_STEP
-            for row in rows:
-                updates.append((next_pos, playlist_id, int(row["id"])))
-                next_pos += POS_STEP
-            conn.executemany(
-                """
-                UPDATE playlist_items
-                SET pos_key = ?
-                WHERE playlist_id = ? AND id = ?
-                """,
-                updates,
-            )
+
+        def _op() -> None:
+            with self._connect() as conn:
+                conn.execute("BEGIN IMMEDIATE")
+                rows = conn.execute(
+                    """
+                    SELECT id
+                    FROM playlist_items
+                    WHERE playlist_id = ?
+                    ORDER BY pos_key
+                    """,
+                    (playlist_id,),
+                ).fetchall()
+                updates = []
+                next_pos = POS_STEP
+                for row in rows:
+                    updates.append((next_pos, playlist_id, int(row["id"])))
+                    next_pos += POS_STEP
+                conn.executemany(
+                    """
+                    UPDATE playlist_items
+                    SET pos_key = ?
+                    WHERE playlist_id = ? AND id = ?
+                    """,
+                    updates,
+                )
+
+        run_with_sqlite_lock_retry(_op, op_name="playlist.renumber")
 
     def _get_tracks_basic_sync(self, track_ids: list[int]) -> list[TrackRecord]:
         if not track_ids:
@@ -970,77 +988,85 @@ class PlaylistStore:
 
     def _upsert_track_meta_sync(self, track_id: int, meta: TrackMeta) -> None:
         now = int(time.time())
-        with self._connect() as conn:
-            conn.execute("BEGIN IMMEDIATE")
-            conn.execute(
-                """
-                INSERT INTO track_meta (
-                    track_id,
-                    title,
-                    artist,
-                    album,
-                    year,
-                    duration_ms,
-                    meta_loaded_at,
-                    meta_valid,
-                    meta_error
+
+        def _op() -> None:
+            with self._connect() as conn:
+                conn.execute("BEGIN IMMEDIATE")
+                conn.execute(
+                    """
+                    INSERT INTO track_meta (
+                        track_id,
+                        title,
+                        artist,
+                        album,
+                        year,
+                        duration_ms,
+                        meta_loaded_at,
+                        meta_valid,
+                        meta_error
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(track_id) DO UPDATE SET
+                        title = excluded.title,
+                        artist = excluded.artist,
+                        album = excluded.album,
+                        year = excluded.year,
+                        duration_ms = excluded.duration_ms,
+                        meta_loaded_at = excluded.meta_loaded_at,
+                        meta_valid = excluded.meta_valid,
+                        meta_error = excluded.meta_error
+                    """,
+                    (
+                        track_id,
+                        meta.title,
+                        meta.artist,
+                        meta.album,
+                        meta.year,
+                        meta.duration_ms,
+                        now,
+                        int(meta.meta_valid),
+                        meta.meta_error,
+                    ),
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(track_id) DO UPDATE SET
-                    title = excluded.title,
-                    artist = excluded.artist,
-                    album = excluded.album,
-                    year = excluded.year,
-                    duration_ms = excluded.duration_ms,
-                    meta_loaded_at = excluded.meta_loaded_at,
-                    meta_valid = excluded.meta_valid,
-                    meta_error = excluded.meta_error
-                """,
-                (
-                    track_id,
-                    meta.title,
-                    meta.artist,
-                    meta.album,
-                    meta.year,
-                    meta.duration_ms,
-                    now,
-                    int(meta.meta_valid),
-                    meta.meta_error,
-                ),
-            )
-            conn.execute(
-                """
-                UPDATE tracks
-                SET mtime_ns = ?, size_bytes = ?, updated_at = ?
-                WHERE id = ?
-                """,
-                (meta.mtime_ns, meta.size_bytes, now, track_id),
-            )
+                conn.execute(
+                    """
+                    UPDATE tracks
+                    SET mtime_ns = ?, size_bytes = ?, updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (meta.mtime_ns, meta.size_bytes, now, track_id),
+                )
+
+        run_with_sqlite_lock_retry(_op, op_name="playlist.upsert_track_meta")
 
     def _mark_meta_invalid_sync(self, track_id: int, error: str | None) -> None:
         now = int(time.time())
-        with self._connect() as conn:
-            conn.execute("BEGIN IMMEDIATE")
-            conn.execute(
-                """
-                INSERT INTO track_meta (
-                    track_id,
-                    meta_loaded_at,
-                    meta_valid,
-                    meta_error
+
+        def _op() -> None:
+            with self._connect() as conn:
+                conn.execute("BEGIN IMMEDIATE")
+                conn.execute(
+                    """
+                    INSERT INTO track_meta (
+                        track_id,
+                        meta_loaded_at,
+                        meta_valid,
+                        meta_error
+                    )
+                    VALUES (?, ?, 0, ?)
+                    ON CONFLICT(track_id) DO UPDATE SET
+                        meta_loaded_at = excluded.meta_loaded_at,
+                        meta_valid = excluded.meta_valid,
+                        meta_error = excluded.meta_error
+                    """,
+                    (track_id, now, error),
                 )
-                VALUES (?, ?, 0, ?)
-                ON CONFLICT(track_id) DO UPDATE SET
-                    meta_loaded_at = excluded.meta_loaded_at,
-                    meta_valid = excluded.meta_valid,
-                    meta_error = excluded.meta_error
-                """,
-                (track_id, now, error),
-            )
-            conn.execute(
-                "UPDATE tracks SET updated_at = ? WHERE id = ?",
-                (now, track_id),
-            )
+                conn.execute(
+                    "UPDATE tracks SET updated_at = ? WHERE id = ?",
+                    (now, track_id),
+                )
+
+        run_with_sqlite_lock_retry(_op, op_name="playlist.mark_meta_invalid")
 
 
 def _normalize_path(path: Path) -> str:

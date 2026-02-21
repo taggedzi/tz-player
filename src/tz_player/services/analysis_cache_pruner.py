@@ -6,6 +6,7 @@ import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 
+from tz_player.services.sqlite_retry import run_with_sqlite_lock_retry
 from tz_player.utils.async_utils import run_blocking
 
 
@@ -80,68 +81,71 @@ class SqliteAnalysisCachePruner:
         max_age_days = max(1, int(max_age_days))
         min_recent_tracks_protected = max(0, int(min_recent_tracks_protected))
 
-        with self._connect() as conn:
-            conn.execute("BEGIN IMMEDIATE")
-            bytes_before = _sum_bytes(conn)
-            entries_pruned = 0
+        def _op() -> AnalysisCachePruneResult:
+            with self._connect() as conn:
+                conn.execute("BEGIN IMMEDIATE")
+                bytes_before = _sum_bytes(conn)
+                entries_pruned = 0
 
-            # Age-based prune first while protecting the most recently accessed rows.
-            conn.execute(
-                """
-                DELETE FROM analysis_cache_entries
-                WHERE id NOT IN (
-                    SELECT id
-                    FROM analysis_cache_entries
-                    ORDER BY last_accessed_at DESC
-                    LIMIT ?
-                )
-                  AND computed_at < (strftime('%s','now') - (? * 86400))
-                """,
-                (min_recent_tracks_protected, max_age_days),
-            )
-            entries_pruned += conn.total_changes
-
-            total_bytes = _sum_bytes(conn)
-            if total_bytes > max_cache_bytes:
-                rows = conn.execute(
+                # Age-based prune first while protecting most recently accessed rows.
+                conn.execute(
                     """
-                    SELECT id, byte_size
-                    FROM analysis_cache_entries
-                    ORDER BY last_accessed_at ASC
-                    """
-                ).fetchall()
-                protected_ids = {
-                    int(row["id"])
-                    for row in conn.execute(
-                        """
+                    DELETE FROM analysis_cache_entries
+                    WHERE id NOT IN (
                         SELECT id
                         FROM analysis_cache_entries
                         ORDER BY last_accessed_at DESC
                         LIMIT ?
-                        """,
-                        (min_recent_tracks_protected,),
-                    ).fetchall()
-                }
-                for row in rows:
-                    if total_bytes <= max_cache_bytes:
-                        break
-                    entry_id = int(row["id"])
-                    if entry_id in protected_ids:
-                        continue
-                    reclaimed = int(row["byte_size"])
-                    conn.execute(
-                        "DELETE FROM analysis_cache_entries WHERE id = ?",
-                        (entry_id,),
                     )
-                    entries_pruned += 1
-                    total_bytes = max(0, total_bytes - reclaimed)
+                      AND computed_at < (strftime('%s','now') - (? * 86400))
+                    """,
+                    (min_recent_tracks_protected, max_age_days),
+                )
+                entries_pruned += conn.total_changes
 
-            bytes_after = _sum_bytes(conn)
-            return AnalysisCachePruneResult(
-                entries_pruned=entries_pruned,
-                bytes_before=bytes_before,
-                bytes_after=bytes_after,
-            )
+                total_bytes = _sum_bytes(conn)
+                if total_bytes > max_cache_bytes:
+                    rows = conn.execute(
+                        """
+                        SELECT id, byte_size
+                        FROM analysis_cache_entries
+                        ORDER BY last_accessed_at ASC
+                        """
+                    ).fetchall()
+                    protected_ids = {
+                        int(row["id"])
+                        for row in conn.execute(
+                            """
+                            SELECT id
+                            FROM analysis_cache_entries
+                            ORDER BY last_accessed_at DESC
+                            LIMIT ?
+                            """,
+                            (min_recent_tracks_protected,),
+                        ).fetchall()
+                    }
+                    for row in rows:
+                        if total_bytes <= max_cache_bytes:
+                            break
+                        entry_id = int(row["id"])
+                        if entry_id in protected_ids:
+                            continue
+                        reclaimed = int(row["byte_size"])
+                        conn.execute(
+                            "DELETE FROM analysis_cache_entries WHERE id = ?",
+                            (entry_id,),
+                        )
+                        entries_pruned += 1
+                        total_bytes = max(0, total_bytes - reclaimed)
+
+                bytes_after = _sum_bytes(conn)
+                return AnalysisCachePruneResult(
+                    entries_pruned=entries_pruned,
+                    bytes_before=bytes_before,
+                    bytes_after=bytes_after,
+                )
+
+        return run_with_sqlite_lock_retry(_op, op_name="analysis_cache.prune")
 
 
 def _sum_bytes(conn: sqlite3.Connection) -> int:

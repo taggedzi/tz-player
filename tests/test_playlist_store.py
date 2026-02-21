@@ -368,3 +368,30 @@ def test_search_item_ids_tracks_metadata_and_path_updates(tmp_path) -> None:
             ("retitled/path/new_name.mp3", "retitled/path/new_name.mp3", row.track_id),
         )
     assert _run(store.search_item_ids(playlist_id, "new_name")) == [row.item_id]
+
+
+def test_clear_playlist_uses_lock_retry_wrapper(tmp_path, monkeypatch) -> None:
+    db_path = tmp_path / "library.sqlite"
+    store = PlaylistStore(db_path)
+    _run(store.initialize())
+    playlist_id = _run(store.create_playlist("Retry"))
+
+    track_path = tmp_path / "song.mp3"
+    _touch(track_path)
+    _run(store.add_tracks(playlist_id, [track_path]))
+
+    calls = {"count": 0}
+    original_retry = playlist_store_module.run_with_sqlite_lock_retry
+
+    def capture_retry(operation, *, op_name: str, **kwargs):  # type: ignore[no-untyped-def]
+        calls["count"] += 1
+        assert op_name == "playlist.clear_playlist"
+        return original_retry(operation, op_name=op_name, **kwargs)
+
+    monkeypatch.setattr(
+        playlist_store_module, "run_with_sqlite_lock_retry", capture_retry
+    )
+    _run(store.clear_playlist(playlist_id))
+
+    assert calls["count"] == 1
+    assert _run(store.count(playlist_id)) == 0

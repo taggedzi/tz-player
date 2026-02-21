@@ -8,7 +8,7 @@ from __future__ import annotations
 VISUALIZER_RESPONSIVENESS_PROFILES = ("safe", "balanced", "aggressive")
 _VISUALIZER_PROFILE_DEFAULT_FPS = {
     "safe": 10,
-    "balanced": 16,
+    "balanced": 14,
     "aggressive": 22,
 }
 _VISUALIZER_PROFILE_SPECTRUM_HOP_MS = {

@@ -52,6 +52,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 DEBUG_VIEWPORT = False
+PLAYLIST_WINDOW_MAX_ROWS = 96
 
 
 class FindInput(Input):
@@ -114,6 +115,12 @@ class PlaylistPane(Static):
         self._search_result_item_ids: list[int] = []
         self._search_prev_cursor_item_id: int | None = None
         self._search_prev_window_offset: int | None = None
+        self._item_index_cache: dict[int, int] = {}
+        self._item_index_cache_playlist_id: int | None = None
+        self._window_cache_offset = 0
+        self._window_cache_rows: list[PlaylistRow] = []
+        self._window_cache_total_count = 0
+        self._window_cache_playlist_id: int | None = None
 
     def compose(self) -> ComposeResult:
         yield Vertical(
@@ -173,6 +180,7 @@ class PlaylistPane(Static):
         self.playlist_id = playlist_id
         self.playing_item_id = playing_item_id
         self.metadata_service = metadata_service
+        self._invalidate_item_index_cache()
         self._bump_refresh_gen()
         await self.refresh_view()
 
@@ -276,15 +284,13 @@ class PlaylistPane(Static):
                 playing_index = self._search_index(self._last_player_state.item_id)
         else:
             if self.cursor_item_id is not None:
-                cursor_index = await self.store.get_item_index(
-                    self.playlist_id, self.cursor_item_id
-                )
+                cursor_index = await self._get_item_index_cached(self.cursor_item_id)
             if (
                 self._last_player_state.status in {"playing", "paused"}
                 and self._last_player_state.item_id is not None
             ):
-                playing_index = await self.store.get_item_index(
-                    self.playlist_id, self._last_player_state.item_id
+                playing_index = await self._get_item_index_cached(
+                    self._last_player_state.item_id
                 )
         self._transport_controls.update_from_state(
             self._last_player_state,
@@ -318,9 +324,7 @@ class PlaylistPane(Static):
                 )
                 return
             self.window_offset = self._clamp_offset(self.window_offset)
-            self._rows = await self.store.fetch_window(
-                self.playlist_id, self.window_offset, self.limit
-            )
+            await self._refresh_window_cached(force_reload=True)
             if gen != self._refresh_gen:
                 logger.debug(
                     "Refresh aborted due to gen change (after fetch) gen=%s current=%s",
@@ -372,11 +376,17 @@ class PlaylistPane(Static):
         if not fresh_rows:
             return
         row_index_map = {row.item_id: index for index, row in enumerate(self._rows)}
+        cache_index_map = {
+            row.item_id: index for index, row in enumerate(self._window_cache_rows)
+        }
         for row in fresh_rows:
             index = row_index_map.get(row.item_id)
             if index is None:
                 continue
             self._rows[index] = row
+            cache_index = cache_index_map.get(row.item_id)
+            if cache_index is not None:
+                self._window_cache_rows[cache_index] = row
         self._update_viewport()
 
     async def _refresh_window(self) -> None:
@@ -387,9 +397,7 @@ class PlaylistPane(Static):
             return
         try:
             gen = self._refresh_gen
-            self._rows = await self.store.fetch_window(
-                self.playlist_id, self.window_offset, self.limit
-            )
+            await self._refresh_window_cached()
             if gen != self._refresh_gen:
                 logger.debug(
                     "Refresh window aborted due to gen change gen=%s current=%s",
@@ -404,6 +412,42 @@ class PlaylistPane(Static):
         except Exception as exc:  # pragma: no cover - UI safety net
             logger.exception("Failed to refresh playlist: %s", exc)
             await self._show_error("Failed to refresh playlist. See log file.")
+
+    async def _refresh_window_cached(self, *, force_reload: bool = False) -> None:
+        """Use an over-fetched local row cache to reduce repeated DB window reads."""
+        if self.store is None or self.playlist_id is None:
+            return
+        if self.search_active:
+            return
+        limit = max(1, self.limit)
+        offset = self.window_offset
+        playlist_id = self.playlist_id
+        if (
+            not force_reload
+            and self._window_cache_playlist_id == playlist_id
+            and self._window_cache_total_count == self.total_count
+            and self._window_cache_covers(offset, limit)
+        ):
+            cached_start = offset - self._window_cache_offset
+            self._rows = self._window_cache_rows[cached_start : cached_start + limit]
+            return
+
+        prefetch = max(limit + 12, limit * 3)
+        fetch_offset = max(0, offset - (limit // 2))
+        fetched = await self.store.fetch_window(playlist_id, fetch_offset, prefetch)
+        self._window_cache_playlist_id = playlist_id
+        self._window_cache_total_count = self.total_count
+        self._window_cache_offset = fetch_offset
+        self._window_cache_rows = fetched
+        local_start = max(0, offset - fetch_offset)
+        self._rows = fetched[local_start : local_start + limit]
+
+    def _window_cache_covers(self, offset: int, limit: int) -> bool:
+        if limit <= 0:
+            return True
+        start = self._window_cache_offset
+        end = start + len(self._window_cache_rows)
+        return offset >= start and (offset + limit) <= end
 
     def _schedule_search(self, query: str) -> None:
         """Debounce search updates and cancel stale in-flight search tasks."""
@@ -557,7 +601,7 @@ class PlaylistPane(Static):
     async def _recompute_limit(self) -> None:
         await asyncio.sleep(0)
         visible = max(1, self._viewport.size.height)
-        self.limit = visible
+        self.limit = min(PLAYLIST_WINDOW_MAX_ROWS, visible)
 
     def _update_viewport(self) -> None:
         if DEBUG_VIEWPORT:
@@ -930,7 +974,34 @@ class PlaylistPane(Static):
         self.run_worker(self._ensure_metadata(pending), exclusive=False)
 
     def _bump_refresh_gen(self) -> None:
+        self._invalidate_item_index_cache()
+        self._invalidate_window_cache()
         self._refresh_gen += 1
+
+    async def _get_item_index_cached(self, item_id: int) -> int | None:
+        if self.store is None or self.playlist_id is None:
+            return None
+        playlist_id = self.playlist_id
+        if self._item_index_cache_playlist_id != playlist_id:
+            self._item_index_cache.clear()
+            self._item_index_cache_playlist_id = playlist_id
+        cached = self._item_index_cache.get(item_id)
+        if cached is not None:
+            return cached
+        index = await self.store.get_item_index(playlist_id, item_id)
+        if index is not None:
+            self._item_index_cache[item_id] = index
+        return index
+
+    def _invalidate_item_index_cache(self) -> None:
+        self._item_index_cache.clear()
+        self._item_index_cache_playlist_id = self.playlist_id
+
+    def _invalidate_window_cache(self) -> None:
+        self._window_cache_offset = 0
+        self._window_cache_rows = []
+        self._window_cache_total_count = 0
+        self._window_cache_playlist_id = self.playlist_id
 
     async def _ensure_metadata(self, track_ids: list[int]) -> None:
         if self.metadata_service is None:

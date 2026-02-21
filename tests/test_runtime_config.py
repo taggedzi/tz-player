@@ -35,7 +35,7 @@ def test_visualizer_responsiveness_profile_normalization_and_defaults() -> None:
     assert normalize_visualizer_responsiveness_profile("balanced") == "balanced"
     assert normalize_visualizer_responsiveness_profile("bad-value") == "balanced"
     assert profile_default_visualizer_fps("safe") == 10
-    assert profile_default_visualizer_fps("balanced") == 16
+    assert profile_default_visualizer_fps("balanced") == 14
     assert profile_default_visualizer_fps("aggressive") == 22
     assert profile_default_spectrum_hop_ms("safe") == 40
     assert profile_default_spectrum_hop_ms("balanced") == 32

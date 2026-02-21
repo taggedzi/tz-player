@@ -14,6 +14,95 @@ Please see `AGENTS.md` for more instructions.
 
 ## Active Backlog
 
+### T-049 Async/UI Non-Blocking Hardening (Post-#16 Recovery)
+- Spec Ref: Section `5` (analysis/service model), Section `6` (visualizer/plugin contract), Section `7` (persistence), Section `8` (non-blocking reliability), `WF-02`, `WF-06`, `WF-07`
+- Status: `done`
+- Goal:
+  - Eliminate remaining UI lag/hang vectors by separating heavy CPU analysis from DB/file I/O pathways and by reducing high-frequency await chains on UI event handlers.
+- Audit Findings (current `main`):
+  - Shared executor contention: one thread pool handles both DB/file operations and CPU-heavy analysis workloads (`src/tz_player/utils/async_utils.py`).
+  - Synchronous visualizer rendering on UI timer path (`src/tz_player/app.py`, `src/tz_player/visualizers/host.py`).
+  - Repeated DB index lookups in transport-control refresh on frequent player-state updates (`src/tz_player/ui/playlist_pane.py`, `src/tz_player/app.py`).
+  - Synchronous plugin discovery/import/preflight during startup (`src/tz_player/app.py`, `src/tz_player/visualizers/registry.py`).
+  - SQLite lock waits can be long under write contention (`src/tz_player/services/playlist_store.py` and analysis stores using `timeout=30` + `BEGIN IMMEDIATE`).
+- Scope:
+  - Tighten async boundaries so the Textual event loop never performs expensive CPU/import/DB work directly.
+  - Add bounded scheduling/backpressure for analysis and DB mutation workloads.
+  - Add regression tests proving UI responsiveness under concurrent analysis and lock contention.
+- Non-goals:
+  - Removing existing playback backends.
+  - Replacing SQLite.
+  - Adding remote processing/services.
+- Tasks:
+  - `T-049A` Executor isolation and API split. Status: `done`
+    - Introduce `run_cpu_bound(...)` separate from `run_blocking(...)`.
+    - Route spectrum/beat/waveform/envelope analysis workloads to CPU-bound executor.
+    - Keep DB/file metadata operations on IO executor.
+    - Add tests validating correct routing and non-callable argument handling.
+  - `T-049B` Analysis scheduling/backpressure controls. Status: `done`
+    - Add global per-analysis-type concurrency caps and queue depth protections.
+    - Coalesce duplicate analysis requests across poll ticks and rapid track changes.
+    - Add cancellation semantics for stale analysis jobs when context changes.
+  - `T-049C` Visualizer render path hardening. Status: `done`
+    - Ensure frame timer callback remains lightweight and never waits on DB/IO.
+    - Add frame-drop/coalescing policy when previous render overruns budget.
+    - Add render-time observability metrics and slow-frame warnings for active plugin IDs.
+  - `T-049D` UI transport refresh DB-read reduction. Status: `done`
+    - Remove per-state-update repeated `get_item_index` calls from hot path.
+    - Introduce cached index map or incremental index tracking for cursor/playing rows.
+    - Debounce/coalesce transport refresh updates while preserving correctness.
+  - `T-049E` Startup/plugin discovery off-loop safeguards. Status: `done`
+    - Move plugin discovery/import/preflight scanning off the UI loop.
+    - Add timeout/fallback behavior for slow local plugin paths.
+    - Preserve current diagnostics and security-policy behavior.
+  - `T-049F` SQLite contention mitigation. Status: `done`
+    - Add bounded retry/jitter strategy for `database is locked` operational errors.
+    - Revisit connection timeout strategy and write batching for mutation-heavy flows.
+    - Add stress tests with simulated lock contention while user actions continue.
+  - `T-049G` ffmpeg/tool probing cache. Status: `done`
+    - Cache ffmpeg-availability checks per session to avoid repeated path lookups in hot UI paths.
+    - Keep explicit refresh path for diagnostics if needed.
+  - `T-049H` Non-blocking regression suite expansion. Status: `done`
+    - Add focused tests for: rapid key input during active analysis, DB lock contention, large folder ingest, and visualizer overrun conditions.
+    - Add timing assertions/events to ensure event-loop responsiveness remains within target budget.
+  - `T-049I` Playlist scroll/query hot-path stabilization. Status: `done`
+    - Remove per-query `PRAGMA journal_mode=WAL` churn from `PlaylistStore` connections; set WAL once during startup init.
+    - Add pane-side prefetch cache so cursor/scroll movement reuses over-fetched windows instead of issuing one DB query per row scroll.
+    - Add regression coverage ensuring repeated nearby window refreshes do not repeatedly call `fetch_window`.
+  - `T-049J` Runtime overload guardrails (analysis + visualizer). Status: `done`
+    - Gate lazy envelope analysis to active track after minimum dwell time so rapid skip/browse does not trigger analysis storms.
+    - Scale visualizer throttle skip-frames from overrun severity rather than fixed single-frame throttling.
+    - Add regression coverage for active-track dwell gating and heavy-overrun throttle scaling.
+  - `T-049K` Adaptive runtime FPS control for visualizer frame loop. Status: `done`
+    - Add app-level runtime FPS backoff on sustained frame-loop overruns (end-to-end render path).
+    - Add gradual FPS recovery after sustained healthy frames.
+    - Reset runtime FPS to configured profile when switching visualizers.
+  - `T-049L` Shutdown resilience and viewport limit hardening. Status: `done`
+    - Guard player-event UI updates during unmount so missing `PlaylistPane` does not crash shutdown.
+    - Add Windows-friendly retry around atomic state-file replace to reduce transient `WinError 32` failures.
+    - Cap playlist viewport fetch window size to avoid oversized DB reads on very tall terminals.
+  - `T-049M` State persistence race elimination on Windows. Status: `done`
+    - Serialize app-level state writes via lock to prevent concurrent write/replace collisions.
+    - Use unique per-write temp files for `save_state(...)` atomic replace path.
+    - Retry transient `WinError 2` replace failures by rewriting temp and retrying.
+  - `T-049N` Visualizer adaptive FPS sensitivity tuning. Status: `done`
+    - Add overrun-score based FPS backoff trigger so recurring (non-consecutive) overruns still reduce runtime FPS.
+    - Add gradual score decay on healthy frames to avoid permanent throttling after transient spikes.
+    - Add regression coverage for intermittent-overrun backoff behavior.
+  - `T-049O` Global visualizer load-governor alignment. Status: `done`
+    - Cap persisted `visualizer_fps` by responsiveness-profile default at startup (unless explicit CLI FPS override is provided).
+    - Preserve runtime adaptive FPS budget when cycling visualizers so all plugins share global load governance.
+    - Add regression coverage for balanced-profile cap and cross-plugin runtime-FPS preservation.
+  - `T-049P` Balanced profile strictness increase. Status: `done`
+    - Lower global `balanced` default visualizer FPS from 16 to 14 for improved headroom across all visualizers.
+    - Keep `safe` and `aggressive` defaults unchanged.
+    - Update runtime/defaulting regression tests to match new baseline.
+- Validation (per implementation change set):
+  - `.ubuntu-venv/bin/python -m ruff check .`
+  - `.ubuntu-venv/bin/python -m ruff format --check .`
+  - `.ubuntu-venv/bin/python -m mypy src`
+  - `.ubuntu-venv/bin/python -m pytest`
+
 ### T-048 Particle Visualizer Expansion Pack (FFT/Beat/RMS Reactive)
 - Spec Ref: Section `6` (visualizer/plugin model), Section `8` (reliability/performance), `WF-06`
 - Status: `in_progress`

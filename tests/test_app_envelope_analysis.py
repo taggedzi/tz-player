@@ -233,6 +233,33 @@ def test_ensure_envelope_failure_sets_runtime_notice(
     )
 
 
+def test_schedule_envelope_analysis_for_path_requires_active_track_dwell(
+    tmp_path, monkeypatch
+) -> None:
+    _setup_dirs(tmp_path, monkeypatch)
+    app = app_module.TzPlayerApp(auto_init=False)
+    app.audio_envelope_store = _StoreStub(has_hit=False)  # type: ignore[assignment]
+    app.player_state = PlayerState(status="playing", playlist_id=1, item_id=1)
+    app.current_track = _track()
+    app._current_track_changed_at_s = 100.0
+    scheduled: list[str] = []
+
+    def _capture(track: TrackInfo) -> None:
+        scheduled.append(track.path)
+
+    monkeypatch.setattr(app, "_schedule_envelope_analysis", _capture)
+    monkeypatch.setattr(app_module.time, "monotonic", lambda: 100.2)
+    _run(app._schedule_envelope_analysis_for_path(TRACK_PATH_STR))
+    assert scheduled == []
+
+    monkeypatch.setattr(app_module.time, "monotonic", lambda: 102.0)
+    _run(app._schedule_envelope_analysis_for_path(TRACK_PATH_STR))
+    assert scheduled == [TRACK_PATH_STR]
+
+    _run(app._schedule_envelope_analysis_for_path("/tmp/other.mp3"))
+    assert scheduled == [TRACK_PATH_STR]
+
+
 def test_next_track_prewarm_schedules_and_warms_predicted_item(
     tmp_path, monkeypatch
 ) -> None:

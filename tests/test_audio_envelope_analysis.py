@@ -9,6 +9,8 @@ from pathlib import Path
 import tz_player.services.audio_envelope_analysis as envelope_module
 from tz_player.services.audio_envelope_analysis import (
     analyze_track_envelope,
+    clear_ffmpeg_probe_cache,
+    ffmpeg_available,
     requires_ffmpeg_for_envelope,
 )
 
@@ -83,3 +85,36 @@ def test_requires_ffmpeg_for_envelope_by_extension() -> None:
     assert requires_ffmpeg_for_envelope("/tmp/song.mp3") is True
     assert requires_ffmpeg_for_envelope("/tmp/song.flac") is True
     assert requires_ffmpeg_for_envelope("/tmp/song.wav") is False
+
+
+def test_ffmpeg_available_uses_cached_probe(monkeypatch) -> None:
+    clear_ffmpeg_probe_cache()
+    calls = {"count": 0}
+
+    def fake_which(binary: str) -> str | None:
+        calls["count"] += 1
+        assert binary == "ffmpeg"
+        return "/usr/bin/ffmpeg"
+
+    monkeypatch.setattr(envelope_module.shutil, "which", fake_which)
+
+    assert ffmpeg_available() is True
+    assert ffmpeg_available() is True
+    assert calls["count"] == 1
+
+
+def test_ffmpeg_available_refresh_reprobes(monkeypatch) -> None:
+    clear_ffmpeg_probe_cache()
+    calls = {"count": 0}
+
+    def fake_which(_binary: str) -> str | None:
+        calls["count"] += 1
+        if calls["count"] == 1:
+            return None
+        return "/usr/bin/ffmpeg"
+
+    monkeypatch.setattr(envelope_module.shutil, "which", fake_which)
+
+    assert ffmpeg_available() is False
+    assert ffmpeg_available(refresh=True) is True
+    assert calls["count"] == 2
