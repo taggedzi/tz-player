@@ -308,6 +308,77 @@ def test_startup_continues_when_local_visualizer_import_fails(
     )
 
 
+def test_startup_falls_back_when_visualizer_discovery_times_out(
+    tmp_path, monkeypatch
+) -> None:
+    _setup_dirs(tmp_path, monkeypatch)
+    save_state(
+        paths.state_path(),
+        AppState(
+            playback_backend="fake",
+            visualizer_plugin_paths=("slow.path.plugins",),
+        ),
+    )
+    app = TzPlayerApp(auto_init=False, backend_name="fake")
+
+    async def fake_run_blocking(func, /, *args, **kwargs):  # type: ignore[no-untyped-def]
+        func_name = getattr(func, "__name__", "")
+        if func_name == "built_in" and kwargs.get("local_plugin_paths"):
+            await asyncio.sleep(0.05)
+        return func(*args, **kwargs)
+
+    monkeypatch.setattr(app_module, "run_blocking", fake_run_blocking)
+    monkeypatch.setattr(app_module, "VISUALIZER_REGISTRY_DISCOVERY_TIMEOUT_S", 0.01)
+
+    async def run_app() -> None:
+        async with app.run_test():
+            await asyncio.sleep(0)
+            await app._initialize_state()
+            assert app.visualizer_host is not None
+            assert app.visualizer_host.active_id == "basic"
+            notice = app._effective_runtime_notice()
+            assert notice is not None
+            assert "timed out" in notice.lower()
+            app.exit()
+
+    _run(run_app())
+
+
+def test_startup_falls_back_when_visualizer_discovery_raises(
+    tmp_path, monkeypatch
+) -> None:
+    _setup_dirs(tmp_path, monkeypatch)
+    save_state(
+        paths.state_path(),
+        AppState(
+            playback_backend="fake",
+            visualizer_plugin_paths=("broken.path.plugins",),
+        ),
+    )
+    app = TzPlayerApp(auto_init=False, backend_name="fake")
+
+    async def fake_run_blocking(func, /, *args, **kwargs):  # type: ignore[no-untyped-def]
+        func_name = getattr(func, "__name__", "")
+        if func_name == "built_in" and kwargs.get("local_plugin_paths"):
+            raise RuntimeError("broken plugin discovery")
+        return func(*args, **kwargs)
+
+    monkeypatch.setattr(app_module, "run_blocking", fake_run_blocking)
+
+    async def run_app() -> None:
+        async with app.run_test():
+            await asyncio.sleep(0)
+            await app._initialize_state()
+            assert app.visualizer_host is not None
+            assert app.visualizer_host.active_id == "basic"
+            notice = app._effective_runtime_notice()
+            assert notice is not None
+            assert "discovery failed" in notice.lower()
+            app.exit()
+
+    _run(run_app())
+
+
 def test_invalid_persisted_visualizer_fps_recovers_to_default(
     tmp_path, monkeypatch
 ) -> None:
@@ -323,13 +394,13 @@ def test_invalid_persisted_visualizer_fps_recovers_to_default(
             await asyncio.sleep(0)
             await app._initialize_state()
             assert app.visualizer_host is not None
-            assert app.visualizer_host.target_fps == 16
-            assert app.state.visualizer_fps == 16
+            assert app.visualizer_host.target_fps == 14
+            assert app.state.visualizer_fps == 14
             app.exit()
 
     _run(run_app())
     persisted = load_state(paths.state_path())
-    assert persisted.visualizer_fps == 16
+    assert persisted.visualizer_fps == 14
 
 
 def test_cli_visualizer_responsiveness_override_sets_profile_default_fps(
@@ -368,6 +439,30 @@ def test_cli_visualizer_responsiveness_override_sets_profile_default_fps(
     persisted = load_state(paths.state_path())
     assert persisted.visualizer_responsiveness_profile == "aggressive"
     assert persisted.visualizer_fps == 22
+
+
+def test_balanced_profile_caps_persisted_visualizer_fps(tmp_path, monkeypatch) -> None:
+    _setup_dirs(tmp_path, monkeypatch)
+    save_state(
+        paths.state_path(),
+        AppState(
+            playback_backend="fake",
+            visualizer_fps=22,
+            visualizer_responsiveness_profile="balanced",
+        ),
+    )
+    app = TzPlayerApp(auto_init=False, backend_name="fake")
+
+    async def run_app() -> None:
+        async with app.run_test():
+            await asyncio.sleep(0)
+            await app._initialize_state()
+            assert app.visualizer_host is not None
+            assert app.visualizer_host.target_fps == 14
+            assert app.state.visualizer_fps == 14
+            app.exit()
+
+    _run(run_app())
 
 
 def test_startup_logs_visualizer_responsiveness_profile_event(

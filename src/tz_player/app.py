@@ -27,6 +27,7 @@ from typing import Any, Callable, Literal, cast
 from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
+from textual.css.query import NoMatches
 from textual.screen import ModalScreen
 from textual.theme import Theme
 from textual.timer import Timer
@@ -76,7 +77,7 @@ from .ui.actions_menu import ActionsMenuDismissed, ActionsMenuPopup, ActionsMenu
 from .ui.modals.error import ErrorModal
 from .ui.playlist_pane import PlaylistPane
 from .ui.status_pane import StatusPane
-from .utils.async_utils import run_blocking
+from .utils.async_utils import run_blocking, run_cpu_bound
 from .version import build_help_epilog
 from .visualizers import (
     VisualizerContext,
@@ -93,8 +94,19 @@ ANALYSIS_CACHE_MAX_BYTES = 2 * 1024 * 1024 * 1024
 ANALYSIS_CACHE_MAX_AGE_DAYS = 180
 ANALYSIS_CACHE_MIN_RECENT_TRACKS_PROTECTED = 200
 ANALYSIS_CACHE_PRUNE_TRIGGER_THRESHOLD = 0.90
+ANALYSIS_MAX_CONCURRENT_PER_TYPE = 2
+ANALYSIS_MAX_PENDING_TASKS_PER_TYPE = 8
+ANALYSIS_SCHEDULE_COOLDOWN_S = 0.75
+ENVELOPE_ANALYSIS_MIN_DWELL_S = 1.5
+VISUALIZER_REGISTRY_DISCOVERY_TIMEOUT_S = 3.0
 VISUALIZER_PLUGIN_SECURITY_MODES = {"off", "warn", "enforce"}
 VISUALIZER_PLUGIN_RUNTIME_MODES = {"in-process", "isolated"}
+VISUALIZER_MIN_RUNTIME_FPS = 6
+VISUALIZER_OVERRUN_STREAK_FOR_BACKOFF = 3
+VISUALIZER_HEALTHY_FRAMES_FOR_RECOVERY = 120
+VISUALIZER_OVERRUN_SCORE_BACKOFF = 2.5
+VISUALIZER_OVERRUN_SCORE_DECAY = 0.15
+VISUALIZER_BACKOFF_COOLDOWN_FRAMES = 30
 CYBERPUNK_THEME = Theme(
     name="cyberpunk-clean",
     primary="#00D7E6",
@@ -345,6 +357,14 @@ class TzPlayerApp(App):
         self._spectrum_analysis_tasks: dict[str, asyncio.Task[None]] = {}
         self._beat_analysis_tasks: dict[str, asyncio.Task[None]] = {}
         self._waveform_proxy_analysis_tasks: dict[str, asyncio.Task[None]] = {}
+        self._envelope_analysis_last_scheduled: dict[str, float] = {}
+        self._spectrum_analysis_last_scheduled: dict[str, float] = {}
+        self._beat_analysis_last_scheduled: dict[str, float] = {}
+        self._waveform_proxy_analysis_last_scheduled: dict[str, float] = {}
+        self._envelope_analysis_semaphore: asyncio.Semaphore | None = None
+        self._spectrum_analysis_semaphore: asyncio.Semaphore | None = None
+        self._beat_analysis_semaphore: asyncio.Semaphore | None = None
+        self._waveform_proxy_analysis_semaphore: asyncio.Semaphore | None = None
         self._spectrum_params = SpectrumParams(band_count=48, hop_ms=40)
         self._beat_params = BeatParams(hop_ms=40)
         self._waveform_proxy_params = WaveformProxyParams(hop_ms=20)
@@ -352,16 +372,26 @@ class TzPlayerApp(App):
         self._next_prewarm_task: asyncio.Task[None] | None = None
         self._next_prewarm_context: tuple[int, int, str, bool, int] | None = None
         self._envelope_missing_ffmpeg_warned: set[str] = set()
+        self._current_track_changed_at_s: float = 0.0
         self._audio_level_notice: str | None = None
         self._runtime_notice: str | None = None
         self._runtime_notice_expiry_s: float | None = None
         self._state_save_task: asyncio.Task[None] | None = None
+        self._state_persist_lock = asyncio.Lock()
         self._last_persisted: (
             tuple[int | None, int | None, int, float, str, bool] | None
         ) = None
         self.visualizer_registry: VisualizerRegistry | None = None
         self.visualizer_host: VisualizerHost | None = None
         self._visualizer_timer: Timer | None = None
+        self._visualizer_render_task: asyncio.Task[None] | None = None
+        self._visualizer_render_pending = False
+        self._visualizer_frames_coalesced = 0
+        self._visualizer_runtime_fps = 0
+        self._visualizer_overrun_streak = 0
+        self._visualizer_healthy_streak = 0
+        self._visualizer_overrun_score = 0.0
+        self._visualizer_backoff_cooldown_frames = 0
         self.startup_failed = False
 
     def compose(self) -> ComposeResult:
@@ -419,12 +449,13 @@ class TzPlayerApp(App):
                 self.state.visualizer_fps,
                 default_fps=profile_default_fps,
             )
+            profile_capped_state_fps = min(state_fps, profile_default_fps)
             effective_fps = (
                 _clamp_int(self._visualizer_fps_override, 2, 30)
                 if self._visualizer_fps_override is not None
                 else profile_default_fps
                 if has_profile_override
-                else state_fps
+                else profile_capped_state_fps
             )
             self.state = replace(
                 self.state,
@@ -474,7 +505,7 @@ class TzPlayerApp(App):
                     "player_poll_interval_s": profile_poll_interval_s,
                 },
             )
-            await run_blocking(save_state, state_path(), self.state)
+            await self._save_state_snapshot(self.state)
             try:
                 await self.store.initialize()
                 self.audio_envelope_store = SqliteEnvelopeStore(db_path())
@@ -503,7 +534,7 @@ class TzPlayerApp(App):
                 raise RuntimeError("Database startup failed") from exc
             if self.state.playlist_id != playlist_id:
                 self.state = replace(self.state, playlist_id=playlist_id)
-                await run_blocking(save_state, state_path(), self.state)
+                await self._save_state_snapshot(self.state)
             self.playlist_id = playlist_id
             self.player_state = self._player_state_from_appstate(playlist_id)
             backend = _build_backend(backend_name)
@@ -809,11 +840,12 @@ class TzPlayerApp(App):
             )
             return
         self.state = replace(self.state, visualizer_id=active)
-        await run_blocking(save_state, state_path(), self.state)
-        self._render_visualizer_frame()
+        await self._save_state_snapshot(self.state)
+        self._schedule_visualizer_frame()
 
     async def handle_playlist_cleared(self) -> None:
         self._cancel_next_track_prewarm()
+        self._cancel_stale_analysis_tasks(active_paths=set())
         if self.player_service is not None:
             await self.player_service.stop()
         self.current_track = None
@@ -829,6 +861,9 @@ class TzPlayerApp(App):
         `PlayerStateChanged` updates controls/status and debounced persistence.
         `TrackChanged` updates track details and starts metadata/envelope work.
         """
+        pane = self._try_query_playlist_pane()
+        if pane is None:
+            return
         if isinstance(event, PlayerStateChanged):
             self.player_state = event.state
             if event.state.error:
@@ -838,7 +873,6 @@ class TzPlayerApp(App):
                 if event.state.status in {"playing", "paused"}
                 else None
             )
-            pane = self.query_one(PlaylistPane)
             pane.set_playing_item_id(playing_id)
             self._update_status_pane()
             await pane.update_transport_controls(self.player_state)
@@ -846,6 +880,11 @@ class TzPlayerApp(App):
                 await self._schedule_state_save()
         elif isinstance(event, TrackChanged):
             self.current_track = event.track_info
+            self._current_track_changed_at_s = time.monotonic()
+            active_paths = (
+                {event.track_info.path} if event.track_info is not None else set()
+            )
+            self._cancel_stale_analysis_tasks(active_paths=active_paths)
             self._update_current_track_pane()
             item_id = self.player_state.item_id
             if (
@@ -873,6 +912,13 @@ class TzPlayerApp(App):
         existing = self._envelope_analysis_tasks.get(key)
         if existing is not None and not existing.done():
             return
+        if not self._mark_analysis_schedule(
+            self._envelope_analysis_last_scheduled, key, label="envelope"
+        ):
+            return
+        if len(self._envelope_analysis_tasks) >= ANALYSIS_MAX_PENDING_TASKS_PER_TYPE:
+            logger.debug("Skipping envelope analysis schedule due to pending-task cap")
+            return
         task = asyncio.create_task(self._ensure_envelope_for_track(track))
         self._envelope_analysis_tasks[key] = task
         task.add_done_callback(self._make_envelope_task_cleanup(key))
@@ -881,20 +927,17 @@ class TzPlayerApp(App):
         """Schedule lazy envelope analysis requested by level sampling."""
         if not track_path:
             return
+        if self.player_state.status not in {"playing", "paused"}:
+            return
         track = self.current_track
         if track is not None and track.path == track_path:
+            if (
+                self._current_track_changed_at_s > 0.0
+                and (time.monotonic() - self._current_track_changed_at_s)
+                < ENVELOPE_ANALYSIS_MIN_DWELL_S
+            ):
+                return
             self._schedule_envelope_analysis(track)
-            return
-        self._schedule_envelope_analysis(
-            TrackInfo(
-                title=None,
-                artist=None,
-                album=None,
-                year=None,
-                path=track_path,
-                duration_ms=None,
-            )
-        )
 
     async def _schedule_spectrum_analysis_for_path(
         self, track_path: str, params: SpectrumParams
@@ -905,6 +948,13 @@ class TzPlayerApp(App):
         key = f"{track_path}|bands={params.band_count}|hop={params.hop_ms}"
         existing = self._spectrum_analysis_tasks.get(key)
         if existing is not None and not existing.done():
+            return
+        if not self._mark_analysis_schedule(
+            self._spectrum_analysis_last_scheduled, key, label="spectrum"
+        ):
+            return
+        if len(self._spectrum_analysis_tasks) >= ANALYSIS_MAX_PENDING_TASKS_PER_TYPE:
+            logger.debug("Skipping spectrum analysis schedule due to pending-task cap")
             return
         task = asyncio.create_task(self._ensure_spectrum_for_track(track_path, params))
         self._spectrum_analysis_tasks[key] = task
@@ -918,27 +968,29 @@ class TzPlayerApp(App):
         if self.spectrum_store is None:
             return
         path = Path(track_path)
+        semaphore = self._ensure_spectrum_analysis_semaphore()
         try:
-            if await self.spectrum_store.has_spectrum(path, params=params):
-                return
-            result = await run_blocking(
-                analyze_track_spectrum,
-                path,
-                band_count=params.band_count,
-                hop_ms=params.hop_ms,
-            )
-            if result is None or not result.frames:
-                return
-            await self.spectrum_store.upsert_spectrum(
-                path,
-                duration_ms=max(1, result.duration_ms),
-                params=params,
-                frames=result.frames,
-            )
-            self._schedule_analysis_cache_prune(reason="post_write", delay_s=0.0)
-            logger.info(
-                "Spectrum analyzed for %s (%d frames)", path, len(result.frames)
-            )
+            async with semaphore:
+                if await self.spectrum_store.has_spectrum(path, params=params):
+                    return
+                result = await run_cpu_bound(
+                    analyze_track_spectrum,
+                    path,
+                    band_count=params.band_count,
+                    hop_ms=params.hop_ms,
+                )
+                if result is None or not result.frames:
+                    return
+                await self.spectrum_store.upsert_spectrum(
+                    path,
+                    duration_ms=max(1, result.duration_ms),
+                    params=params,
+                    frames=result.frames,
+                )
+                self._schedule_analysis_cache_prune(reason="post_write", delay_s=0.0)
+                logger.info(
+                    "Spectrum analyzed for %s (%d frames)", path, len(result.frames)
+                )
         except Exception as exc:
             logger.debug("Spectrum analysis failed for %s: %s", path, exc)
 
@@ -952,6 +1004,13 @@ class TzPlayerApp(App):
         existing = self._beat_analysis_tasks.get(key)
         if existing is not None and not existing.done():
             return
+        if not self._mark_analysis_schedule(
+            self._beat_analysis_last_scheduled, key, label="beat"
+        ):
+            return
+        if len(self._beat_analysis_tasks) >= ANALYSIS_MAX_PENDING_TASKS_PER_TYPE:
+            logger.debug("Skipping beat analysis schedule due to pending-task cap")
+            return
         task = asyncio.create_task(self._ensure_beat_for_track(track_path, params))
         self._beat_analysis_tasks[key] = task
         task.add_done_callback(lambda _task: self._beat_analysis_tasks.pop(key, None))
@@ -960,27 +1019,31 @@ class TzPlayerApp(App):
         if self.beat_store is None:
             return
         path = Path(track_path)
+        semaphore = self._ensure_beat_analysis_semaphore()
         try:
-            if await self.beat_store.has_beats(path, params=params):
-                return
-            result = await run_blocking(
-                analyze_track_beats,
-                path,
-                hop_ms=params.hop_ms,
-            )
-            if result is None or not result.frames:
-                return
-            await self.beat_store.upsert_beats(
-                path,
-                duration_ms=max(1, result.duration_ms),
-                params=params,
-                bpm=result.bpm,
-                frames=result.frames,
-            )
-            self._schedule_analysis_cache_prune(reason="post_write", delay_s=0.0)
-            logger.info(
-                "Beat analysis completed for %s (%d frames)", path, len(result.frames)
-            )
+            async with semaphore:
+                if await self.beat_store.has_beats(path, params=params):
+                    return
+                result = await run_cpu_bound(
+                    analyze_track_beats,
+                    path,
+                    hop_ms=params.hop_ms,
+                )
+                if result is None or not result.frames:
+                    return
+                await self.beat_store.upsert_beats(
+                    path,
+                    duration_ms=max(1, result.duration_ms),
+                    params=params,
+                    bpm=result.bpm,
+                    frames=result.frames,
+                )
+                self._schedule_analysis_cache_prune(reason="post_write", delay_s=0.0)
+                logger.info(
+                    "Beat analysis completed for %s (%d frames)",
+                    path,
+                    len(result.frames),
+                )
         except Exception as exc:
             logger.debug("Beat analysis failed for %s: %s", path, exc)
 
@@ -993,6 +1056,18 @@ class TzPlayerApp(App):
         key = f"{track_path}|hop={params.hop_ms}"
         existing = self._waveform_proxy_analysis_tasks.get(key)
         if existing is not None and not existing.done():
+            return
+        if not self._mark_analysis_schedule(
+            self._waveform_proxy_analysis_last_scheduled, key, label="waveform_proxy"
+        ):
+            return
+        if (
+            len(self._waveform_proxy_analysis_tasks)
+            >= ANALYSIS_MAX_PENDING_TASKS_PER_TYPE
+        ):
+            logger.debug(
+                "Skipping waveform proxy analysis schedule due to pending-task cap"
+            )
             return
         task = asyncio.create_task(
             self._ensure_waveform_proxy_for_track(track_path, params)
@@ -1008,28 +1083,32 @@ class TzPlayerApp(App):
         if self.waveform_proxy_store is None:
             return
         path = Path(track_path)
+        semaphore = self._ensure_waveform_proxy_analysis_semaphore()
         try:
-            if await self.waveform_proxy_store.has_waveform_proxy(path, params=params):
-                return
-            result = await run_blocking(
-                analyze_track_waveform_proxy,
-                path,
-                hop_ms=params.hop_ms,
-            )
-            if result is None or not result.frames:
-                return
-            await self.waveform_proxy_store.upsert_waveform_proxy(
-                path,
-                duration_ms=max(1, result.duration_ms),
-                params=params,
-                frames=result.frames,
-            )
-            self._schedule_analysis_cache_prune(reason="post_write", delay_s=0.0)
-            logger.info(
-                "Waveform proxy analyzed for %s (%d frames)",
-                path,
-                len(result.frames),
-            )
+            async with semaphore:
+                if await self.waveform_proxy_store.has_waveform_proxy(
+                    path, params=params
+                ):
+                    return
+                result = await run_cpu_bound(
+                    analyze_track_waveform_proxy,
+                    path,
+                    hop_ms=params.hop_ms,
+                )
+                if result is None or not result.frames:
+                    return
+                await self.waveform_proxy_store.upsert_waveform_proxy(
+                    path,
+                    duration_ms=max(1, result.duration_ms),
+                    params=params,
+                    frames=result.frames,
+                )
+                self._schedule_analysis_cache_prune(reason="post_write", delay_s=0.0)
+                logger.info(
+                    "Waveform proxy analyzed for %s (%d frames)",
+                    path,
+                    len(result.frames),
+                )
         except Exception as exc:
             logger.debug("Waveform proxy analysis failed for %s: %s", path, exc)
 
@@ -1181,46 +1260,130 @@ class TzPlayerApp(App):
         if self.audio_envelope_store is None:
             return
         path = Path(track.path)
+        semaphore = self._ensure_envelope_analysis_semaphore()
         try:
-            if await self.audio_envelope_store.has_envelope(path):
-                logger.debug("Envelope cache hit for %s", path)
+            async with semaphore:
+                if await self.audio_envelope_store.has_envelope(path):
+                    logger.debug("Envelope cache hit for %s", path)
+                    self._update_audio_level_notice(str(path))
+                    return
+                logger.debug("Envelope cache miss for %s; starting analysis.", path)
+                result = await run_cpu_bound(analyze_track_envelope, path)
+                if result is None or not result.points:
+                    if requires_ffmpeg_for_envelope(path) and not ffmpeg_available():
+                        path_key = str(path)
+                        if path_key not in self._envelope_missing_ffmpeg_warned:
+                            self._envelope_missing_ffmpeg_warned.add(path_key)
+                            logger.warning(
+                                "Envelope analysis unavailable for %s: ffmpeg not found on PATH; using fallback levels.",
+                                path,
+                            )
+                            self._set_runtime_notice(
+                                "ffmpeg not found; using fallback audio levels.",
+                                ttl_s=10.0,
+                            )
+                        self._update_audio_level_notice(path_key)
+                    else:
+                        logger.debug("Envelope analysis unavailable for %s", path)
+                    return
+                await self.audio_envelope_store.upsert_envelope(
+                    path,
+                    result.points,
+                    duration_ms=max(1, result.duration_ms),
+                )
+                self._schedule_analysis_cache_prune(reason="post_write", delay_s=0.0)
+                logger.info(
+                    "Envelope analyzed for %s (%d points)", path, len(result.points)
+                )
                 self._update_audio_level_notice(str(path))
-                return
-            logger.debug("Envelope cache miss for %s; starting analysis.", path)
-            result = await run_blocking(analyze_track_envelope, path)
-            if result is None or not result.points:
-                if requires_ffmpeg_for_envelope(path) and not ffmpeg_available():
-                    path_key = str(path)
-                    if path_key not in self._envelope_missing_ffmpeg_warned:
-                        self._envelope_missing_ffmpeg_warned.add(path_key)
-                        logger.warning(
-                            "Envelope analysis unavailable for %s: ffmpeg not found on PATH; using fallback levels.",
-                            path,
-                        )
-                        self._set_runtime_notice(
-                            "ffmpeg not found; using fallback audio levels.",
-                            ttl_s=10.0,
-                        )
-                    self._update_audio_level_notice(path_key)
-                else:
-                    logger.debug("Envelope analysis unavailable for %s", path)
-                return
-            await self.audio_envelope_store.upsert_envelope(
-                path,
-                result.points,
-                duration_ms=max(1, result.duration_ms),
-            )
-            self._schedule_analysis_cache_prune(reason="post_write", delay_s=0.0)
-            logger.info(
-                "Envelope analyzed for %s (%d points)", path, len(result.points)
-            )
-            self._update_audio_level_notice(str(path))
         except Exception as exc:
             logger.warning("Envelope analysis failed for %s: %s", path, exc)
             self._set_runtime_notice(
                 "Envelope analysis failed; using fallback audio levels.",
                 ttl_s=10.0,
             )
+
+    def _ensure_envelope_analysis_semaphore(self) -> asyncio.Semaphore:
+        semaphore = self._envelope_analysis_semaphore
+        if semaphore is None:
+            semaphore = asyncio.Semaphore(ANALYSIS_MAX_CONCURRENT_PER_TYPE)
+            self._envelope_analysis_semaphore = semaphore
+        return semaphore
+
+    def _ensure_spectrum_analysis_semaphore(self) -> asyncio.Semaphore:
+        semaphore = self._spectrum_analysis_semaphore
+        if semaphore is None:
+            semaphore = asyncio.Semaphore(ANALYSIS_MAX_CONCURRENT_PER_TYPE)
+            self._spectrum_analysis_semaphore = semaphore
+        return semaphore
+
+    def _ensure_beat_analysis_semaphore(self) -> asyncio.Semaphore:
+        semaphore = self._beat_analysis_semaphore
+        if semaphore is None:
+            semaphore = asyncio.Semaphore(ANALYSIS_MAX_CONCURRENT_PER_TYPE)
+            self._beat_analysis_semaphore = semaphore
+        return semaphore
+
+    def _ensure_waveform_proxy_analysis_semaphore(self) -> asyncio.Semaphore:
+        semaphore = self._waveform_proxy_analysis_semaphore
+        if semaphore is None:
+            semaphore = asyncio.Semaphore(ANALYSIS_MAX_CONCURRENT_PER_TYPE)
+            self._waveform_proxy_analysis_semaphore = semaphore
+        return semaphore
+
+    def _mark_analysis_schedule(
+        self, schedule_map: dict[str, float], key: str, *, label: str
+    ) -> bool:
+        now = time.monotonic()
+        previous = schedule_map.get(key)
+        if previous is not None and (now - previous) < ANALYSIS_SCHEDULE_COOLDOWN_S:
+            logger.debug(
+                "Skipping %s analysis schedule due to cooldown",
+                label,
+            )
+            return False
+        schedule_map[key] = now
+        return True
+
+    def _cancel_stale_analysis_tasks(self, *, active_paths: set[str]) -> None:
+        def _cancel_matching(
+            task_map: dict[str, asyncio.Task[None]],
+            schedule_map: dict[str, float],
+            path_from_key: Callable[[str], str],
+        ) -> None:
+            for key, task in list(task_map.items()):
+                if path_from_key(key) in active_paths:
+                    continue
+                task.cancel()
+                task_map.pop(key, None)
+                schedule_map.pop(key, None)
+
+            stale_schedule_keys = [
+                key for key in schedule_map if path_from_key(key) not in active_paths
+            ]
+            for stale_key in stale_schedule_keys:
+                schedule_map.pop(stale_key, None)
+
+        _cancel_matching(
+            self._envelope_analysis_tasks,
+            self._envelope_analysis_last_scheduled,
+            lambda key: key,
+        )
+        _cancel_matching(
+            self._spectrum_analysis_tasks,
+            self._spectrum_analysis_last_scheduled,
+            lambda key: key.split("|", 1)[0],
+        )
+        _cancel_matching(
+            self._beat_analysis_tasks,
+            self._beat_analysis_last_scheduled,
+            lambda key: key.split("|", 1)[0],
+        )
+        _cancel_matching(
+            self._waveform_proxy_analysis_tasks,
+            self._waveform_proxy_analysis_last_scheduled,
+            lambda key: key.split("|", 1)[0],
+        )
 
     async def _track_info_provider(
         self, playlist_id: int, item_id: int
@@ -1265,24 +1428,71 @@ class TzPlayerApp(App):
         return await self.store.list_item_ids(playlist_id)
 
     def _update_status_pane(self) -> None:
-        pane = self.query_one(StatusPane)
+        try:
+            pane = self.query_one(StatusPane)
+        except NoMatches:
+            return
         pane.set_runtime_notice(self._effective_runtime_notice())
         pane.update_state(self.player_state)
 
     def _update_current_track_pane(self) -> None:
-        pane = self.query_one("#current-track-pane", Static)
+        try:
+            pane = self.query_one("#current-track-pane", Static)
+        except NoMatches:
+            return
         pane.update(_format_track_info_panel(self.current_track))
+
+    def _try_query_playlist_pane(self) -> PlaylistPane | None:
+        try:
+            return self.query_one(PlaylistPane)
+        except NoMatches:
+            return None
 
     async def _start_visualizer(self) -> None:
         """Create registry/host, activate plugin, and start frame timer loop."""
         configured_paths = list(self.state.visualizer_plugin_paths)
         default_plugin_path = str(visualizer_plugin_dir())
         local_plugin_paths = [default_plugin_path, *configured_paths]
-        self.visualizer_registry = VisualizerRegistry.built_in(
-            local_plugin_paths=local_plugin_paths,
-            plugin_security_mode=self.state.visualizer_plugin_security_mode,
-            plugin_runtime_mode=self.state.visualizer_plugin_runtime_mode,
-        )
+        try:
+            self.visualizer_registry = await asyncio.wait_for(
+                run_blocking(
+                    VisualizerRegistry.built_in,
+                    local_plugin_paths=local_plugin_paths,
+                    plugin_security_mode=self.state.visualizer_plugin_security_mode,
+                    plugin_runtime_mode=self.state.visualizer_plugin_runtime_mode,
+                ),
+                timeout=VISUALIZER_REGISTRY_DISCOVERY_TIMEOUT_S,
+            )
+        except asyncio.TimeoutError:
+            logger.warning(
+                "Visualizer plugin discovery timed out after %.1fs; falling back to built-in visualizers only.",
+                VISUALIZER_REGISTRY_DISCOVERY_TIMEOUT_S,
+            )
+            self._set_runtime_notice(
+                "Visualizer plugin discovery timed out; using built-in visualizers.",
+                ttl_s=10.0,
+            )
+            self.visualizer_registry = await run_blocking(
+                VisualizerRegistry.built_in,
+                local_plugin_paths=[],
+                plugin_security_mode=self.state.visualizer_plugin_security_mode,
+                plugin_runtime_mode=self.state.visualizer_plugin_runtime_mode,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Visualizer plugin discovery failed (%s); falling back to built-in visualizers only.",
+                exc,
+            )
+            self._set_runtime_notice(
+                "Visualizer plugin discovery failed; using built-in visualizers.",
+                ttl_s=10.0,
+            )
+            self.visualizer_registry = await run_blocking(
+                VisualizerRegistry.built_in,
+                local_plugin_paths=[],
+                plugin_security_mode=self.state.visualizer_plugin_security_mode,
+                plugin_runtime_mode=self.state.visualizer_plugin_runtime_mode,
+            )
         registry_notices = self.visualizer_registry.consume_notices()
         if registry_notices:
             self._set_runtime_notice(registry_notices[0], ttl_s=10.0)
@@ -1297,25 +1507,70 @@ class TzPlayerApp(App):
         active = self.visualizer_host.activate(requested, context)
         if self.state.visualizer_id != active:
             self.state = replace(self.state, visualizer_id=active)
-            await run_blocking(save_state, state_path(), self.state)
-        self._render_visualizer_frame()
-        interval = 1.0 / self.visualizer_host.target_fps
-        self._visualizer_timer = self.set_interval(
-            interval, self._render_visualizer_frame
-        )
+            await self._save_state_snapshot(self.state)
+        self._reset_visualizer_runtime_fps()
+        self._schedule_visualizer_frame()
+        self._apply_visualizer_timer_fps(self._visualizer_runtime_fps)
 
     def _stop_visualizer(self) -> None:
         if self._visualizer_timer is not None:
             self._visualizer_timer.stop()
             self._visualizer_timer = None
+        if self._visualizer_render_task is not None:
+            self._visualizer_render_task.cancel()
+            self._visualizer_render_task = None
+        self._visualizer_render_pending = False
+        self._visualizer_frames_coalesced = 0
+        self._visualizer_runtime_fps = 0
+        self._visualizer_overrun_streak = 0
+        self._visualizer_healthy_streak = 0
+        self._visualizer_overrun_score = 0.0
+        self._visualizer_backoff_cooldown_frames = 0
         if self.visualizer_host is not None:
             self.visualizer_host.shutdown()
             self.visualizer_host = None
 
-    def _render_visualizer_frame(self) -> None:
+    def _schedule_visualizer_frame(self) -> None:
+        if self.visualizer_host is None:
+            return
+        if self._visualizer_render_task is not None:
+            if not self._visualizer_render_task.done():
+                self._visualizer_render_pending = True
+                self._visualizer_frames_coalesced += 1
+                return
+            self._visualizer_render_task = None
+        self._visualizer_render_task = asyncio.create_task(
+            self._render_visualizer_frame_async()
+        )
+        self._visualizer_render_task.add_done_callback(
+            self._on_visualizer_render_task_done
+        )
+
+    def _on_visualizer_render_task_done(self, task: asyncio.Task[None]) -> None:
+        if self._visualizer_render_task is task:
+            self._visualizer_render_task = None
+        if task.cancelled():
+            return
+        with contextlib.suppress(Exception):
+            task.result()
+        if self._visualizer_render_pending:
+            pending = self._visualizer_frames_coalesced
+            self._visualizer_render_pending = False
+            self._visualizer_frames_coalesced = 0
+            logger.debug(
+                "Visualizer frame coalescing drained pending work",
+                extra={
+                    "event": "visualizer_frame_coalesced",
+                    "coalesced_frames": pending,
+                },
+            )
+            self._schedule_visualizer_frame()
+
+    async def _render_visualizer_frame_async(self) -> None:
         """Render one visualizer frame from current player and track state."""
         if self.visualizer_host is None:
             return
+        start = time.monotonic()
         pane = self.query_one("#visualizer-pane", Static)
         context = VisualizerContext(
             ansi_enabled=self.state.ansi_enabled,
@@ -1382,6 +1637,119 @@ class TzPlayerApp(App):
         else:
             render_text = output
         pane.update(Text.from_ansi(render_text))
+        elapsed = time.monotonic() - start
+        effective_fps = (
+            self._visualizer_runtime_fps
+            if self._visualizer_runtime_fps > 0
+            else self.visualizer_host.target_fps
+        )
+        frame_budget_s = 1.0 / max(1, effective_fps)
+        if elapsed > frame_budget_s:
+            logger.info(
+                "Visualizer frame loop overrun",
+                extra={
+                    "event": "visualizer_frame_loop_overrun",
+                    "elapsed_s": elapsed,
+                    "frame_budget_s": frame_budget_s,
+                    "active_plugin_id": self.visualizer_host.active_id,
+                },
+            )
+        self._adapt_visualizer_runtime_fps(elapsed_s=elapsed)
+
+    def _reset_visualizer_runtime_fps(self) -> None:
+        self._visualizer_runtime_fps = max(2, min(30, int(self.state.visualizer_fps)))
+        self._visualizer_overrun_streak = 0
+        self._visualizer_healthy_streak = 0
+        self._visualizer_overrun_score = 0.0
+        self._visualizer_backoff_cooldown_frames = 0
+
+    def _apply_visualizer_timer_fps(self, fps: int) -> None:
+        if self.visualizer_host is None:
+            return
+        normalized = max(2, min(30, int(fps)))
+        self._visualizer_runtime_fps = normalized
+        if self._visualizer_timer is not None:
+            self._visualizer_timer.stop()
+            self._visualizer_timer = None
+        self._visualizer_timer = self.set_interval(
+            1.0 / normalized, self._schedule_visualizer_frame
+        )
+
+    def _adapt_visualizer_runtime_fps(self, *, elapsed_s: float) -> None:
+        host = self.visualizer_host
+        if host is None:
+            return
+        if self._visualizer_runtime_fps <= 0:
+            self._visualizer_runtime_fps = max(2, min(30, int(host.target_fps)))
+        if self._visualizer_backoff_cooldown_frames > 0:
+            self._visualizer_backoff_cooldown_frames -= 1
+        budget_s = 1.0 / max(1, self._visualizer_runtime_fps)
+        max_fps = max(2, min(30, int(self.state.visualizer_fps)))
+        min_fps = max(2, min(VISUALIZER_MIN_RUNTIME_FPS, max_fps))
+
+        if elapsed_s > budget_s:
+            self._visualizer_overrun_streak += 1
+            self._visualizer_healthy_streak = 0
+            overrun_ratio = max(1.0, elapsed_s / budget_s)
+            self._visualizer_overrun_score += min(2.0, overrun_ratio - 1.0)
+            if (
+                self._visualizer_backoff_cooldown_frames <= 0
+                and (
+                    self._visualizer_overrun_streak
+                    >= VISUALIZER_OVERRUN_STREAK_FOR_BACKOFF
+                    or self._visualizer_overrun_score
+                    >= VISUALIZER_OVERRUN_SCORE_BACKOFF
+                )
+                and self._visualizer_runtime_fps > min_fps
+            ):
+                step = 2 if overrun_ratio < 2.0 else 4
+                new_fps = max(min_fps, self._visualizer_runtime_fps - step)
+                if new_fps != self._visualizer_runtime_fps:
+                    self._apply_visualizer_timer_fps(new_fps)
+                    logger.info(
+                        "Visualizer runtime FPS reduced due to sustained overruns",
+                        extra={
+                            "event": "visualizer_runtime_fps_backoff",
+                            "active_plugin_id": host.active_id,
+                            "runtime_fps": new_fps,
+                            "configured_fps": max_fps,
+                            "elapsed_s": elapsed_s,
+                            "budget_s": budget_s,
+                            "overrun_ratio": overrun_ratio,
+                            "overrun_score": round(self._visualizer_overrun_score, 3),
+                        },
+                    )
+                self._visualizer_overrun_streak = 0
+                self._visualizer_overrun_score = max(
+                    0.0, self._visualizer_overrun_score - 1.5
+                )
+                self._visualizer_backoff_cooldown_frames = (
+                    VISUALIZER_BACKOFF_COOLDOWN_FRAMES
+                )
+            return
+
+        self._visualizer_overrun_streak = 0
+        self._visualizer_overrun_score = max(
+            0.0, self._visualizer_overrun_score - VISUALIZER_OVERRUN_SCORE_DECAY
+        )
+        if self._visualizer_runtime_fps >= max_fps:
+            self._visualizer_healthy_streak = 0
+            return
+        self._visualizer_healthy_streak += 1
+        if self._visualizer_healthy_streak >= VISUALIZER_HEALTHY_FRAMES_FOR_RECOVERY:
+            new_fps = min(max_fps, self._visualizer_runtime_fps + 1)
+            if new_fps != self._visualizer_runtime_fps:
+                self._apply_visualizer_timer_fps(new_fps)
+                logger.info(
+                    "Visualizer runtime FPS recovered after stable frames",
+                    extra={
+                        "event": "visualizer_runtime_fps_recovery",
+                        "active_plugin_id": host.active_id,
+                        "runtime_fps": new_fps,
+                        "configured_fps": max_fps,
+                    },
+                )
+            self._visualizer_healthy_streak = 0
 
     def _active_visualizer_requests_spectrum(self) -> bool:
         if self.visualizer_host is None:
@@ -1517,9 +1885,13 @@ class TzPlayerApp(App):
         )
         self._last_persisted = self._state_tuple(self.player_state)
         try:
-            await run_blocking(save_state, state_path(), self.state)
+            await self._save_state_snapshot(self.state)
         except Exception as exc:
             logger.warning("Failed to persist state during shutdown: %s", exc)
+
+    async def _save_state_snapshot(self, state: AppState) -> None:
+        async with self._state_persist_lock:
+            await run_blocking(save_state, state_path(), state)
 
     def _state_tuple(
         self, state: PlayerState

@@ -280,3 +280,27 @@ def test_overrun_and_throttle_emit_observability_events(caplog, monkeypatch) -> 
         if getattr(record, "event", None) == "visualizer_throttle_skip"
     ]
     assert skip_events
+
+
+def test_heavy_overrun_scales_throttle_frames(caplog, monkeypatch) -> None:
+    caplog.set_level(logging.INFO, logger="tz_player.visualizers.host")
+    registry = VisualizerRegistry({"good": GoodPlugin}, default_id="good")
+    host = VisualizerHost(registry, target_fps=10)
+    context = VisualizerContext(ansi_enabled=True, unicode_enabled=True)
+    host.activate("good", context)
+
+    # 0.45s render time against 0.1s budget => overrun ratio ~4.5 -> skip >= 3.
+    moments = iter([0.0, 0.45, 1.0, 1.45, 2.0, 2.45])
+    monkeypatch.setattr(host_module.time, "monotonic", lambda: next(moments))
+
+    host.render_frame(_frame(), context)
+    host.render_frame(_frame(), context)
+    host.render_frame(_frame(), context)
+
+    throttle_events = [
+        record
+        for record in caplog.records
+        if getattr(record, "event", None) == "visualizer_throttle_engaged"
+    ]
+    assert throttle_events
+    assert getattr(throttle_events[-1], "throttle_frames", 0) >= 3

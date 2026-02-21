@@ -8,6 +8,7 @@ import struct
 import subprocess
 import wave
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -50,9 +51,16 @@ def analyze_track_envelope(
     return _limit_points(ffmpeg_result, max_points=max_points)
 
 
-def ffmpeg_available() -> bool:
+def ffmpeg_available(*, refresh: bool = False) -> bool:
     """Return whether `ffmpeg` binary is available on PATH."""
-    return shutil.which("ffmpeg") is not None
+    if refresh:
+        clear_ffmpeg_probe_cache()
+    return _ffmpeg_binary() is not None
+
+
+def clear_ffmpeg_probe_cache() -> None:
+    """Clear in-memory ffmpeg discovery cache for explicit re-probe paths."""
+    _ffmpeg_binary.cache_clear()
 
 
 def requires_ffmpeg_for_envelope(path: Path | str) -> bool:
@@ -98,7 +106,7 @@ def _analyze_wave(path: Path, *, bucket_ms: int) -> EnvelopeAnalysisResult | Non
 
 def _analyze_ffmpeg(path: Path, *, bucket_ms: int) -> EnvelopeAnalysisResult | None:
     """Decode non-wave media via ffmpeg and bucket levels from raw PCM stream."""
-    ffmpeg_bin = shutil.which("ffmpeg")
+    ffmpeg_bin = _ffmpeg_binary()
     if ffmpeg_bin is None:
         return None
     cmd = [
@@ -264,3 +272,8 @@ def _limit_points(
 
 def _clamp(value: float) -> float:
     return max(0.0, min(1.0, float(value)))
+
+
+@lru_cache(maxsize=1)
+def _ffmpeg_binary() -> str | None:
+    return shutil.which("ffmpeg")

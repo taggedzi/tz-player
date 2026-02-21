@@ -9,6 +9,7 @@ import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 
+from tz_player.services.sqlite_retry import run_with_sqlite_lock_retry
 from tz_player.utils.async_utils import run_blocking
 
 
@@ -147,10 +148,11 @@ class SqliteBeatStore:
         total_bytes = len(normalized_frames) * 24
         bpm_value = max(0.0, float(bpm))
 
-        with self._connect() as conn:
-            conn.execute("BEGIN IMMEDIATE")
-            conn.execute(
-                """
+        def _op() -> None:
+            with self._connect() as conn:
+                conn.execute("BEGIN IMMEDIATE")
+                conn.execute(
+                    """
                 INSERT INTO analysis_cache_entries (
                     analysis_type,
                     path_norm,
@@ -174,21 +176,21 @@ class SqliteBeatStore:
                     computed_at = excluded.computed_at,
                     last_accessed_at = excluded.last_accessed_at
                 """,
-                (
-                    self.ANALYSIS_TYPE,
-                    path_norm,
-                    mtime_ns,
-                    size_bytes,
-                    self._analysis_version,
-                    params_hash,
-                    params_json,
-                    max(1, int(duration_ms)),
-                    len(normalized_frames),
-                    total_bytes,
-                ),
-            )
-            row = conn.execute(
-                """
+                    (
+                        self.ANALYSIS_TYPE,
+                        path_norm,
+                        mtime_ns,
+                        size_bytes,
+                        self._analysis_version,
+                        params_hash,
+                        params_json,
+                        max(1, int(duration_ms)),
+                        len(normalized_frames),
+                        total_bytes,
+                    ),
+                )
+                row = conn.execute(
+                    """
                 SELECT id
                 FROM analysis_cache_entries
                 WHERE analysis_type = ?
@@ -199,23 +201,23 @@ class SqliteBeatStore:
                   AND size_bytes IS ?
                 LIMIT 1
                 """,
-                (
-                    self.ANALYSIS_TYPE,
-                    path_norm,
-                    self._analysis_version,
-                    params_hash,
-                    mtime_ns,
-                    size_bytes,
-                ),
-            ).fetchone()
-            if row is None:
-                return
-            entry_id = int(row["id"])
-            conn.execute(
-                "DELETE FROM analysis_beat_frames WHERE entry_id = ?", (entry_id,)
-            )
-            conn.executemany(
-                """
+                    (
+                        self.ANALYSIS_TYPE,
+                        path_norm,
+                        self._analysis_version,
+                        params_hash,
+                        mtime_ns,
+                        size_bytes,
+                    ),
+                ).fetchone()
+                if row is None:
+                    return
+                entry_id = int(row["id"])
+                conn.execute(
+                    "DELETE FROM analysis_beat_frames WHERE entry_id = ?", (entry_id,)
+                )
+                conn.executemany(
+                    """
                 INSERT INTO analysis_beat_frames (
                     entry_id,
                     frame_idx,
@@ -225,13 +227,15 @@ class SqliteBeatStore:
                     bpm
                 ) VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                [
-                    (entry_id, idx, position_ms, strength_u8, is_beat, bpm_value)
-                    for idx, (position_ms, strength_u8, is_beat) in enumerate(
-                        normalized_frames
-                    )
-                ],
-            )
+                    [
+                        (entry_id, idx, position_ms, strength_u8, is_beat, bpm_value)
+                        for idx, (position_ms, strength_u8, is_beat) in enumerate(
+                            normalized_frames
+                        )
+                    ],
+                )
+
+        run_with_sqlite_lock_retry(_op, op_name="beat.upsert")
 
     def _has_beats_sync(self, track_path: Path, params: BeatParams) -> bool:
         path_norm = _normalize_path(track_path)

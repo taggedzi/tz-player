@@ -11,6 +11,7 @@ from pathlib import Path
 
 from tz_player.services.audio_level_service import EnvelopeLevelProvider
 from tz_player.services.playback_backend import LevelSample
+from tz_player.services.sqlite_retry import run_with_sqlite_lock_retry
 from tz_player.utils.async_utils import run_blocking
 
 
@@ -125,10 +126,12 @@ class SqliteEnvelopeStore(EnvelopeLevelProvider):
             )
             for position_ms, level_left, level_right in points
         ]
-        with self._connect() as conn:
-            conn.execute("BEGIN IMMEDIATE")
-            conn.execute(
-                """
+
+        def _op() -> None:
+            with self._connect() as conn:
+                conn.execute("BEGIN IMMEDIATE")
+                conn.execute(
+                    """
                 INSERT INTO analysis_cache_entries (
                     analysis_type,
                     path_norm,
@@ -152,21 +155,21 @@ class SqliteEnvelopeStore(EnvelopeLevelProvider):
                     computed_at = excluded.computed_at,
                     last_accessed_at = excluded.last_accessed_at
                 """,
-                (
-                    self.ANALYSIS_TYPE,
-                    path_norm,
-                    mtime_ns,
-                    size_bytes,
-                    self._analysis_version,
-                    params_hash,
-                    params_json,
-                    max(1, int(duration_ms)),
-                    len(normalized_points),
-                    len(normalized_points) * 24,
-                ),
-            )
-            row = conn.execute(
-                """
+                    (
+                        self.ANALYSIS_TYPE,
+                        path_norm,
+                        mtime_ns,
+                        size_bytes,
+                        self._analysis_version,
+                        params_hash,
+                        params_json,
+                        max(1, int(duration_ms)),
+                        len(normalized_points),
+                        len(normalized_points) * 24,
+                    ),
+                )
+                row = conn.execute(
+                    """
                 SELECT id
                 FROM analysis_cache_entries
                 WHERE analysis_type = ?
@@ -177,24 +180,24 @@ class SqliteEnvelopeStore(EnvelopeLevelProvider):
                   AND size_bytes IS ?
                 LIMIT 1
                 """,
-                (
-                    self.ANALYSIS_TYPE,
-                    path_norm,
-                    self._analysis_version,
-                    params_hash,
-                    mtime_ns,
-                    size_bytes,
-                ),
-            ).fetchone()
-            if row is None:
-                return
-            entry_id = int(row["id"])
-            conn.execute(
-                "DELETE FROM analysis_scalar_frames WHERE entry_id = ?",
-                (entry_id,),
-            )
-            conn.executemany(
-                """
+                    (
+                        self.ANALYSIS_TYPE,
+                        path_norm,
+                        self._analysis_version,
+                        params_hash,
+                        mtime_ns,
+                        size_bytes,
+                    ),
+                ).fetchone()
+                if row is None:
+                    return
+                entry_id = int(row["id"])
+                conn.execute(
+                    "DELETE FROM analysis_scalar_frames WHERE entry_id = ?",
+                    (entry_id,),
+                )
+                conn.executemany(
+                    """
                 INSERT INTO analysis_scalar_frames (
                     entry_id,
                     position_ms,
@@ -202,11 +205,13 @@ class SqliteEnvelopeStore(EnvelopeLevelProvider):
                     level_right
                 ) VALUES (?, ?, ?, ?)
                 """,
-                [
-                    (entry_id, position_ms, level_left, level_right)
-                    for position_ms, level_left, level_right in normalized_points
-                ],
-            )
+                    [
+                        (entry_id, position_ms, level_left, level_right)
+                        for position_ms, level_left, level_right in normalized_points
+                    ],
+                )
+
+        run_with_sqlite_lock_retry(_op, op_name="envelope.upsert")
 
     def _get_level_at_sync(
         self, track_path: Path, position_ms: int
