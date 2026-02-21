@@ -2,12 +2,21 @@
 
 from __future__ import annotations
 
+import re
+
 from tz_player.visualizers.base import VisualizerContext, VisualizerFrameInput
-from tz_player.visualizers.fireworks import FireworksVisualizer
+from tz_player.visualizers.fireworks import FireworksVisualizer, _colorize, _Rocket
 from tz_player.visualizers.registry import VisualizerRegistry
 
 
-def _frame(*, frame_index: int = 10, beat_onset: bool = False) -> VisualizerFrameInput:
+def _frame(
+    *,
+    frame_index: int = 10,
+    beat_onset: bool = False,
+    level_left: float = 0.66,
+    level_right: float = 0.61,
+    spectrum_bands: bytes | None = None,
+) -> VisualizerFrameInput:
     return VisualizerFrameInput(
         frame_index=frame_index,
         monotonic_s=0.0,
@@ -25,9 +34,9 @@ def _frame(*, frame_index: int = 10, beat_onset: bool = False) -> VisualizerFram
         title="Track",
         artist="Artist",
         album="Album",
-        level_left=0.66,
-        level_right=0.61,
-        spectrum_bands=bytes([45, 68, 112, 165] * 12),
+        level_left=level_left,
+        level_right=level_right,
+        spectrum_bands=spectrum_bands or bytes([45, 68, 112, 165] * 12),
         beat_is_onset=beat_onset,
         waveform_min_left=-0.65,
         waveform_max_left=0.74,
@@ -57,3 +66,73 @@ def test_fireworks_render_launch_and_ansi() -> None:
     output_b = plugin.render(_frame(frame_index=51, beat_onset=False))
     assert "LAUNCH" in output_a
     assert "\x1b[" in output_b
+
+
+def test_fireworks_auto_launch_on_high_energy_frames_without_onset() -> None:
+    plugin = FireworksVisualizer()
+    plugin.on_activate(VisualizerContext(ansi_enabled=False, unicode_enabled=True))
+    output = plugin.render(
+        _frame(
+            frame_index=120,
+            beat_onset=False,
+            level_left=0.93,
+            level_right=0.91,
+            spectrum_bands=bytes([228, 206, 214, 224] * 12),
+        )
+    )
+    assert "SURGE" in output
+
+
+def test_fireworks_color_palettes_cover_warm_cool_and_white_ranges() -> None:
+    rgb_pattern = re.compile(r"38;2;(\d+);(\d+);(\d+)m")
+    colors: set[tuple[int, int, int]] = set()
+    for palette in ("red", "orange", "green", "blue", "white", "purple", "gold"):
+        for glyph in ("|", ".", "+", "*", "#", "@", "^"):
+            token = _colorize(glyph, palette_name=palette, shade=0, kind="main")
+            match = rgb_pattern.search(token)
+            assert match is not None
+            colors.add((int(match.group(1)), int(match.group(2)), int(match.group(3))))
+
+    assert any(r > 230 and g < 170 and b < 150 for r, g, b in colors)  # reds
+    assert any(r > 230 and 140 <= g <= 190 and b < 140 for r, g, b in colors)  # oranges
+    assert any(g > 210 and r < 190 and b < 210 for r, g, b in colors)  # greens
+    assert any(b > 230 and r < 210 for r, g, b in colors)  # blues
+    assert any(r > 235 and g > 235 and b > 235 for r, g, b in colors)  # whites
+
+
+def test_fireworks_single_palette_stays_color_cohesive() -> None:
+    rgb_pattern = re.compile(r"38;2;(\d+);(\d+);(\d+)m")
+    samples: list[tuple[int, int, int]] = []
+    for glyph in ("@", "O", "#", "X", "*", "+", "=", ":", ".", ",", "|", "!"):
+        for shade in (-1, 0, 1):
+            token = _colorize(glyph, palette_name="blue", shade=shade, kind="main")
+            match = rgb_pattern.search(token)
+            assert match is not None
+            samples.append(
+                (int(match.group(1)), int(match.group(2)), int(match.group(3)))
+            )
+
+    # blue palette should remain blue-dominant across glyph/shade variation.
+    assert all(b >= r for r, _, b in samples)
+
+
+def test_fireworks_rocket_explodes_when_drifting_offscreen() -> None:
+    plugin = FireworksVisualizer()
+    plugin.on_activate(VisualizerContext(ansi_enabled=False, unicode_enabled=True))
+    plugin._rockets.append(
+        _Rocket(
+            x=4.8,
+            y=8.0,
+            vx=1.2,
+            vy=-0.1,
+            y_explode=1.5,
+            theme="hot",
+            burst_type="chrysanthemum",
+            palette="red",
+        )
+    )
+
+    plugin._update_rockets(rows=12, cols=5, vu=0.7, bass=0.7, mids=0.5, highs=0.4)
+
+    assert not plugin._rockets
+    assert plugin._particles

@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from tz_player.app import build_parser as app_build_parser
+from tz_player.app import (
+    _normalize_beat_analyzer_mode,
+)
+from tz_player.app import (
+    build_parser as app_build_parser,
+)
 from tz_player.cli import build_parser as cli_build_parser
 from tz_player.gui import build_parser as gui_build_parser
 from tz_player.runtime_config import (
@@ -46,3 +51,10 @@ def test_visualizer_responsiveness_profile_normalization_and_defaults() -> None:
     assert profile_default_player_poll_interval_s("safe") == 0.25
     assert profile_default_player_poll_interval_s("balanced") == 0.18
     assert profile_default_player_poll_interval_s("aggressive") == 0.12
+
+
+def test_beat_analyzer_mode_normalization() -> None:
+    assert _normalize_beat_analyzer_mode("native") == "native"
+    assert _normalize_beat_analyzer_mode("librosa") == "librosa"
+    assert _normalize_beat_analyzer_mode("invalid") == "native"
+    assert _normalize_beat_analyzer_mode(None) == "native"

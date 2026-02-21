@@ -21,6 +21,7 @@ ADVANCED_VIZ_IDS = (
     "viz.particle.data_core_frag",
     "viz.particle.plasma_stream",
     "viz.particle.fireworks",
+    "viz.debug.beat_scope",
     "viz.spectrum.radial",
     "viz.typography.glitch",
     "viz.waveform.neon",

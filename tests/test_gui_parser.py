@@ -55,6 +55,12 @@ def test_gui_parser_accepts_visualizer_plugin_runtime_mode() -> None:
     assert args.visualizer_plugin_runtime == "isolated"
 
 
+def test_gui_parser_accepts_beat_analyzer_mode() -> None:
+    parser = build_parser()
+    args = parser.parse_args(["--beat-analyzer", "native"])
+    assert args.beat_analyzer == "native"
+
+
 def test_gui_parser_defaults_visualizer_plugin_paths_to_none() -> None:
     parser = build_parser()
     args = parser.parse_args([])

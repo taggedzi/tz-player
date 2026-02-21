@@ -1,7 +1,9 @@
 """Async utility helpers for safely offloading blocking callables.
 
-This module provides the project-wide thread-pool bridge used to keep the
-Textual event loop responsive during file/DB/metadata operations.
+This module provides:
+- a thread-pool bridge (`run_blocking`) for IO-heavy operations, and
+- a process-pool bridge (`run_cpu_bound`) for CPU-heavy work that can hold
+  the GIL long enough to starve the UI loop.
 """
 
 from __future__ import annotations

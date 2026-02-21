@@ -69,6 +69,11 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("in-process", "isolated"),
         help="Local plugin runtime mode.",
     )
+    parser.add_argument(
+        "--beat-analyzer",
+        choices=("native", "librosa"),
+        help="Beat analyzer mode (native|librosa).",
+    )
     return parser
 
 
@@ -90,6 +95,7 @@ def main() -> int:
         visualizer_plugin_paths = getattr(args, "visualizer_plugin_paths", None)
         visualizer_plugin_security = getattr(args, "visualizer_plugin_security", None)
         visualizer_plugin_runtime = getattr(args, "visualizer_plugin_runtime", None)
+        beat_analyzer = getattr(args, "beat_analyzer", None)
         app_kwargs: dict[str, object] = {"backend_name": args.backend}
         if visualizer_fps is not None:
             app_kwargs["visualizer_fps_override"] = visualizer_fps
@@ -107,6 +113,8 @@ def main() -> int:
             app_kwargs["visualizer_plugin_runtime_mode_override"] = (
                 visualizer_plugin_runtime
             )
+        if beat_analyzer is not None:
+            app_kwargs["beat_analyzer_override"] = beat_analyzer
         app = TzPlayerApp(**cast(dict[str, Any], app_kwargs))
         app.run()
         return 1 if getattr(app, "startup_failed", False) else 0
