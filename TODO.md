@@ -2,6 +2,7 @@
 
 Execution tracker derived from `SPEC.md`.
 `SPEC.md` remains the source of truth.
+Please see `AGENTS.md` for more instructions.
 
 ## Status Legend
 
