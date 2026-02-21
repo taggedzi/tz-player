@@ -377,7 +377,7 @@ class TzPlayerApp(App):
         self._runtime_notice: str | None = None
         self._runtime_notice_expiry_s: float | None = None
         self._state_save_task: asyncio.Task[None] | None = None
-        self._state_persist_lock = asyncio.Lock()
+        self._state_persist_lock: asyncio.Lock | None = None
         self._last_persisted: (
             tuple[int | None, int | None, int, float, str, bool] | None
         ) = None
@@ -1890,6 +1890,8 @@ class TzPlayerApp(App):
             logger.warning("Failed to persist state during shutdown: %s", exc)
 
     async def _save_state_snapshot(self, state: AppState) -> None:
+        if self._state_persist_lock is None:
+            self._state_persist_lock = asyncio.Lock()
         async with self._state_persist_lock:
             await run_blocking(save_state, state_path(), state)
 
