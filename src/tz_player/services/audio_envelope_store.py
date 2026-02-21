@@ -7,6 +7,7 @@ import json
 import math
 import os
 import sqlite3
+import time
 from pathlib import Path
 
 from tz_player.services.audio_level_service import EnvelopeLevelProvider
@@ -29,6 +30,8 @@ class SqliteEnvelopeStore(EnvelopeLevelProvider):
         self._db_path = Path(db_path)
         self._analysis_version = analysis_version
         self._bucket_ms = max(10, int(bucket_ms))
+        self._access_touch_interval_s = 30.0
+        self._last_access_touch_s: dict[int, float] = {}
 
     async def initialize(self) -> None:
         await run_blocking(self._initialize_sync)
@@ -240,10 +243,17 @@ class SqliteEnvelopeStore(EnvelopeLevelProvider):
             if row is None:
                 return None
             entry_id = int(row["id"])
-            conn.execute(
-                "UPDATE analysis_cache_entries SET last_accessed_at = strftime('%s','now') WHERE id = ?",
-                (entry_id,),
-            )
+            now_s = time.monotonic()
+            last_touch_s = self._last_access_touch_s.get(entry_id)
+            if (
+                last_touch_s is None
+                or (now_s - last_touch_s) >= self._access_touch_interval_s
+            ):
+                conn.execute(
+                    "UPDATE analysis_cache_entries SET last_accessed_at = strftime('%s','now') WHERE id = ?",
+                    (entry_id,),
+                )
+                self._last_access_touch_s[entry_id] = now_s
             pos = max(0, int(position_ms))
             prev_row = conn.execute(
                 """

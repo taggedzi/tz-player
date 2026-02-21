@@ -2,6 +2,7 @@
 
 Execution tracker derived from `SPEC.md`.
 `SPEC.md` remains the source of truth.
+Refer to `Agents.md` for operational guidelines.
 
 ## Status Legend
 
@@ -12,6 +13,42 @@ Execution tracker derived from `SPEC.md`.
 - `deferred`: intentionally postponed by project decision
 
 ## Active Backlog
+
+### T-050 UI Responsiveness Hardening (Post-Audit)
+- Spec Ref: Section `8` (reliability/performance), Section `5` (analysis services), `WF-06`
+- Status: `done`
+- Goal:
+  - Eliminate event-loop stalls and reduce UI lag caused by blocking/contended analysis, cache, and plugin execution paths.
+- Scope:
+  - Separate CPU-heavy analysis execution from general IO executor traffic.
+  - Reduce high-frequency SQLite write pressure from per-sample cache reads.
+  - Move plugin discovery/load off startup-critical UI path.
+  - Add guardrails and tests around non-blocking expectations.
+- Non-goals:
+  - Full visualizer architecture rewrite in one pass.
+  - Remote/network plugin loading.
+- Tasks:
+  - `T-050A` Split blocking executors by workload class. Status: `done`
+    - Add dedicated CPU-bound executor helper (`run_cpu_blocking`).
+    - Route heavy analysis functions (envelope/spectrum/beat/waveform-proxy) through CPU executor.
+    - Keep DB/file metadata calls on IO executor.
+  - `T-050B` Reduce cache read-path write contention. Status: `done`
+    - Throttle `last_accessed_at` writes for analysis cache reads (envelope/spectrum/beat/waveform-proxy stores).
+    - Preserve pruning semantics while avoiding per-poll write locks.
+  - `T-050C` Move plugin discovery/loading off startup hot path. Status: `done`
+    - Build visualizer registry via background worker.
+    - Keep deterministic fallback behavior if discovery/import fails.
+  - `T-050D` Reduce UI-thread render blocking risk. Status: `done`
+    - Add bounded/asynchronous frame-render handoff strategy for expensive plugins.
+    - Ensure keyboard input and focus navigation remain responsive under slow renderers.
+  - `T-050E` Verification and docs. Status: `done`
+    - Add/extend non-blocking regression tests for executor routing and cache-touch behavior.
+    - Document mitigation and residual risks.
+- Acceptance:
+  - No added synchronous heavy analysis work on Textual event loop.
+  - Playback polling no longer produces sustained DB write contention from cache reads.
+  - Startup remains functional with plugin discovery errors, without long UI stalls.
+  - Quality gates pass for touched areas.
 
 ### T-048 Particle Visualizer Expansion Pack (FFT/Beat/RMS Reactive)
 - Spec Ref: Section `6` (visualizer/plugin model), Section `8` (reliability/performance), `WF-06`

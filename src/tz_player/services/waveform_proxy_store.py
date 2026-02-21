@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import sqlite3
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -38,6 +39,8 @@ class SqliteWaveformProxyStore:
     def __init__(self, db_path: Path, *, analysis_version: int = 1) -> None:
         self._db_path = Path(db_path)
         self._analysis_version = analysis_version
+        self._access_touch_interval_s = 30.0
+        self._last_access_touch_s: dict[int, float] = {}
 
     async def initialize(self) -> None:
         await run_blocking(self._initialize_sync)
@@ -338,10 +341,17 @@ class SqliteWaveformProxyStore:
             if row is None:
                 return None
             entry_id = int(row["id"])
-            conn.execute(
-                "UPDATE analysis_cache_entries SET last_accessed_at = strftime('%s','now') WHERE id = ?",
-                (entry_id,),
-            )
+            now_s = time.monotonic()
+            last_touch_s = self._last_access_touch_s.get(entry_id)
+            if (
+                last_touch_s is None
+                or (now_s - last_touch_s) >= self._access_touch_interval_s
+            ):
+                conn.execute(
+                    "UPDATE analysis_cache_entries SET last_accessed_at = strftime('%s','now') WHERE id = ?",
+                    (entry_id,),
+                )
+                self._last_access_touch_s[entry_id] = now_s
             prev_row = conn.execute(
                 """
                 SELECT

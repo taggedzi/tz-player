@@ -97,3 +97,35 @@ def test_spectrum_store_prune_enforces_size_limit(tmp_path) -> None:
         )
     )
     assert pruned >= 2
+
+
+def test_spectrum_store_throttles_access_touch_writes(tmp_path) -> None:
+    db_path = tmp_path / "library.sqlite"
+    store = SqliteSpectrumStore(db_path)
+    _run(store.initialize())
+
+    track = tmp_path / "song.mp3"
+    _touch(track, b"abcdef")
+    params = SpectrumParams(band_count=4, hop_ms=40)
+    _run(
+        store.upsert_spectrum(
+            track,
+            duration_ms=1000,
+            params=params,
+            frames=[(0, bytes([1, 2, 3, 4]))],
+        )
+    )
+
+    assert _run(store.get_frame_at(track, position_ms=0, params=params)) is not None
+    touched_once = dict(store._last_access_touch_s)  # noqa: SLF001
+    assert len(touched_once) == 1
+
+    assert _run(store.get_frame_at(track, position_ms=20, params=params)) is not None
+    assert store._last_access_touch_s == touched_once  # noqa: SLF001
+
+    store._access_touch_interval_s = -1.0  # noqa: SLF001
+    assert _run(store.get_frame_at(track, position_ms=40, params=params)) is not None
+    assert len(store._last_access_touch_s) == 1  # noqa: SLF001
+    assert next(iter(store._last_access_touch_s.values())) > next(
+        iter(touched_once.values())
+    )  # noqa: SLF001

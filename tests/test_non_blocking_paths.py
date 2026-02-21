@@ -11,7 +11,7 @@ import pytest
 import tz_player.services.metadata_service as metadata_service_module
 import tz_player.ui.playlist_pane as playlist_pane_module
 from tz_player.ui.playlist_pane import PlaylistPane
-from tz_player.utils.async_utils import run_blocking
+from tz_player.utils.async_utils import run_blocking, run_cpu_blocking
 
 
 def _run(coro):
@@ -47,6 +47,11 @@ def test_metadata_safe_stat_uses_run_blocking(monkeypatch, tmp_path) -> None:
 def test_run_blocking_rejects_non_callable() -> None:
     with pytest.raises(TypeError, match="func must be callable"):
         _run(run_blocking(None))  # type: ignore[arg-type]
+
+
+def test_run_cpu_blocking_rejects_non_callable() -> None:
+    with pytest.raises(TypeError, match="func must be callable"):
+        _run(run_cpu_blocking(None))  # type: ignore[arg-type]
 
 
 def test_add_folder_scans_via_run_blocking(monkeypatch, tmp_path) -> None:
@@ -127,3 +132,104 @@ def test_advanced_visualizer_modules_avoid_blocking_imports() -> None:
                 assert root_name not in forbidden_roots, (
                     f"{module.name} imports forbidden module '{node.module}'"
                 )
+
+
+def test_app_visualizer_registry_build_uses_run_blocking() -> None:
+    root = Path(__file__).resolve().parents[1]
+    module = root / "src/tz_player/app.py"
+    parsed = ast.parse(module.read_text(encoding="utf-8"))
+    method = _find_method(
+        parsed, class_name="TzPlayerApp", method_name="_start_visualizer"
+    )
+
+    found = False
+    for node in ast.walk(method):
+        if not isinstance(node, ast.Call):
+            continue
+        if not isinstance(node.func, ast.Name) or node.func.id != "run_blocking":
+            continue
+        if not node.args:
+            continue
+        first = node.args[0]
+        if not isinstance(first, ast.Attribute):
+            continue
+        if not isinstance(first.value, ast.Name):
+            continue
+        if first.value.id == "VisualizerRegistry" and first.attr == "built_in":
+            found = True
+            break
+
+    assert found, (
+        "Expected _start_visualizer to call run_blocking(VisualizerRegistry.built_in, ...)"
+    )
+
+
+def test_app_visualizer_timer_uses_render_request_callback() -> None:
+    root = Path(__file__).resolve().parents[1]
+    module = root / "src/tz_player/app.py"
+    parsed = ast.parse(module.read_text(encoding="utf-8"))
+    method = _find_method(
+        parsed, class_name="TzPlayerApp", method_name="_start_visualizer"
+    )
+
+    found = False
+    for node in ast.walk(method):
+        if not isinstance(node, ast.Call):
+            continue
+        if not isinstance(node.func, ast.Attribute) or node.func.attr != "set_interval":
+            continue
+        if len(node.args) < 2:
+            continue
+        callback = node.args[1]
+        if (
+            isinstance(callback, ast.Attribute)
+            and isinstance(callback.value, ast.Name)
+            and callback.value.id == "self"
+            and callback.attr == "_request_visualizer_render"
+        ):
+            found = True
+            break
+
+    assert found, (
+        "Expected visualizer timer callback to be self._request_visualizer_render"
+    )
+
+
+def test_app_visualizer_render_uses_run_cpu_blocking() -> None:
+    root = Path(__file__).resolve().parents[1]
+    module = root / "src/tz_player/app.py"
+    parsed = ast.parse(module.read_text(encoding="utf-8"))
+    method = _find_method(
+        parsed,
+        class_name="TzPlayerApp",
+        method_name="_render_visualizer_frame_async",
+    )
+
+    found = False
+    for node in ast.walk(method):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "run_cpu_blocking"
+        ):
+            found = True
+            break
+
+    assert found, (
+        "Expected _render_visualizer_frame_async to offload render via run_cpu_blocking"
+    )
+
+
+def _find_method(
+    module: ast.Module, *, class_name: str, method_name: str
+) -> ast.AsyncFunctionDef | ast.FunctionDef:
+    for node in module.body:
+        if not isinstance(node, ast.ClassDef) or node.name != class_name:
+            continue
+        for child in node.body:
+            if (
+                isinstance(child, (ast.AsyncFunctionDef, ast.FunctionDef))
+                and child.name == method_name
+            ):
+                return child
+    raise AssertionError(f"Method {class_name}.{method_name} not found")

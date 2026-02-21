@@ -7,7 +7,7 @@ This document maps the visualizer workflow across app startup, registry/host set
 - Included:
   - CLI/runtime visualizer configuration (`--visualizer-fps`, `--visualizer-plugin-path`, `--visualizer-plugin-security`, `--visualizer-plugin-runtime`)
   - Startup initialization (`_start_visualizer`)
-  - Per-frame rendering (`_render_visualizer_frame`)
+  - Per-frame rendering request + async handoff (`_request_visualizer_render`, `_render_visualizer_frame_async`)
   - Runtime plugin switching (`action_cycle_visualizer`, key `z`)
   - Host fallback/throttling behavior
   - Shutdown path (`_stop_visualizer`)
@@ -45,7 +45,7 @@ Flow:
 1. Build registry:
 - Always include default drop-in directory (`<user_config_dir>/visualizers/plugins`)
 - Add persisted/CLI-configured plugin paths after default path
-- Call `VisualizerRegistry.built_in(local_plugin_paths=..., plugin_security_mode=..., plugin_runtime_mode=...)`
+- Call `VisualizerRegistry.built_in(...)` through `run_blocking(...)` so plugin discovery/import does not execute on the Textual event loop
 - `src/tz_player/app.py:887`
 
 2. Build host:
@@ -61,8 +61,8 @@ Flow:
 - `src/tz_player/app.py:901`
 
 4. Start rendering:
-- Render one immediate frame
-- Install repeating timer with `set_interval(1.0 / target_fps, self._render_visualizer_frame)`
+- Request one immediate frame render
+- Install repeating timer with `set_interval(1.0 / target_fps, self._request_visualizer_render)`
 - `src/tz_player/app.py:906`
 
 ## 4. Registry Discovery and Plugin Contract
@@ -102,11 +102,15 @@ Plugin interface contract:
 - `on_activate(context)`, `on_deactivate()`, `render(frame) -> str`
 - `src/tz_player/visualizers/base.py:46`
 
-## 5. Per-Frame Render Path (`_render_visualizer_frame`)
+## 5. Per-Frame Render Path (`_request_visualizer_render` + `_render_visualizer_frame_async`)
 
 Timer callback path:
 
-1. Build `VisualizerFrameInput` from live app/player state:
+1. Timer requests render:
+- `_request_visualizer_render` coalesces requests while a render is in-flight.
+- If a render task is already running, one pending render flag is retained.
+
+2. Async render task builds `VisualizerFrameInput` from live app/player state:
 - Layout size (`pane.size.width/height`)
 - Playback transport state (`status`, `position`, `duration`, `volume`, `speed`, repeat/shuffle)
 - Current track metadata (`path`, `title`, `artist`, `album`)
@@ -114,19 +118,18 @@ Timer callback path:
 - Spectrum snapshot (`spectrum_bands`, `spectrum_source`, `spectrum_status`)
 - `src/tz_player/app.py:929`
 
-2. Call host:
-- `output = self.visualizer_host.render_frame(frame, context)`
-- `src/tz_player/app.py:957`
+3. Call host off-loop:
+- Render call is executed via `run_cpu_blocking(self._render_visualizer_frame_sync, ...)`
+- Host `render_frame(...)` and notice consumption occur under a host lock to avoid activation/shutdown races.
 
-3. Surface host notices and diagnostics:
+4. Surface host notices and diagnostics:
 - Pull one-shot host notice (`consume_notice()`)
 - Merge with audio-level notice (for example ffmpeg unavailable fallback)
 - Update visualizer pane using ANSI-capable text rendering
-- `src/tz_player/app.py:962`
 
-4. Safety net:
+5. Safety net:
 - If render call itself raises at app level, pane shows `Visualizer unavailable`
-- `src/tz_player/app.py:958`
+- Render task finalization clears in-flight state and immediately runs one pending render if queued.
 
 ## 6. Runtime Switching (`z` / `action_cycle_visualizer`)
 
@@ -206,7 +209,8 @@ App then forwards these values into each `VisualizerFrameInput`.
 On app unmount:
 
 1. Stop visualizer timer
-2. Shutdown host (best-effort plugin deactivation)
+2. Cancel any in-flight visualizer render task
+3. Shutdown host (best-effort plugin deactivation) via off-loop worker call
 3. Clear host reference
 
 - `src/tz_player/app.py:421`

@@ -19,6 +19,7 @@ import logging
 import os
 import sqlite3
 import sys
+import threading
 import time
 from dataclasses import replace
 from pathlib import Path
@@ -76,7 +77,7 @@ from .ui.actions_menu import ActionsMenuDismissed, ActionsMenuPopup, ActionsMenu
 from .ui.modals.error import ErrorModal
 from .ui.playlist_pane import PlaylistPane
 from .ui.status_pane import StatusPane
-from .utils.async_utils import run_blocking
+from .utils.async_utils import run_blocking, run_cpu_blocking
 from .version import build_help_epilog
 from .visualizers import (
     VisualizerContext,
@@ -362,6 +363,9 @@ class TzPlayerApp(App):
         self.visualizer_registry: VisualizerRegistry | None = None
         self.visualizer_host: VisualizerHost | None = None
         self._visualizer_timer: Timer | None = None
+        self._visualizer_host_lock = threading.Lock()
+        self._visualizer_render_task: asyncio.Task[None] | None = None
+        self._visualizer_render_pending = False
         self.startup_failed = False
 
     def compose(self) -> ComposeResult:
@@ -568,7 +572,7 @@ class TzPlayerApp(App):
 
     async def on_unmount(self) -> None:
         """Best-effort shutdown for timers, tasks, persisted state, and backend."""
-        self._stop_visualizer()
+        await self._stop_visualizer()
         if self._state_save_task is not None:
             self._state_save_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -797,7 +801,12 @@ class TzPlayerApp(App):
             unicode_enabled=True,
         )
         try:
-            active = self.visualizer_host.activate(next_id, context)
+            active = await run_blocking(
+                self._activate_visualizer_sync,
+                self.visualizer_host,
+                next_id,
+                context,
+            )
         except Exception as exc:
             logger.exception("Failed to switch visualizer to '%s': %s", next_id, exc)
             await self.push_screen(
@@ -810,7 +819,7 @@ class TzPlayerApp(App):
             return
         self.state = replace(self.state, visualizer_id=active)
         await run_blocking(save_state, state_path(), self.state)
-        self._render_visualizer_frame()
+        self._request_visualizer_render()
 
     async def handle_playlist_cleared(self) -> None:
         self._cancel_next_track_prewarm()
@@ -921,7 +930,7 @@ class TzPlayerApp(App):
         try:
             if await self.spectrum_store.has_spectrum(path, params=params):
                 return
-            result = await run_blocking(
+            result = await run_cpu_blocking(
                 analyze_track_spectrum,
                 path,
                 band_count=params.band_count,
@@ -963,7 +972,7 @@ class TzPlayerApp(App):
         try:
             if await self.beat_store.has_beats(path, params=params):
                 return
-            result = await run_blocking(
+            result = await run_cpu_blocking(
                 analyze_track_beats,
                 path,
                 hop_ms=params.hop_ms,
@@ -1011,7 +1020,7 @@ class TzPlayerApp(App):
         try:
             if await self.waveform_proxy_store.has_waveform_proxy(path, params=params):
                 return
-            result = await run_blocking(
+            result = await run_cpu_blocking(
                 analyze_track_waveform_proxy,
                 path,
                 hop_ms=params.hop_ms,
@@ -1187,7 +1196,7 @@ class TzPlayerApp(App):
                 self._update_audio_level_notice(str(path))
                 return
             logger.debug("Envelope cache miss for %s; starting analysis.", path)
-            result = await run_blocking(analyze_track_envelope, path)
+            result = await run_cpu_blocking(analyze_track_envelope, path)
             if result is None or not result.points:
                 if requires_ffmpeg_for_envelope(path) and not ffmpeg_available():
                     path_key = str(path)
@@ -1278,7 +1287,8 @@ class TzPlayerApp(App):
         configured_paths = list(self.state.visualizer_plugin_paths)
         default_plugin_path = str(visualizer_plugin_dir())
         local_plugin_paths = [default_plugin_path, *configured_paths]
-        self.visualizer_registry = VisualizerRegistry.built_in(
+        self.visualizer_registry = await run_blocking(
+            VisualizerRegistry.built_in,
             local_plugin_paths=local_plugin_paths,
             plugin_security_mode=self.state.visualizer_plugin_security_mode,
             plugin_runtime_mode=self.state.visualizer_plugin_runtime_mode,
@@ -1294,27 +1304,52 @@ class TzPlayerApp(App):
             unicode_enabled=True,
         )
         requested = self.state.visualizer_id or self.visualizer_registry.default_id
-        active = self.visualizer_host.activate(requested, context)
+        active = await run_blocking(
+            self._activate_visualizer_sync,
+            self.visualizer_host,
+            requested,
+            context,
+        )
         if self.state.visualizer_id != active:
             self.state = replace(self.state, visualizer_id=active)
             await run_blocking(save_state, state_path(), self.state)
-        self._render_visualizer_frame()
+        self._request_visualizer_render()
         interval = 1.0 / self.visualizer_host.target_fps
         self._visualizer_timer = self.set_interval(
-            interval, self._render_visualizer_frame
+            interval, self._request_visualizer_render
         )
 
-    def _stop_visualizer(self) -> None:
+    async def _stop_visualizer(self) -> None:
         if self._visualizer_timer is not None:
             self._visualizer_timer.stop()
             self._visualizer_timer = None
-        if self.visualizer_host is not None:
-            self.visualizer_host.shutdown()
-            self.visualizer_host = None
+        self._visualizer_render_pending = False
+        if self._visualizer_render_task is not None:
+            self._visualizer_render_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._visualizer_render_task
+            self._visualizer_render_task = None
+        host = self.visualizer_host
+        self.visualizer_host = None
+        if host is not None:
+            await run_blocking(self._shutdown_visualizer_host_sync, host)
 
-    def _render_visualizer_frame(self) -> None:
-        """Render one visualizer frame from current player and track state."""
+    def _request_visualizer_render(self) -> None:
         if self.visualizer_host is None:
+            return
+        task = self._visualizer_render_task
+        if task is not None and not task.done():
+            self._visualizer_render_pending = True
+            return
+        self._visualizer_render_pending = False
+        self._visualizer_render_task = asyncio.create_task(
+            self._render_visualizer_frame_async()
+        )
+
+    async def _render_visualizer_frame_async(self) -> None:
+        """Render one visualizer frame on a worker thread, then update the pane."""
+        host = self.visualizer_host
+        if host is None:
             return
         pane = self.query_one("#visualizer-pane", Static)
         context = VisualizerContext(
@@ -1322,7 +1357,7 @@ class TzPlayerApp(App):
             unicode_enabled=True,
         )
         frame = VisualizerFrameInput(
-            frame_index=self.visualizer_host.frame_index,
+            frame_index=host.frame_index,
             monotonic_s=time.monotonic(),
             width=max(1, pane.size.width),
             height=max(1, pane.size.height),
@@ -1364,12 +1399,20 @@ class TzPlayerApp(App):
             beat_status=self.player_state.beat_status,
         )
         try:
-            output = self.visualizer_host.render_frame(frame, context)
+            output, notice = await run_cpu_blocking(
+                self._render_visualizer_frame_sync,
+                host,
+                frame,
+                context,
+            )
         except Exception as exc:  # pragma: no cover - UI safety net
             logger.exception("Visualizer host render failed: %s", exc)
             pane.update("Visualizer unavailable")
+            output = None
+            notice = None
+        if output is None:
+            self._finalize_visualizer_render_task()
             return
-        notice = self.visualizer_host.consume_notice()
         if notice:
             self._set_runtime_notice(notice, ttl_s=8.0)
         audio_notice = self._audio_level_notice
@@ -1382,6 +1425,39 @@ class TzPlayerApp(App):
         else:
             render_text = output
         pane.update(Text.from_ansi(render_text))
+        self._finalize_visualizer_render_task()
+
+    def _finalize_visualizer_render_task(self) -> None:
+        self._visualizer_render_task = None
+        if self._visualizer_render_pending and self.visualizer_host is not None:
+            self._visualizer_render_pending = False
+            self._visualizer_render_task = asyncio.create_task(
+                self._render_visualizer_frame_async()
+            )
+
+    def _render_visualizer_frame_sync(
+        self,
+        host: VisualizerHost,
+        frame: VisualizerFrameInput,
+        context: VisualizerContext,
+    ) -> tuple[str, str | None]:
+        with self._visualizer_host_lock:
+            output = host.render_frame(frame, context)
+            notice = host.consume_notice()
+        return output, notice
+
+    def _activate_visualizer_sync(
+        self,
+        host: VisualizerHost,
+        plugin_id: str,
+        context: VisualizerContext,
+    ) -> str:
+        with self._visualizer_host_lock:
+            return host.activate(plugin_id, context)
+
+    def _shutdown_visualizer_host_sync(self, host: VisualizerHost) -> None:
+        with self._visualizer_host_lock:
+            host.shutdown()
 
     def _active_visualizer_requests_spectrum(self) -> bool:
         if self.visualizer_host is None:
