@@ -154,7 +154,7 @@ Please see `AGENTS.md` for more instructions.
     - Emit benchmark summaries to a local git-ignored directory (for example `.local/perf_results/`) with timestamp + git SHA metadata.
     - Add a small comparison utility/script that diff-compares two runs and highlights regressions/improvements by metric and threshold.
     - Keep output human-readable and scriptable (JSON + concise text summary).
-  - `T-052I` Documentation + runbook for perf workflow. Status: `todo`
+  - `T-052I` Documentation + runbook for perf workflow. Status: `done`
     - Document setup for local perf corpus (`docs/perf-media.md`), recommended machine conditions, and repeatable run steps.
     - Add guidance for:
       - cold vs warm cache runs

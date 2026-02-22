@@ -49,6 +49,7 @@ TZ_PLAYER_RUN_PERF=1 .ubuntu-venv/bin/python -m pytest tests/test_performance_op
   - warm cache run
   - rapid next/previous track switching
   - visualizer-heavy playback (for example particle visualizers)
+- For the broader opt-in benchmark/artifact workflow, see `docs/perf-benchmarks.md`.
 
 ## Naming / Organization (Optional)
 
