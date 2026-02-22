@@ -59,6 +59,7 @@ ADVANCED_VIZ_FRAME_COUNT = 120
 ADVANCED_VIZ_PANE_WIDTH = 160
 ADVANCED_VIZ_PANE_HEIGHT = 50
 PROFILE_MATRIX_FRAME_COUNT = 80
+VISUALIZER_BENCH_ARTIFACT_FRAME_COUNT = 40
 PROFILE_INTERACTION_BUDGET_S = 0.12
 PROFILE_RENDER_BUDGETS = {
     "safe": {"fps": 10, "median_s": 0.050, "max_s": 0.180, "max_throttle_rate": 0.01},
@@ -94,6 +95,26 @@ ADVANCED_VIZ_IDS = (
     "viz.waveform.proxy",
     "viz.waveform.neon",
 )
+
+VISUALIZER_TIER_MAP = {
+    "viz.spectrum.radial": "cheap",
+    "viz.waveform.proxy": "cheap",
+    "viz.waveform.neon": "cheap",
+    "viz.typography.glitch": "medium",
+    "viz.spectrogram.waterfall": "medium",
+    "viz.spectrum.terrain": "medium",
+    "viz.reactor.particles": "medium",
+    "viz.particle.constellation": "medium",
+    "viz.particle.rain_reactive": "medium",
+    "viz.particle.ember_field": "medium",
+    "viz.particle.gravity_well": "heavy",
+    "viz.particle.shockwave_rings": "heavy",
+    "viz.particle.orbital_system": "heavy",
+    "viz.particle.magnetic_grid": "heavy",
+    "viz.particle.audio_tornado": "heavy",
+    "viz.particle.data_core_frag": "heavy",
+    "viz.particle.plasma_stream": "heavy",
+}
 
 
 class FakeAppDirs:
@@ -384,6 +405,125 @@ def test_advanced_visualizer_large_pane_render_budget() -> None:
                 f"{profile}/{plugin_id} throttle rate {throttle_rate:.3f} exceeded "
                 f"budget {float(budget['max_throttle_rate']):.3f}"
             )
+
+
+def test_advanced_visualizer_matrix_benchmark_artifact(tmp_path) -> None:
+    registry = VisualizerRegistry.built_in()
+    spectrum = bytes(((idx * 9) % 256) for idx in range(48))
+    context = VisualizerContext(ansi_enabled=False, unicode_enabled=True)
+    scenarios: list[PerfScenarioResult] = []
+
+    for profile, budget in PROFILE_RENDER_BUDGETS.items():
+        profile_metrics = {}
+        counters: dict[str, int | float] = {
+            "frame_count": VISUALIZER_BENCH_ARTIFACT_FRAME_COUNT
+        }
+        tier_counts = {"cheap": 0, "medium": 0, "heavy": 0}
+        for plugin_id in ADVANCED_VIZ_IDS:
+            host = VisualizerHost(registry, target_fps=int(budget["fps"]))
+            host.activate(plugin_id, context)
+            samples_ms: list[float] = []
+            throttled = 0
+            for frame_idx in range(VISUALIZER_BENCH_ARTIFACT_FRAME_COUNT):
+                frame = VisualizerFrameInput(
+                    frame_index=frame_idx,
+                    monotonic_s=frame_idx / 60.0,
+                    width=ADVANCED_VIZ_PANE_WIDTH,
+                    height=ADVANCED_VIZ_PANE_HEIGHT,
+                    status="playing",
+                    position_s=frame_idx * 0.04,
+                    duration_s=300.0,
+                    volume=72.0,
+                    speed=1.0,
+                    repeat_mode="OFF",
+                    shuffle=False,
+                    track_id=1,
+                    track_path="/perf/advanced.mp3",
+                    title="Perf Signal",
+                    artist="Bench",
+                    album="Suite",
+                    level_left=0.65,
+                    level_right=0.58,
+                    spectrum_bands=spectrum,
+                    spectrum_source="cache",
+                    spectrum_status="ready",
+                    beat_is_onset=(frame_idx % 24 == 0),
+                    beat_strength=0.8 if frame_idx % 24 == 0 else 0.2,
+                    beat_bpm=126.0,
+                    beat_source="cache",
+                    beat_status="ready",
+                )
+                begin = time.perf_counter()
+                output = host.render_frame(frame, context)
+                elapsed_ms = (time.perf_counter() - begin) * 1000.0
+                if output == "Visualizer throttled":
+                    throttled += 1
+                    continue
+                samples_ms.append(elapsed_ms)
+                assert output
+            host.shutdown()
+
+            assert samples_ms
+            plugin_key = plugin_id.replace(".", "_")
+            profile_metrics[f"{plugin_key}_render_ms"] = summarize_samples(
+                samples_ms, unit="ms"
+            )
+            counters[f"{plugin_key}_throttled_frames"] = throttled
+            counters[f"{plugin_key}_throttle_rate"] = round(
+                throttled / VISUALIZER_BENCH_ARTIFACT_FRAME_COUNT, 4
+            )
+            tier = VISUALIZER_TIER_MAP.get(plugin_id, "unknown")
+            counters[f"{plugin_key}_tier"] = tier
+            if tier in tier_counts:
+                tier_counts[tier] += 1
+
+        scenarios.append(
+            PerfScenarioResult(
+                scenario_id=f"visualizer_matrix_render_{profile}",
+                category="visualizer",
+                status="pass",
+                elapsed_s=round(
+                    sum(
+                        metric.mean_value * metric.count
+                        for metric in profile_metrics.values()
+                    )
+                    / 1000.0,
+                    6,
+                ),
+                metrics=profile_metrics,
+                counters={
+                    **counters,
+                    **{f"tier_count_{k}": v for k, v in tier_counts.items()},
+                },
+                metadata={
+                    "profile": profile,
+                    "target_fps": int(budget["fps"]),
+                    "plugin_ids": list(ADVANCED_VIZ_IDS),
+                    "plugin_tiers": {
+                        plugin_id: VISUALIZER_TIER_MAP.get(plugin_id, "unknown")
+                        for plugin_id in ADVANCED_VIZ_IDS
+                    },
+                },
+            )
+        )
+
+    run = PerfRunResult(
+        run_id=f"visualizer-matrix-{uuid.uuid4().hex[:8]}",
+        created_at=utc_now_iso(),
+        app_version=None,
+        git_sha=None,
+        machine={"runner": "pytest-opt-in"},
+        config={
+            "scenario": "advanced_visualizer_matrix_benchmark_artifact",
+            "frame_count": VISUALIZER_BENCH_ARTIFACT_FRAME_COUNT,
+            "pane_width": ADVANCED_VIZ_PANE_WIDTH,
+            "pane_height": ADVANCED_VIZ_PANE_HEIGHT,
+        },
+        scenarios=scenarios,
+    )
+    artifact_path = write_perf_run_artifact(run, results_dir=tmp_path / "perf_results")
+    assert artifact_path.exists()
+    assert len(scenarios) == len(PROFILE_RENDER_BUDGETS)
 
 
 def test_local_perf_media_corpus_manifest_smoke() -> None:

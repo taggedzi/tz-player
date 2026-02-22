@@ -138,7 +138,7 @@ Please see `AGENTS.md` for more instructions.
       - selected/play action -> spectrum/beat/waveform cache ready (or preload hit)
       - warm-cache replay latencies vs cold-cache latencies
     - Include long-track cases to expose analysis cap/truncation behavior and preload timing.
-  - `T-052E` Visualizer performance matrix benchmark. Status: `todo`
+  - `T-052E` Visualizer performance matrix benchmark. Status: `in_progress`
     - Expand current advanced visualizer perf checks to collect richer metrics (median/p95/max, overrun rate, runtime FPS backoff events).
     - Partition matrix into tiers (`cheap`, `medium`, `heavy`) so regressions are attributable and runtime stays bounded.
     - Include at least one beat-reactive and one waveform-proxy visualizer path per run.
