@@ -6,6 +6,7 @@ from tz-player modules without scraping human-readable log message strings.
 
 from __future__ import annotations
 
+import asyncio
 import gc
 import inspect
 import logging
@@ -182,6 +183,54 @@ def event_latency_ms_since(start_monotonic_s: float, event: CapturedPerfEvent) -
     return max(
         0.0, (float(event.captured_monotonic_s) - float(start_monotonic_s)) * 1000.0
     )
+
+
+def find_captured_event(
+    events: list[CapturedPerfEvent],
+    *,
+    event_name: str | None = None,
+    context_equals: dict[str, object] | None = None,
+) -> CapturedPerfEvent | None:
+    """Return the first captured event matching event name and context fields."""
+    for event in events:
+        if event_name is not None and event.event != event_name:
+            continue
+        if context_equals:
+            matched = True
+            for key, value in context_equals.items():
+                if event.context.get(key) != value:
+                    matched = False
+                    break
+            if not matched:
+                continue
+        return event
+    return None
+
+
+async def wait_for_captured_event(
+    handler: PerfEventCaptureHandler,
+    *,
+    event_name: str,
+    timeout_s: float = 2.0,
+    poll_interval_s: float = 0.01,
+    context_equals: dict[str, object] | None = None,
+) -> CapturedPerfEvent:
+    """Wait for a matching captured event from a capture handler."""
+    deadline = time.monotonic() + max(0.0, float(timeout_s))
+    interval = max(0.001, float(poll_interval_s))
+    while time.monotonic() < deadline:
+        event = find_captured_event(
+            handler.snapshot(),
+            event_name=event_name,
+            context_equals=context_equals,
+        )
+        if event is not None:
+            return event
+        await asyncio.sleep(interval)
+    details = f"event={event_name}"
+    if context_equals:
+        details = f"{details} context={context_equals}"
+    raise TimeoutError(f"Timed out waiting for captured perf {details}")
 
 
 def capture_process_resource_snapshot(*, label: str) -> ProcessResourceSnapshot:

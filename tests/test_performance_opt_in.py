@@ -34,6 +34,7 @@ from tz_player.perf_observability import (
     diff_process_resource_snapshots,
     event_latency_ms_since,
     probe_method_calls,
+    wait_for_captured_event,
 )
 from tz_player.services.audio_analysis_bundle import analyze_track_analysis_bundle
 from tz_player.services.audio_envelope_analysis import (
@@ -736,22 +737,6 @@ class _DelayedEnvelopeProvider:
         _ = track_path
 
 
-async def _wait_for_analysis_preload_event(
-    handler, *, track_path: str, timeout_s: float = 2.0
-):
-    deadline = time.monotonic() + timeout_s
-    while time.monotonic() < deadline:
-        for event in handler.snapshot():
-            if event.event != "analysis_preload_completed":
-                continue
-            if event.context.get("track_path") == track_path:
-                return event
-        await asyncio.sleep(0.01)
-    raise AssertionError(
-        f"Timed out waiting for analysis_preload_completed for {track_path}"
-    )
-
-
 def test_player_service_track_switch_and_preload_benchmark_smoke(tmp_path) -> None:
     media_dir = resolve_perf_media_dir()
     skip_reason = perf_media_skip_reason(media_dir)
@@ -824,8 +809,11 @@ def test_player_service_track_switch_and_preload_benchmark_smoke(tmp_path) -> No
                         play_item_latencies_ms.append(
                             (time.perf_counter() - start) * 1000.0
                         )
-                        event = await _wait_for_analysis_preload_event(
-                            capture, track_path=str(path)
+                        event = await wait_for_captured_event(
+                            capture,
+                            event_name="analysis_preload_completed",
+                            context_equals={"track_path": str(path)},
+                            timeout_s=2.0,
                         )
                         preload_event_latencies_ms.append(
                             event_latency_ms_since(start, event)

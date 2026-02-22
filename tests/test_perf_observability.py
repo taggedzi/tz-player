@@ -10,7 +10,9 @@ from tz_player.perf_observability import (
     diff_process_resource_snapshots,
     event_latency_ms_since,
     filter_events,
+    find_captured_event,
     probe_method_calls,
+    wait_for_captured_event,
 )
 
 
@@ -161,3 +163,73 @@ def test_event_latency_ms_since_uses_monotonic_time() -> None:
         assert latency_ms < 1000.0
     finally:
         root.setLevel(prior_level)
+
+
+def test_find_captured_event_matches_context_fields() -> None:
+    root = logging.getLogger()
+    prior_level = root.level
+    root.setLevel(logging.INFO)
+    try:
+        with capture_perf_events(logger=root) as handler:
+            logger = logging.getLogger("tz_player.test_perf")
+            logger.info(
+                "Analysis preload completed",
+                extra={
+                    "event": "analysis_preload_completed",
+                    "track_path": "/tmp/a.mp3",
+                    "elapsed_s": 0.1,
+                },
+            )
+            logger.info(
+                "Analysis preload completed",
+                extra={
+                    "event": "analysis_preload_completed",
+                    "track_path": "/tmp/b.mp3",
+                    "elapsed_s": 0.2,
+                },
+            )
+            events = handler.snapshot()
+        match = find_captured_event(
+            events,
+            event_name="analysis_preload_completed",
+            context_equals={"track_path": "/tmp/b.mp3"},
+        )
+        assert match is not None
+        assert match.context["track_path"] == "/tmp/b.mp3"
+    finally:
+        root.setLevel(prior_level)
+
+
+def test_wait_for_captured_event_returns_matching_event() -> None:
+    import asyncio
+
+    async def run() -> None:
+        root = logging.getLogger()
+        prior_level = root.level
+        root.setLevel(logging.INFO)
+        try:
+            with capture_perf_events(logger=root) as handler:
+
+                async def emit_later() -> None:
+                    await asyncio.sleep(0.01)
+                    logging.getLogger("tz_player.test_perf").info(
+                        "Analysis preload completed",
+                        extra={
+                            "event": "analysis_preload_completed",
+                            "track_path": "/tmp/c.mp3",
+                        },
+                    )
+
+                task = asyncio.create_task(emit_later())
+                event = await wait_for_captured_event(
+                    handler,
+                    event_name="analysis_preload_completed",
+                    context_equals={"track_path": "/tmp/c.mp3"},
+                    timeout_s=0.5,
+                )
+                await task
+            assert event.context["track_path"] == "/tmp/c.mp3"
+        finally:
+            root.setLevel(prior_level)
+
+    asyncio.run(run())
