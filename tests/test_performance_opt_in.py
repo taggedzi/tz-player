@@ -186,6 +186,19 @@ def _perf_results_dir(tmp_path: Path) -> Path:
     return tmp_path / "perf_results"
 
 
+def _active_visualizer_id(app: TzPlayerApp) -> str | None:
+    """Best-effort active visualizer id across app implementation revisions."""
+    host = getattr(app, "visualizer_host", None)
+    host_active = getattr(host, "active_id", None)
+    if isinstance(host_active, str) and host_active:
+        return host_active
+    state = getattr(app, "state", None)
+    state_active = getattr(state, "visualizer_id", None)
+    if isinstance(state_active, str) and state_active:
+        return state_active
+    return None
+
+
 def _seed_large_playlist(db_path: Path, playlist_id: int, total: int) -> None:
     """Insert a large synthetic playlist directly for scale-oriented perf checks."""
     batch_tracks: list[tuple[int, str, str]] = []
@@ -1361,7 +1374,7 @@ def test_controls_latency_jitter_under_background_load_benchmark(
                             ),
                             **jitter_counters,
                         },
-                        metadata={"visualizer_id": app._active_visualizer_id},
+                        metadata={"visualizer_id": _active_visualizer_id(app)},
                     )
                 ],
             )
@@ -1471,7 +1484,7 @@ def test_hidden_hotspot_idle_and_control_burst_call_probe_artifact(
                         counters=counters,
                         metadata={
                             "top_cumulative_methods": metadata_top,
-                            "visualizer_id": app._active_visualizer_id,
+                            "visualizer_id": _active_visualizer_id(app),
                         },
                     )
                 ],
@@ -1589,7 +1602,7 @@ def test_hidden_hotspot_state_save_and_logging_overhead_artifact(
                         },
                         metadata={
                             "top_cumulative_methods": metadata_top,
-                            "visualizer_id": app._active_visualizer_id,
+                            "visualizer_id": _active_visualizer_id(app),
                         },
                     )
                 ],
@@ -1832,7 +1845,7 @@ def test_resource_usage_phase_trend_artifact(tmp_path, monkeypatch) -> None:
                         metadata={
                             "snapshots": metadata_snapshots,
                             "deltas": metadata_deltas,
-                            "visualizer_id": app._active_visualizer_id,
+                            "visualizer_id": _active_visualizer_id(app),
                         },
                     )
                 ],
