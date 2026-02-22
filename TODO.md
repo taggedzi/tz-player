@@ -74,6 +74,118 @@ Please see `AGENTS.md` for more instructions.
   - `.ubuntu-venv/bin/python -m mypy src`
   - `.ubuntu-venv/bin/python -m pytest`
 
+### T-052 Permanent Opt-In Performance Benchmark + Profiling Harness
+- Spec Ref: Section `5` (analysis/service model), Section `6` (visualizer/plugin contract), Section `7` (persistence), Section `8` (non-blocking reliability/performance), `WF-02`, `WF-06`, `WF-07`
+- ADR Alignment:
+  - `ADR-0004` (audio-level service + observability/source semantics)
+  - `ADR-0006` (lazy scalar/spectrum cache architecture)
+  - `ADR-0007` (search/playlist DB performance + observability)
+  - `ADR-0008` (lazy beat cache + perf/observability expansion)
+  - `ADR-0009` (defer live waveform; define perf/observability budgets for high-FPS workloads)
+- Status: `in_progress`
+- Goal:
+  - Add a permanent, opt-in performance testing and benchmark workflow that can identify where time is spent (track switching, analysis cache loading, visualizer rendering, controls, and DB operations) and support apples-to-apples comparisons before/after optimizations.
+- Why now (current evidence):
+  - Runtime logs already surface `visualizer_frame_loop_overrun`, `playlist_store_slow_query`, analysis cache miss scheduling, and analysis preload/sampling stats.
+  - Recent in-memory analysis-cache work added memory-vs-DB sampling observability; benchmark coverage should now formalize these metrics into repeatable tests.
+- Scope:
+  - Extend existing opt-in perf tests (`TZ_PLAYER_RUN_PERF=1`) instead of creating a separate perf framework.
+  - Add benchmark scenarios that run against a local media corpus (for example `.local/perf_media/`) and synthetic DB stress data.
+  - Capture both wall-clock durations and structured event metrics (cache hit rates, preload frame counts, frame overruns, slow queries).
+  - Produce stable comparison artifacts (JSON/CSV summary) for before/after branch benchmarking.
+- Non-goals:
+  - Turning perf tests into required CI gates for all contributors.
+  - Benchmarking network/remote features (out of v1 scope).
+  - Replacing runtime logs with a heavyweight tracing dependency.
+- Success Criteria / Acceptance:
+  - Developers can run a documented opt-in command and obtain a benchmark summary covering:
+    - track switch latency (`play/next` to first usable visualizer/level data and cache-ready transitions)
+    - analysis preload/cache load timings and frame counts by channel (`spectrum`, `beat`, `waveform_proxy`, `envelope`)
+    - visualizer render performance across a representative plugin matrix (median/p95/max frame time, overrun rate)
+    - control responsiveness (volume/seek/play/pause/next interactions)
+    - playlist DB interactions (window fetch, search, random, item-id listing) including mode-aware search stats
+  - Results are persisted in a local artifact format suitable for branch-to-branch comparison.
+  - Perf suite remains opt-in and skippable in normal CI/test runs.
+- Tasks:
+  - `T-052A` Benchmark scenario taxonomy + metric contract. Status: `done`
+    - Define canonical scenarios:
+      - cold-cache track play
+      - warm-cache track play
+      - rapid next/prev switching burst
+      - long-track analysis-on-demand
+      - visualizer matrix render loop
+      - controls interaction latency
+      - large-playlist DB query matrix (FTS/fallback-aware)
+    - Define per-scenario metrics and units (`ms`, `s`, hit rates, frame counts, overrun counts, p50/p95/max).
+    - Freeze a machine-readable result schema (JSON) for future comparisons.
+  - `T-052B` Instrumentation normalization + event capture hooks. Status: `todo`
+    - Standardize/expand structured perf events so tests can consume them deterministically (not just human log strings).
+    - Ensure event payloads expose timestamps/IDs needed to correlate:
+      - track switch start/end
+      - analysis preload start/end + frame counts
+      - cache miss scheduling + analysis completion
+      - visualizer frame overruns / effective runtime FPS
+      - DB slow-query events (`playlist_store_slow_query`, search mode)
+    - Keep instrumentation lightweight and disabled/low-cost outside perf runs.
+  - `T-052C` Local media corpus integration (opt-in). Status: `todo`
+    - Add perf-test configuration/env support for a local corpus path (default `.local/perf_media/` if present).
+    - Validate corpus presence/shape and skip with explicit reason when missing.
+    - Record corpus manifest details in benchmark output (track count, durations, formats) for reproducibility.
+  - `T-052D` Track-switch and analysis-cache benchmark scenarios. Status: `todo`
+    - Add opt-in perf tests/scripts that measure:
+      - selected/play action -> first fallback frame visible
+      - selected/play action -> `fallback -> envelope` transition
+      - selected/play action -> spectrum/beat/waveform cache ready (or preload hit)
+      - warm-cache replay latencies vs cold-cache latencies
+    - Include long-track cases to expose analysis cap/truncation behavior and preload timing.
+  - `T-052E` Visualizer performance matrix benchmark. Status: `todo`
+    - Expand current advanced visualizer perf checks to collect richer metrics (median/p95/max, overrun rate, runtime FPS backoff events).
+    - Partition matrix into tiers (`cheap`, `medium`, `heavy`) so regressions are attributable and runtime stays bounded.
+    - Include at least one beat-reactive and one waveform-proxy visualizer path per run.
+  - `T-052F` Controls and UI interaction benchmark coverage. Status: `todo`
+    - Add opt-in latency checks for representative control actions (`play/pause`, `next`, `seek`, `volume`, visualizer cycle).
+    - Measure while background analysis is active to catch event-loop starvation regressions.
+    - Report interaction jitter, not only median latency.
+  - `T-052G` DB performance benchmark expansion + correlation. Status: `todo`
+    - Keep/extend synthetic large-playlist tests in `tests/test_performance_opt_in.py` for fetch/search/list/random.
+    - Add scenario coverage for viewport-style repeated nearby window fetches and mixed search patterns.
+    - Correlate benchmark failures with slow-query events and operation/mode fields.
+  - `T-052H` Result artifact storage + comparison tooling. Status: `todo`
+    - Emit benchmark summaries to a local git-ignored directory (for example `.local/perf_results/`) with timestamp + git SHA metadata.
+    - Add a small comparison utility/script that diff-compares two runs and highlights regressions/improvements by metric and threshold.
+    - Keep output human-readable and scriptable (JSON + concise text summary).
+  - `T-052I` Documentation + runbook for perf workflow. Status: `todo`
+    - Document setup for local perf corpus (`docs/perf-media.md`), recommended machine conditions, and repeatable run steps.
+    - Add guidance for:
+      - cold vs warm cache runs
+      - branch comparison workflow
+      - interpreting common bottlenecks (visualizer overruns vs DB slow queries vs analysis cache misses)
+    - Link perf workflow from `docs/usage.md` and/or developer docs.
+  - `T-052J` Optional profile/deep-dive mode (non-default). Status: `todo`
+    - Add a second opt-in mode for deeper profiling (`cProfile`/`pyinstrument`-style local runs or targeted timers) for diagnosing hotspots after a benchmark regression is found.
+    - Keep this separate from standard perf benchmarks to preserve run-time stability and comparability.
+  - `T-052K` Broad hidden-hotspot sweep coverage (non-obvious paths). Status: `todo`
+    - Add opt-in benchmark/probe scenarios for code paths that are easy to overlook but can accumulate meaningful cost under frequent polling/UI updates:
+      - state serialization/save-state cadence and file replace paths
+      - log formatting/structured logging overhead under high event volume
+      - plugin host/frame input assembly and per-frame data marshaling
+      - UI status/footer/pane refresh/update churn during playback
+      - cache prune scheduling checks / metadata-touch bookkeeping
+      - background task orchestration, cancellation, and debounce/coalescing paths
+    - Add lightweight counters/timers for “frequency x cost” analysis so low-cost calls with extreme call counts are visible.
+    - Include idle-playback and browse-without-playback scenarios to catch costs unrelated to analysis/rendering.
+    - Report top repeated operations by cumulative time (best-effort, opt-in only) to expose accidental hot paths.
+  - `T-052L` Resource-usage trend capture (CPU/time/memory/GC) for perf runs. Status: `todo`
+    - Capture coarse process-level resource signals during opt-in perf runs (CPU %, RSS/high-water mark where available, GC collections/time) alongside latency metrics.
+    - Correlate resource spikes with benchmark phases/scenarios to distinguish CPU-bound rendering, DB contention, and memory churn.
+    - Keep collection portable and optional so it does not destabilize benchmark comparability across machines.
+- Validation (per implementation change set):
+  - `.ubuntu-venv/bin/python -m ruff check .`
+  - `.ubuntu-venv/bin/python -m ruff format --check .`
+  - `.ubuntu-venv/bin/python -m mypy src`
+  - `.ubuntu-venv/bin/python -m pytest`
+  - `TZ_PLAYER_RUN_PERF=1 .ubuntu-venv/bin/python -m pytest tests/test_performance_opt_in.py`
+
 ### T-049 Async/UI Non-Blocking Hardening (Post-#16 Recovery)
 - Spec Ref: Section `5` (analysis/service model), Section `6` (visualizer/plugin contract), Section `7` (persistence), Section `8` (non-blocking reliability), `WF-02`, `WF-06`, `WF-07`
 - Status: `done`
