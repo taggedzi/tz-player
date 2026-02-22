@@ -19,6 +19,38 @@ This project includes a permanent, opt-in performance benchmarking harness for t
 
 ## Running Opt-In Perf Tests
 
+Preferred workflow (persistent artifacts in `.local/perf_results/`):
+
+```bash
+.ubuntu-venv/bin/python tools/perf_run.py --scenario analysis-cache --scenario visualizer-matrix
+```
+
+Run all supported scenarios once:
+
+```bash
+.ubuntu-venv/bin/python tools/perf_run.py
+```
+
+Repeat selected scenarios (useful for stability checks):
+
+```bash
+.ubuntu-venv/bin/python tools/perf_run.py --scenario controls --repeat 3
+```
+
+List supported scenario names:
+
+```bash
+.ubuntu-venv/bin/python tools/perf_run.py --list-scenarios
+```
+
+You can also pass through extra pytest flags:
+
+```bash
+.ubuntu-venv/bin/python tools/perf_run.py --scenario db-query-matrix --pytest-args -s
+```
+
+Lower-level direct pytest runs remain available:
+
 Run the full opt-in perf test module:
 
 ```bash
@@ -51,6 +83,7 @@ Benchmark artifacts are written to a local git-ignored directory:
 - `.local/perf_results/`
 
 Artifacts are JSON and can be compared across runs/branches.
+`tools/perf_run.py` sets `TZ_PLAYER_PERF_RESULTS_DIR` automatically so opt-in perf tests write directly to this directory.
 
 ### Compare Two Artifacts
 

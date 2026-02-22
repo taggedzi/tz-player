@@ -24,6 +24,7 @@ from tz_player.perf_benchmarking import (
     build_perf_media_manifest,
     perf_media_skip_reason,
     resolve_perf_media_dir,
+    resolve_perf_results_dir,
     summarize_samples,
     utc_now_iso,
     write_perf_run_artifact,
@@ -173,6 +174,13 @@ def _setup_dirs(tmp_path, monkeypatch) -> None:
 
     monkeypatch.setattr(paths, "AppDirs", fake_app_dirs)
     paths.get_app_dirs.cache_clear()
+
+
+def _perf_results_dir(tmp_path: Path) -> Path:
+    """Use env-configured perf artifact dir when provided, else test-local dir."""
+    if os.getenv("TZ_PLAYER_PERF_RESULTS_DIR"):
+        return resolve_perf_results_dir()
+    return tmp_path / "perf_results"
 
 
 def _seed_large_playlist(db_path: Path, playlist_id: int, total: int) -> None:
@@ -521,7 +529,9 @@ def test_large_playlist_db_query_matrix_benchmark_artifact(
             )
         ],
     )
-    artifact_path = write_perf_run_artifact(run, results_dir=tmp_path / "perf_results")
+    artifact_path = write_perf_run_artifact(
+        run, results_dir=_perf_results_dir(tmp_path)
+    )
     assert artifact_path.exists()
     assert event_counts.get("playlist_store_slow_query", 0) >= 1
 
@@ -709,7 +719,9 @@ def test_advanced_visualizer_matrix_benchmark_artifact(tmp_path) -> None:
         },
         scenarios=scenarios,
     )
-    artifact_path = write_perf_run_artifact(run, results_dir=tmp_path / "perf_results")
+    artifact_path = write_perf_run_artifact(
+        run, results_dir=_perf_results_dir(tmp_path)
+    )
     assert artifact_path.exists()
     assert len(scenarios) == len(PROFILE_RENDER_BUDGETS)
 
@@ -887,7 +899,7 @@ def test_player_service_track_switch_and_preload_benchmark_smoke(tmp_path) -> No
                         ],
                     )
                     artifact_path = write_perf_run_artifact(
-                        run, results_dir=tmp_path / "perf_results"
+                        run, results_dir=_perf_results_dir(tmp_path)
                     )
                 finally:
                     await service.shutdown()
@@ -1220,7 +1232,7 @@ def test_real_analysis_cache_cold_warm_benchmark_artifact(tmp_path) -> None:
             ],
         )
         artifact_path = write_perf_run_artifact(
-            run, results_dir=tmp_path / "perf_results"
+            run, results_dir=_perf_results_dir(tmp_path)
         )
         return artifact_path
 
@@ -1328,7 +1340,7 @@ def test_controls_latency_jitter_under_background_load_benchmark(
                 ],
             )
             artifact_path = write_perf_run_artifact(
-                run, results_dir=tmp_path / "perf_results"
+                run, results_dir=_perf_results_dir(tmp_path)
             )
             app.exit()
             return action_samples_ms, artifact_path
@@ -1439,7 +1451,7 @@ def test_hidden_hotspot_idle_and_control_burst_call_probe_artifact(
                 ],
             )
             artifact_path = write_perf_run_artifact(
-                run, results_dir=tmp_path / "perf_results"
+                run, results_dir=_perf_results_dir(tmp_path)
             )
             app.exit()
             return artifact_path
@@ -1557,7 +1569,7 @@ def test_hidden_hotspot_state_save_and_logging_overhead_artifact(
                 ],
             )
             artifact_path = write_perf_run_artifact(
-                run, results_dir=tmp_path / "perf_results"
+                run, results_dir=_perf_results_dir(tmp_path)
             )
             app.exit()
             return artifact_path
@@ -1669,7 +1681,7 @@ def test_resource_usage_phase_trend_artifact(tmp_path, monkeypatch) -> None:
                 ],
             )
             artifact_path = write_perf_run_artifact(
-                run, results_dir=tmp_path / "perf_results"
+                run, results_dir=_perf_results_dir(tmp_path)
             )
             app.exit()
             return artifact_path
