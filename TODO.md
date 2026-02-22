@@ -161,7 +161,7 @@ Please see `AGENTS.md` for more instructions.
       - branch comparison workflow
       - interpreting common bottlenecks (visualizer overruns vs DB slow queries vs analysis cache misses)
     - Link perf workflow from `docs/usage.md` and/or developer docs.
-  - `T-052J` Optional profile/deep-dive mode (non-default). Status: `todo`
+  - `T-052J` Optional profile/deep-dive mode (non-default). Status: `in_progress`
     - Add a second opt-in mode for deeper profiling (`cProfile`/`pyinstrument`-style local runs or targeted timers) for diagnosing hotspots after a benchmark regression is found.
     - Keep this separate from standard perf benchmarks to preserve run-time stability and comparability.
   - `T-052K` Broad hidden-hotspot sweep coverage (non-obvious paths). Status: `in_progress`

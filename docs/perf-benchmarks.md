@@ -112,3 +112,29 @@ Optional thresholds:
   - CPU and GC are broadly portable
   - RSS (`ru_maxrss`) availability/units vary by OS
 - Compare artifacts primarily on the same machine/profile for meaningful trends.
+
+## Optional Deep-Profile Mode (Separate from Benchmarks)
+
+Use deep profiling only after a benchmark identifies a regression/hotspot. Profiling overhead changes timings substantially, so do not compare profiled runs to normal benchmark artifacts.
+
+### Profile a Pytest Perf Scenario
+
+```bash
+.ubuntu-venv/bin/python tools/perf_profile.py \
+  --label controls-deep \
+  --module pytest -- \
+  tests/test_performance_opt_in.py -k "controls_latency_jitter_under_background_load_benchmark"
+```
+
+### Profile Artifacts
+
+Deep-profile artifacts are written locally (git-ignored):
+
+- `.local/perf_profiles/*.prof` (raw cProfile stats)
+- `.local/perf_profiles/*.txt` (rendered `pstats` summary)
+
+Use this mode to answer questions like:
+
+- which functions dominate cumulative time inside a slow scenario?
+- is time concentrated in Python rendering code, DB calls, logging, or state churn?
+- what changed after a specific optimization attempt?
