@@ -85,6 +85,26 @@ class SqliteWaveformProxyStore:
             params,
         )
 
+    async def list_frames(
+        self,
+        track_path: Path | str,
+        *,
+        params: WaveformProxyParams,
+    ) -> list[WaveformProxyFrame]:
+        return await run_blocking(self._list_frames_sync, Path(track_path), params)
+
+    async def touch_waveform_proxy_access(
+        self,
+        track_path: Path | str,
+        *,
+        params: WaveformProxyParams,
+    ) -> None:
+        await run_blocking(
+            self._touch_waveform_proxy_access_sync,
+            Path(track_path),
+            params,
+        )
+
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self._db_path, timeout=30)
         conn.row_factory = sqlite3.Row
@@ -342,10 +362,6 @@ class SqliteWaveformProxyStore:
             if row is None:
                 return None
             entry_id = int(row["id"])
-            conn.execute(
-                "UPDATE analysis_cache_entries SET last_accessed_at = strftime('%s','now') WHERE id = ?",
-                (entry_id,),
-            )
             prev_row = conn.execute(
                 """
                 SELECT
@@ -385,6 +401,94 @@ class SqliteWaveformProxyStore:
                 max_left_i8=_clamp_i8(int(row_to_use["max_left_i8"])),
                 min_right_i8=_clamp_i8(int(row_to_use["min_right_i8"])),
                 max_right_i8=_clamp_i8(int(row_to_use["max_right_i8"])),
+            )
+
+    def _list_frames_sync(
+        self,
+        track_path: Path,
+        params: WaveformProxyParams,
+    ) -> list[WaveformProxyFrame]:
+        path_norm = _normalize_path(track_path)
+        mtime_ns, size_bytes = _stat_path(track_path)
+        params_hash = _params_hash(_params_json(params))
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT id
+                FROM analysis_cache_entries
+                WHERE analysis_type = ?
+                  AND path_norm = ?
+                  AND analysis_version = ?
+                  AND params_hash = ?
+                  AND mtime_ns IS ?
+                  AND size_bytes IS ?
+                LIMIT 1
+                """,
+                (
+                    self.ANALYSIS_TYPE,
+                    path_norm,
+                    self._analysis_version,
+                    params_hash,
+                    mtime_ns,
+                    size_bytes,
+                ),
+            ).fetchone()
+            if row is None:
+                return []
+            entry_id = int(row["id"])
+            rows = conn.execute(
+                """
+                SELECT
+                    position_ms,
+                    min_left_i8,
+                    max_left_i8,
+                    min_right_i8,
+                    max_right_i8
+                FROM analysis_waveform_proxy_frames
+                WHERE entry_id = ?
+                ORDER BY position_ms ASC
+                """,
+                (entry_id,),
+            ).fetchall()
+            return [
+                WaveformProxyFrame(
+                    position_ms=int(item["position_ms"]),
+                    min_left_i8=_clamp_i8(int(item["min_left_i8"])),
+                    max_left_i8=_clamp_i8(int(item["max_left_i8"])),
+                    min_right_i8=_clamp_i8(int(item["min_right_i8"])),
+                    max_right_i8=_clamp_i8(int(item["max_right_i8"])),
+                )
+                for item in rows
+            ]
+
+    def _touch_waveform_proxy_access_sync(
+        self,
+        track_path: Path,
+        params: WaveformProxyParams,
+    ) -> None:
+        path_norm = _normalize_path(track_path)
+        mtime_ns, size_bytes = _stat_path(track_path)
+        params_hash = _params_hash(_params_json(params))
+        with self._connect() as conn:
+            conn.execute(
+                """
+                UPDATE analysis_cache_entries
+                SET last_accessed_at = strftime('%s','now')
+                WHERE analysis_type = ?
+                  AND path_norm = ?
+                  AND analysis_version = ?
+                  AND params_hash = ?
+                  AND mtime_ns IS ?
+                  AND size_bytes IS ?
+                """,
+                (
+                    self.ANALYSIS_TYPE,
+                    path_norm,
+                    self._analysis_version,
+                    params_hash,
+                    mtime_ns,
+                    size_bytes,
+                ),
             )
 
 

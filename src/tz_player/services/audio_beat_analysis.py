@@ -3,15 +3,10 @@
 from __future__ import annotations
 
 import math
-import shutil
-import struct
-import subprocess
-import wave
 from dataclasses import dataclass
 from pathlib import Path
 
-_TARGET_SAMPLE_RATE = 11_025
-_WAVE_SUFFIXES = {".wav", ".wave"}
+from .audio_decode import DecodedAnalysisAudio, decode_track_for_analysis
 
 
 @dataclass(frozen=True)
@@ -31,20 +26,42 @@ def analyze_track_beats(
 ) -> BeatAnalysisResult | None:
     """Decode track and compute onset-strength timeline with beat markers."""
     path = Path(track_path)
-    if not path.exists() or not path.is_file():
+    decoded = decode_track_for_analysis(path)
+    if decoded is None:
         return None
-    hop_ms = max(10, int(hop_ms))
+    return analyze_beats_from_decoded(
+        decoded,
+        hop_ms=hop_ms,
+        max_frames=max_frames,
+    )
 
-    decoded = _decode_wave(path)
-    if decoded is None:
-        if path.suffix.lower() in _WAVE_SUFFIXES:
-            return None
-        decoded = _decode_ffmpeg(path)
-    if decoded is None:
-        return None
-    sample_rate, mono_samples = decoded
+
+def analyze_beats_from_decoded(
+    decoded: DecodedAnalysisAudio,
+    *,
+    hop_ms: int = 40,
+    max_frames: int = 12_000,
+) -> BeatAnalysisResult | None:
+    """Compute beat timeline from decoded mono samples."""
+    return analyze_beats_from_mono(
+        decoded.mono_rate,
+        decoded.mono_samples,
+        hop_ms=hop_ms,
+        max_frames=max_frames,
+    )
+
+
+def analyze_beats_from_mono(
+    sample_rate: int,
+    mono_samples: list[float],
+    *,
+    hop_ms: int = 40,
+    max_frames: int = 12_000,
+) -> BeatAnalysisResult | None:
+    """Compute beat timeline from mono samples."""
     if sample_rate <= 0 or not mono_samples:
         return None
+    hop_ms = max(10, int(hop_ms))
 
     hop_samples = max(1, int(sample_rate * (hop_ms / 1000.0)))
     window_samples = max(hop_samples, hop_samples * 2)
@@ -81,104 +98,6 @@ def analyze_track_beats(
     if not frames:
         return None
     return BeatAnalysisResult(duration_ms=max(1, duration_ms), bpm=bpm, frames=frames)
-
-
-def _decode_wave(path: Path) -> tuple[int, list[float]] | None:
-    try:
-        with wave.open(str(path), "rb") as handle:
-            channels = int(handle.getnchannels())
-            frame_rate = int(handle.getframerate())
-            sample_width = int(handle.getsampwidth())
-            if channels <= 0 or frame_rate <= 0 or sample_width <= 0:
-                return None
-            raw = handle.readframes(handle.getnframes())
-            mono = _pcm_to_mono(raw, channels=channels, sample_width=sample_width)
-            if not mono:
-                return None
-            sample_rate, resampled = _resample_mono(
-                mono, frame_rate, _TARGET_SAMPLE_RATE
-            )
-            return sample_rate, resampled
-    except (wave.Error, EOFError, OSError, ValueError):
-        return None
-
-
-def _decode_ffmpeg(path: Path) -> tuple[int, list[float]] | None:
-    ffmpeg_bin = shutil.which("ffmpeg")
-    if ffmpeg_bin is None:
-        return None
-    cmd = [
-        ffmpeg_bin,
-        "-v",
-        "error",
-        "-i",
-        str(path),
-        "-vn",
-        "-sn",
-        "-dn",
-        "-f",
-        "s16le",
-        "-acodec",
-        "pcm_s16le",
-        "-ac",
-        "1",
-        "-ar",
-        str(_TARGET_SAMPLE_RATE),
-        "pipe:1",
-    ]
-    proc: subprocess.Popen[bytes] | None = None
-    try:
-        proc = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-        )
-        if proc.stdout is None:
-            return None
-        raw = proc.stdout.read()
-        code = proc.wait(timeout=4.0)
-        if code != 0 or not raw:
-            return None
-        return _TARGET_SAMPLE_RATE, _pcm_to_mono(raw, channels=1, sample_width=2)
-    except (OSError, subprocess.SubprocessError):
-        return None
-    finally:
-        if proc is not None and proc.poll() is None:
-            proc.kill()
-
-
-def _pcm_to_mono(raw: bytes, *, channels: int, sample_width: int) -> list[float]:
-    bytes_per_frame = channels * sample_width
-    frame_count = len(raw) // bytes_per_frame
-    if frame_count <= 0:
-        return []
-    if sample_width == 2:
-        if channels == 1:
-            return [sample / 32768.0 for (sample,) in struct.iter_unpack("<h", raw)]
-        mono: list[float] = []
-        for frame in struct.iter_unpack("<" + ("h" * channels), raw):
-            mono.append(sum(frame) / (channels * 32768.0))
-        return mono
-    return []
-
-
-def _resample_mono(
-    samples: list[float],
-    source_rate: int,
-    target_rate: int,
-) -> tuple[int, list[float]]:
-    if source_rate <= 0 or target_rate <= 0 or source_rate == target_rate:
-        return source_rate, samples
-    step = source_rate / target_rate
-    if step <= 1.0:
-        return source_rate, samples
-    out: list[float] = []
-    idx = 0.0
-    size = len(samples)
-    while int(idx) < size:
-        out.append(samples[int(idx)])
-        idx += step
-    return target_rate, out
 
 
 def _rms_energy(values: list[float]) -> float:

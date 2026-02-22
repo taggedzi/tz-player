@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import sqlite3
 from pathlib import Path
 
 from tz_player.services.beat_store import BeatParams, SqliteBeatStore
@@ -75,3 +76,37 @@ def test_beat_store_miss_when_fingerprint_changes(tmp_path) -> None:
     _touch(track, b"abcdef-ghij")
     assert _run(store.get_frame_at(track, position_ms=0, params=params)) is None
     assert _run(store.has_beats(track, params=params)) is False
+
+
+def test_beat_store_get_frame_does_not_write_access_timestamp(tmp_path) -> None:
+    db_path = tmp_path / "library.sqlite"
+    store = SqliteBeatStore(db_path)
+    _run(store.initialize())
+
+    track = tmp_path / "song.mp3"
+    _touch(track, b"abcdef")
+    params = BeatParams(hop_ms=40)
+    _run(
+        store.upsert_beats(
+            track,
+            duration_ms=1000,
+            params=params,
+            bpm=120.0,
+            frames=[(0, 128, True)],
+        )
+    )
+
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            "UPDATE analysis_cache_entries SET last_accessed_at = 100 WHERE analysis_type = 'beat'"
+        )
+
+    sample = _run(store.get_frame_at(track, position_ms=0, params=params))
+    assert sample is not None
+
+    with sqlite3.connect(db_path) as conn:
+        row = conn.execute(
+            "SELECT last_accessed_at FROM analysis_cache_entries WHERE analysis_type = 'beat' LIMIT 1"
+        ).fetchone()
+    assert row is not None
+    assert int(row[0]) == 100

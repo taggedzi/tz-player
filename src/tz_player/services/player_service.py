@@ -173,6 +173,7 @@ class PlayerService:
         self._beat_params = beat_params
         self._should_sample_beat = should_sample_beat
         self._current_track_path: str | None = None
+        self._analysis_preload_task: asyncio.Task[None] | None = None
         self._backend.set_event_handler(self._handle_backend_event)
 
     @property
@@ -190,6 +191,7 @@ class PlayerService:
 
     async def shutdown(self) -> None:
         """Stop polling loop and perform best-effort backend shutdown."""
+        self._cancel_analysis_preload()
         if self._poll_task is not None:
             self._poll_task.cancel()
             with suppress(asyncio.CancelledError):
@@ -249,6 +251,7 @@ class PlayerService:
             else self._default_duration_ms
         )
         if track_info is None:
+            self._cancel_analysis_preload()
             self._current_track_path = None
             async with self._lock:
                 self._state = replace(
@@ -262,7 +265,12 @@ class PlayerService:
                 )
             await self._emit_state()
             return
+        previous_track_path = self._current_track_path
         self._current_track_path = track_info.path
+        self._start_analysis_preload(
+            track_info.path,
+            clear_track_path=previous_track_path,
+        )
         try:
             await self._backend.play(
                 item_id,
@@ -307,6 +315,7 @@ class PlayerService:
         await self._emit_state()
 
     async def stop(self) -> None:
+        self._cancel_analysis_preload()
         self._current_track_path = None
         async with self._lock:
             self._stop_requested = True
@@ -337,6 +346,97 @@ class PlayerService:
             self._track_started_monotonic_s = None
         await self._backend.stop()
         await self._emit_state()
+
+    def _start_analysis_preload(
+        self,
+        track_path: str,
+        *,
+        clear_track_path: str | None = None,
+    ) -> None:
+        self._cancel_analysis_preload(clear_track_path=clear_track_path)
+        self._analysis_preload_task = asyncio.create_task(
+            self._preload_analysis_for_track(track_path)
+        )
+        self._analysis_preload_task.add_done_callback(
+            lambda _task: setattr(self, "_analysis_preload_task", None)
+        )
+
+    def _cancel_analysis_preload(self, *, clear_track_path: str | None = None) -> None:
+        task = self._analysis_preload_task
+        if task is not None:
+            task.cancel()
+        self._analysis_preload_task = None
+        path_to_clear = clear_track_path
+        if path_to_clear is None:
+            path_to_clear = self._current_track_path
+        if path_to_clear is not None:
+            if self._spectrum_service is not None:
+                clear = getattr(self._spectrum_service, "clear_track_cache", None)
+                if clear is not None and callable(clear):
+                    clear(path_to_clear)
+            if self._beat_service is not None:
+                clear = getattr(self._beat_service, "clear_track_cache", None)
+                if clear is not None and callable(clear):
+                    clear(path_to_clear)
+            if self._waveform_proxy_service is not None:
+                clear = getattr(self._waveform_proxy_service, "clear_track_cache", None)
+                if clear is not None and callable(clear):
+                    clear(path_to_clear)
+            self._audio_level_service.clear_envelope_cache(path_to_clear)
+
+    async def _preload_analysis_for_track(self, track_path: str) -> None:
+        start = time.monotonic()
+        try:
+            coros: list[Awaitable[int]] = []
+            channel_names: list[str] = []
+            if self._spectrum_service is not None and self._spectrum_params is not None:
+                preload = getattr(self._spectrum_service, "preload_track", None)
+                if preload is not None and callable(preload):
+                    coros.append(preload(track_path, params=self._spectrum_params))
+                    channel_names.append("spectrum")
+            if self._beat_service is not None and self._beat_params is not None:
+                preload = getattr(self._beat_service, "preload_track", None)
+                if preload is not None and callable(preload):
+                    coros.append(preload(track_path, params=self._beat_params))
+                    channel_names.append("beat")
+            if (
+                self._waveform_proxy_service is not None
+                and self._waveform_proxy_params is not None
+            ):
+                preload = getattr(self._waveform_proxy_service, "preload_track", None)
+                if preload is not None and callable(preload):
+                    coros.append(
+                        preload(track_path, params=self._waveform_proxy_params)
+                    )
+                    channel_names.append("waveform_proxy")
+            coros.append(self._audio_level_service.preload_envelope_track(track_path))
+            channel_names.append("envelope")
+            if not coros:
+                return
+            results = await asyncio.gather(*coros, return_exceptions=True)
+            frame_counts: dict[str, int] = {}
+            for idx, channel in enumerate(channel_names):
+                result = results[idx]
+                if isinstance(result, BaseException):
+                    frame_counts[channel] = 0
+                else:
+                    frame_counts[channel] = max(0, int(result))
+            logger.info(
+                "Analysis preload completed",
+                extra={
+                    "event": "analysis_preload_completed",
+                    "track_path": track_path,
+                    "channels": channel_names,
+                    "frame_counts": frame_counts,
+                    "elapsed_s": round(time.monotonic() - start, 3),
+                },
+            )
+        except asyncio.CancelledError:
+            return
+
+    async def prime_analysis_memory_cache(self, track_path: str) -> None:
+        """Prime in-memory analysis caches for a specific track path."""
+        await self._preload_analysis_for_track(track_path)
 
     async def seek_ratio(self, ratio: float) -> None:
         async with self._lock:

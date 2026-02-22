@@ -15,6 +15,7 @@ from textual.css.query import NoMatches
 import tz_player.app as app_module
 import tz_player.services.metadata_service as metadata_service_module
 import tz_player.ui.playlist_pane as playlist_pane_module
+from tz_player.services.audio_analysis_bundle import AnalysisBundleResult
 from tz_player.services.audio_beat_analysis import BeatAnalysisResult
 from tz_player.services.audio_envelope_analysis import EnvelopeAnalysisResult
 from tz_player.services.audio_spectrum_analysis import SpectrumAnalysisResult
@@ -203,9 +204,7 @@ def test_app_analysis_paths_use_run_cpu_bound(monkeypatch, tmp_path) -> None:
 
     async def fail_run_blocking(func, /, *args, **kwargs):  # type: ignore[no-untyped-def]
         if func in {
-            app_module.analyze_track_spectrum,
-            app_module.analyze_track_beats,
-            app_module.analyze_track_waveform_proxy,
+            app_module.analyze_track_analysis_bundle,
             app_module.analyze_track_envelope,
         }:
             raise AssertionError(
@@ -217,27 +216,21 @@ def test_app_analysis_paths_use_run_cpu_bound(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(app_module, "run_blocking", fail_run_blocking)
     monkeypatch.setattr(
         app_module,
-        "analyze_track_spectrum",
-        lambda *_args, **_kwargs: SpectrumAnalysisResult(
-            duration_ms=1000,
-            frames=[(0, b"\x00")],
-        ),
-    )
-    monkeypatch.setattr(
-        app_module,
-        "analyze_track_beats",
-        lambda *_args, **_kwargs: BeatAnalysisResult(
-            duration_ms=1000,
-            bpm=120.0,
-            frames=[(0, 1, True)],
-        ),
-    )
-    monkeypatch.setattr(
-        app_module,
-        "analyze_track_waveform_proxy",
-        lambda *_args, **_kwargs: WaveformProxyAnalysisResult(
-            duration_ms=1000,
-            frames=[(0, 0, 0, 0, 0)],
+        "analyze_track_analysis_bundle",
+        lambda *_args, **_kwargs: AnalysisBundleResult(
+            spectrum=SpectrumAnalysisResult(
+                duration_ms=1000,
+                frames=[(0, b"\x00")],
+            ),
+            beat=BeatAnalysisResult(
+                duration_ms=1000,
+                bpm=120.0,
+                frames=[(0, 1, True)],
+            ),
+            waveform_proxy=WaveformProxyAnalysisResult(
+                duration_ms=1000,
+                frames=[(0, 0, 0, 0, 0)],
+            ),
         ),
     )
     monkeypatch.setattr(
@@ -280,9 +273,7 @@ def test_app_analysis_paths_use_run_cpu_bound(monkeypatch, tmp_path) -> None:
         )
     )
 
-    assert app_module.analyze_track_spectrum in cpu_funcs
-    assert app_module.analyze_track_beats in cpu_funcs
-    assert app_module.analyze_track_waveform_proxy in cpu_funcs
+    assert app_module.analyze_track_analysis_bundle in cpu_funcs
     assert app_module.analyze_track_envelope in cpu_funcs
 
 

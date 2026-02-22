@@ -12,6 +12,9 @@ from tz_player.services.waveform_proxy_store import (
 
 
 class _CacheHitProvider:
+    def __init__(self) -> None:
+        self.touch_calls = 0
+
     async def get_frame_at(
         self,
         track_path: str,
@@ -33,6 +36,15 @@ class _CacheHitProvider:
     ) -> bool:
         del track_path, params
         return True
+
+    async def touch_waveform_proxy_access(
+        self,
+        track_path: str,
+        *,
+        params: WaveformProxyParams,
+    ) -> None:
+        del track_path, params
+        self.touch_calls += 1
 
 
 class _CacheMissProvider:
@@ -59,7 +71,8 @@ def _run(coro):
 
 def test_waveform_proxy_service_returns_cache_hit_when_available() -> None:
     async def run() -> None:
-        service = WaveformProxyService(cache_provider=_CacheHitProvider())
+        provider = _CacheHitProvider()
+        service = WaveformProxyService(cache_provider=provider)
         reading = await service.sample(
             track_path="/tmp/song.mp3",
             position_ms=100,
@@ -71,6 +84,27 @@ def test_waveform_proxy_service_returns_cache_hit_when_available() -> None:
         assert reading.max_left > 0.0
         assert reading.min_right < 0.0
         assert reading.max_right > 0.0
+        assert provider.touch_calls == 1
+
+    _run(run())
+
+
+def test_waveform_proxy_service_throttles_access_touch_updates() -> None:
+    async def run() -> None:
+        provider = _CacheHitProvider()
+        service = WaveformProxyService(cache_provider=provider)
+        params = WaveformProxyParams(hop_ms=20)
+        await service.sample(
+            track_path="/tmp/song.mp3",
+            position_ms=10,
+            params=params,
+        )
+        await service.sample(
+            track_path="/tmp/song.mp3",
+            position_ms=20,
+            params=params,
+        )
+        assert provider.touch_calls == 1
 
     _run(run())
 
