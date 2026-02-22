@@ -120,6 +120,26 @@ Optional thresholds:
   .local/perf_results/<candidate>.json
 ```
 
+### Compare Two Suite Runs (Auto-Pair Scenario Artifacts)
+
+Use the suite comparison tool to compare two `*_suite_summary.json` files and
+automatically pair scenario artifacts by scenario group and repeat index:
+
+```bash
+.ubuntu-venv/bin/python tools/perf_compare_suite.py \
+  .local/perf_results/<baseline-suite>_suite_summary.json \
+  .local/perf_results/<candidate-suite>_suite_summary.json
+```
+
+Optional strict mode (non-zero exit if a suite is missing scenario artifacts that
+the other suite has):
+
+```bash
+.ubuntu-venv/bin/python tools/perf_compare_suite.py --strict \
+  .local/perf_results/<baseline-suite>_suite_summary.json \
+  .local/perf_results/<candidate-suite>_suite_summary.json
+```
+
 ## Recommended Workflow (Repeatable)
 
 1. Record machine context (same machine, same power mode, minimal background apps).
