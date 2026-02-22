@@ -10,6 +10,7 @@ import asyncio
 import gc
 import inspect
 import logging
+import statistics
 import threading
 import time
 from collections.abc import Iterator
@@ -80,6 +81,18 @@ class ProcessResourceDelta:
     gc_count_deltas: tuple[int, int, int]
     gc_collections_delta: int | None
     rss_bytes_delta: int | None
+
+
+@dataclass(frozen=True)
+class NumericEventContextSummary:
+    """Summary stats for numeric values extracted from event context."""
+
+    event_name: str
+    context_key: str
+    count: int
+    min_value: float
+    mean_value: float
+    max_value: float
 
 
 class PerfEventCaptureHandler(logging.Handler):
@@ -205,6 +218,59 @@ def find_captured_event(
                 continue
         return event
     return None
+
+
+def count_events_by_context_value(
+    events: list[CapturedPerfEvent],
+    *,
+    context_key: str,
+    event_name: str | None = None,
+) -> dict[str, int]:
+    """Count events grouped by a string context field."""
+    counts: dict[str, int] = {}
+    for event in events:
+        if event_name is not None and event.event != event_name:
+            continue
+        value = event.context.get(context_key)
+        if not isinstance(value, str) or not value:
+            continue
+        counts[value] = counts.get(value, 0) + 1
+    return counts
+
+
+def summarize_numeric_event_context(
+    events: list[CapturedPerfEvent],
+    *,
+    event_name: str,
+    context_key: str,
+    context_equals: dict[str, object] | None = None,
+) -> NumericEventContextSummary | None:
+    """Summarize numeric values for a specific event/context field."""
+    values: list[float] = []
+    for event in events:
+        if event.event != event_name:
+            continue
+        if context_equals:
+            matched = True
+            for key, value in context_equals.items():
+                if event.context.get(key) != value:
+                    matched = False
+                    break
+            if not matched:
+                continue
+        raw = event.context.get(context_key)
+        if isinstance(raw, (int, float)):
+            values.append(float(raw))
+    if not values:
+        return None
+    return NumericEventContextSummary(
+        event_name=event_name,
+        context_key=context_key,
+        count=len(values),
+        min_value=min(values),
+        mean_value=statistics.fmean(values),
+        max_value=max(values),
+    )
 
 
 async def wait_for_captured_event(

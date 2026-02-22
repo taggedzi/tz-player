@@ -6,12 +6,14 @@ import time
 from tz_player.perf_observability import (
     capture_perf_events,
     capture_process_resource_snapshot,
+    count_events_by_context_value,
     count_events_by_name,
     diff_process_resource_snapshots,
     event_latency_ms_since,
     filter_events,
     find_captured_event,
     probe_method_calls,
+    summarize_numeric_event_context,
     wait_for_captured_event,
 )
 
@@ -233,3 +235,76 @@ def test_wait_for_captured_event_returns_matching_event() -> None:
             root.setLevel(prior_level)
 
     asyncio.run(run())
+
+
+def test_count_events_by_context_value_and_numeric_summary() -> None:
+    root = logging.getLogger()
+    prior_level = root.level
+    root.setLevel(logging.INFO)
+    try:
+        with capture_perf_events(logger=root) as handler:
+            logger = logging.getLogger("tz_player.services.playlist_store")
+            logger.info(
+                "PlaylistStore operation exceeded perf threshold",
+                extra={
+                    "event": "playlist_store_slow_query",
+                    "operation": "fetch_window",
+                    "elapsed_ms": 120.0,
+                    "mode": "fts",
+                },
+            )
+            logger.info(
+                "PlaylistStore operation exceeded perf threshold",
+                extra={
+                    "event": "playlist_store_slow_query",
+                    "operation": "search_item_ids",
+                    "elapsed_ms": 220.0,
+                    "mode": "fts",
+                },
+            )
+            logger.info(
+                "PlaylistStore operation exceeded perf threshold",
+                extra={
+                    "event": "playlist_store_slow_query",
+                    "operation": "search_item_ids",
+                    "elapsed_ms": 180.0,
+                    "mode": "like_fallback",
+                },
+            )
+            events = handler.snapshot()
+
+        op_counts = count_events_by_context_value(
+            events,
+            event_name="playlist_store_slow_query",
+            context_key="operation",
+        )
+        mode_counts = count_events_by_context_value(
+            events,
+            event_name="playlist_store_slow_query",
+            context_key="mode",
+        )
+        assert op_counts == {"fetch_window": 1, "search_item_ids": 2}
+        assert mode_counts == {"fts": 2, "like_fallback": 1}
+
+        summary = summarize_numeric_event_context(
+            events,
+            event_name="playlist_store_slow_query",
+            context_key="elapsed_ms",
+        )
+        assert summary is not None
+        assert summary.count == 3
+        assert summary.min_value == 120.0
+        assert summary.max_value == 220.0
+
+        filtered = summarize_numeric_event_context(
+            events,
+            event_name="playlist_store_slow_query",
+            context_key="elapsed_ms",
+            context_equals={"operation": "search_item_ids"},
+        )
+        assert filtered is not None
+        assert filtered.count == 2
+        assert filtered.min_value == 180.0
+        assert filtered.max_value == 220.0
+    finally:
+        root.setLevel(prior_level)

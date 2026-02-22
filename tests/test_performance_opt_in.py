@@ -30,10 +30,12 @@ from tz_player.perf_benchmarking import (
 from tz_player.perf_observability import (
     capture_perf_events,
     capture_process_resource_snapshot,
+    count_events_by_context_value,
     count_events_by_name,
     diff_process_resource_snapshots,
     event_latency_ms_since,
     probe_method_calls,
+    summarize_numeric_event_context,
     wait_for_captured_event,
 )
 from tz_player.services.audio_analysis_bundle import analyze_track_analysis_bundle
@@ -443,20 +445,35 @@ def test_large_playlist_db_query_matrix_benchmark_artifact(
         root.setLevel(prior_level)
 
     event_counts = count_events_by_name(slow_events)
-    slow_ops: dict[str, int] = {}
-    slow_modes: dict[str, int] = {}
-    for event in slow_events:
-        op = event.context.get("operation")
-        if isinstance(op, str):
-            slow_ops[op] = slow_ops.get(op, 0) + 1
-        mode = event.context.get("mode")
-        if isinstance(mode, str):
-            slow_modes[mode] = slow_modes.get(mode, 0) + 1
+    slow_ops = count_events_by_context_value(
+        slow_events,
+        event_name="playlist_store_slow_query",
+        context_key="operation",
+    )
+    slow_modes = count_events_by_context_value(
+        slow_events,
+        event_name="playlist_store_slow_query",
+        context_key="mode",
+    )
+    slow_elapsed_summary = summarize_numeric_event_context(
+        slow_events,
+        event_name="playlist_store_slow_query",
+        context_key="elapsed_ms",
+    )
 
     metrics = {
         metric_name: summarize_samples(samples, unit="ms")
         for metric_name, samples in timings_ms.items()
     }
+    if slow_elapsed_summary is not None:
+        metrics["slow_query_event_elapsed_ms"] = summarize_samples(
+            [
+                slow_elapsed_summary.min_value,
+                slow_elapsed_summary.mean_value,
+                slow_elapsed_summary.max_value,
+            ],
+            unit="ms",
+        )
     run = PerfRunResult(
         run_id=f"db-query-matrix-{uuid.uuid4().hex[:8]}",
         created_at=utc_now_iso(),
@@ -491,6 +508,14 @@ def test_large_playlist_db_query_matrix_benchmark_artifact(
                     "slow_operation_counts": slow_ops,
                     "slow_mode_counts": slow_modes,
                     "captured_event_names": event_counts,
+                    "slow_elapsed_summary": None
+                    if slow_elapsed_summary is None
+                    else {
+                        "count": slow_elapsed_summary.count,
+                        "min_value": slow_elapsed_summary.min_value,
+                        "mean_value": slow_elapsed_summary.mean_value,
+                        "max_value": slow_elapsed_summary.max_value,
+                    },
                 },
             )
         ],
