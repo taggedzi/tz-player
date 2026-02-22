@@ -175,7 +175,7 @@ Please see `AGENTS.md` for more instructions.
     - Add lightweight counters/timers for “frequency x cost” analysis so low-cost calls with extreme call counts are visible.
     - Include idle-playback and browse-without-playback scenarios to catch costs unrelated to analysis/rendering.
     - Report top repeated operations by cumulative time (best-effort, opt-in only) to expose accidental hot paths.
-  - `T-052L` Resource-usage trend capture (CPU/time/memory/GC) for perf runs. Status: `todo`
+  - `T-052L` Resource-usage trend capture (CPU/time/memory/GC) for perf runs. Status: `in_progress`
     - Capture coarse process-level resource signals during opt-in perf runs (CPU %, RSS/high-water mark where available, GC collections/time) alongside latency metrics.
     - Correlate resource spikes with benchmark phases/scenarios to distinguish CPU-bound rendering, DB contention, and memory churn.
     - Keep collection portable and optional so it does not destabilize benchmark comparability across machines.

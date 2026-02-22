@@ -6,6 +6,7 @@ from tz-player modules without scraping human-readable log message strings.
 
 from __future__ import annotations
 
+import gc
 import inspect
 import logging
 import threading
@@ -15,6 +16,11 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from functools import wraps
 from typing import Any
+
+try:
+    import resource as _resource
+except Exception:  # pragma: no cover - platform dependent
+    _resource = None
 
 _LOG_RECORD_BASE_FIELDS = frozenset(logging.makeLogRecord({}).__dict__.keys())
 
@@ -45,6 +51,33 @@ class CallProbeStat:
         if self.count <= 0:
             return 0.0
         return self.total_s / self.count
+
+
+@dataclass(frozen=True)
+class ProcessResourceSnapshot:
+    """Best-effort process resource sample for perf trend reporting."""
+
+    label: str
+    captured_monotonic_s: float
+    process_cpu_s: float
+    thread_cpu_s: float | None
+    gc_counts: tuple[int, int, int]
+    gc_collections_total: int | None
+    rss_bytes: int | None
+
+
+@dataclass(frozen=True)
+class ProcessResourceDelta:
+    """Delta between two resource snapshots."""
+
+    start_label: str
+    end_label: str
+    elapsed_s: float
+    process_cpu_s: float
+    thread_cpu_s: float | None
+    gc_count_deltas: tuple[int, int, int]
+    gc_collections_delta: int | None
+    rss_bytes_delta: int | None
 
 
 class PerfEventCaptureHandler(logging.Handler):
@@ -140,6 +173,72 @@ def filter_events(
     if event_name is None:
         return list(events)
     return [event for event in events if event.event == event_name]
+
+
+def capture_process_resource_snapshot(*, label: str) -> ProcessResourceSnapshot:
+    """Capture a best-effort process resource snapshot using stdlib only."""
+    thread_cpu: float | None
+    try:
+        thread_cpu = time.thread_time()
+    except Exception:  # pragma: no cover - platform dependent
+        thread_cpu = None
+
+    gc_collections_total: int | None = None
+    try:
+        stats = gc.get_stats()
+        gc_collections_total = int(sum(int(gen.get("collections", 0)) for gen in stats))
+    except Exception:  # pragma: no cover - interpreter dependent
+        gc_collections_total = None
+
+    rss_bytes: int | None = None
+    if _resource is not None:
+        try:
+            usage = _resource.getrusage(_resource.RUSAGE_SELF)
+            rss_raw = int(getattr(usage, "ru_maxrss", 0))
+            # Linux reports KiB; macOS/BSD may report bytes. Heuristic only.
+            rss_bytes = rss_raw * 1024 if rss_raw < (1 << 40) else rss_raw
+        except Exception:  # pragma: no cover - platform dependent
+            rss_bytes = None
+
+    counts = gc.get_count()
+    return ProcessResourceSnapshot(
+        label=label,
+        captured_monotonic_s=time.perf_counter(),
+        process_cpu_s=time.process_time(),
+        thread_cpu_s=thread_cpu,
+        gc_counts=(int(counts[0]), int(counts[1]), int(counts[2])),
+        gc_collections_total=gc_collections_total,
+        rss_bytes=rss_bytes,
+    )
+
+
+def diff_process_resource_snapshots(
+    start: ProcessResourceSnapshot, end: ProcessResourceSnapshot
+) -> ProcessResourceDelta:
+    """Compute delta between two process resource snapshots."""
+    thread_cpu_delta: float | None = None
+    if start.thread_cpu_s is not None and end.thread_cpu_s is not None:
+        thread_cpu_delta = end.thread_cpu_s - start.thread_cpu_s
+    gc_collections_delta: int | None = None
+    if start.gc_collections_total is not None and end.gc_collections_total is not None:
+        gc_collections_delta = end.gc_collections_total - start.gc_collections_total
+    rss_delta: int | None = None
+    if start.rss_bytes is not None and end.rss_bytes is not None:
+        rss_delta = end.rss_bytes - start.rss_bytes
+    return ProcessResourceDelta(
+        start_label=start.label,
+        end_label=end.label,
+        elapsed_s=end.captured_monotonic_s - start.captured_monotonic_s,
+        process_cpu_s=end.process_cpu_s - start.process_cpu_s,
+        thread_cpu_s=thread_cpu_delta,
+        gc_count_deltas=(
+            end.gc_counts[0] - start.gc_counts[0],
+            end.gc_counts[1] - start.gc_counts[1],
+            end.gc_counts[2] - start.gc_counts[2],
+        ),
+        gc_collections_delta=gc_collections_delta,
+        rss_bytes_delta=rss_delta,
+    )
 
 
 class MethodCallProbe:

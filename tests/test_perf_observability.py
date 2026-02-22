@@ -5,7 +5,9 @@ import time
 
 from tz_player.perf_observability import (
     capture_perf_events,
+    capture_process_resource_snapshot,
     count_events_by_name,
+    diff_process_resource_snapshots,
     filter_events,
     probe_method_calls,
 )
@@ -122,3 +124,19 @@ def test_probe_method_calls_collects_async_method_stats() -> None:
         assert stats[0].total_s > 0
 
     asyncio.run(run())
+
+
+def test_capture_process_resource_snapshot_and_delta() -> None:
+    start = capture_process_resource_snapshot(label="start")
+    for _ in range(20_000):
+        _ = 123 * 456
+    end = capture_process_resource_snapshot(label="end")
+    delta = diff_process_resource_snapshots(start, end)
+
+    assert start.label == "start"
+    assert end.label == "end"
+    assert delta.start_label == "start"
+    assert delta.end_label == "end"
+    assert delta.elapsed_s >= 0
+    assert delta.process_cpu_s >= 0
+    assert len(delta.gc_count_deltas) == 3

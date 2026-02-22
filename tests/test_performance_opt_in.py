@@ -29,7 +29,9 @@ from tz_player.perf_benchmarking import (
 )
 from tz_player.perf_observability import (
     capture_perf_events,
+    capture_process_resource_snapshot,
     count_events_by_name,
+    diff_process_resource_snapshots,
     probe_method_calls,
 )
 from tz_player.services.beat_store import BeatParams
@@ -1079,6 +1081,118 @@ def test_hidden_hotspot_idle_and_control_burst_call_probe_artifact(
                         counters=counters,
                         metadata={
                             "top_cumulative_methods": metadata_top,
+                            "visualizer_id": app._active_visualizer_id,
+                        },
+                    )
+                ],
+            )
+            artifact_path = write_perf_run_artifact(
+                run, results_dir=tmp_path / "perf_results"
+            )
+            app.exit()
+            return artifact_path
+
+    artifact_path = _run(run_scenario())
+    assert artifact_path.exists()
+
+
+def test_resource_usage_phase_trend_artifact(tmp_path, monkeypatch) -> None:
+    _setup_dirs(tmp_path, monkeypatch)
+    app = TzPlayerApp(auto_init=False, backend_name="fake")
+
+    async def run_scenario() -> Path:
+        async with app.run_test():
+            await asyncio.sleep(0)
+            await app._initialize_state()
+            snapshots = [capture_process_resource_snapshot(label="post_init")]
+
+            await asyncio.sleep(0.4)
+            snapshots.append(capture_process_resource_snapshot(label="after_idle"))
+
+            for _ in range(10):
+                await app.action_volume_up()
+                await app.action_volume_down()
+                await app.action_speed_up()
+                await app.action_speed_reset()
+                await app.action_cycle_visualizer()
+                await asyncio.sleep(0)
+            snapshots.append(capture_process_resource_snapshot(label="after_controls"))
+
+            await asyncio.sleep(0.3)
+            snapshots.append(capture_process_resource_snapshot(label="after_settle"))
+
+            deltas = [
+                diff_process_resource_snapshots(snapshots[idx], snapshots[idx + 1])
+                for idx in range(len(snapshots) - 1)
+            ]
+
+            metrics = {}
+            for delta in deltas:
+                phase = f"{delta.start_label}_to_{delta.end_label}"
+                metrics[f"{phase}_elapsed_ms"] = summarize_samples(
+                    [delta.elapsed_s * 1000.0], unit="ms"
+                )
+                metrics[f"{phase}_process_cpu_ms"] = summarize_samples(
+                    [delta.process_cpu_s * 1000.0], unit="ms"
+                )
+                if delta.thread_cpu_s is not None:
+                    metrics[f"{phase}_thread_cpu_ms"] = summarize_samples(
+                        [delta.thread_cpu_s * 1000.0], unit="ms"
+                    )
+
+            metadata_snapshots = [
+                {
+                    "label": snap.label,
+                    "captured_monotonic_s": round(snap.captured_monotonic_s, 6),
+                    "process_cpu_s": round(snap.process_cpu_s, 6),
+                    "thread_cpu_s": None
+                    if snap.thread_cpu_s is None
+                    else round(snap.thread_cpu_s, 6),
+                    "gc_counts": list(snap.gc_counts),
+                    "gc_collections_total": snap.gc_collections_total,
+                    "rss_bytes": snap.rss_bytes,
+                }
+                for snap in snapshots
+            ]
+            metadata_deltas = [
+                {
+                    "phase": f"{delta.start_label}_to_{delta.end_label}",
+                    "elapsed_ms": round(delta.elapsed_s * 1000.0, 4),
+                    "process_cpu_ms": round(delta.process_cpu_s * 1000.0, 4),
+                    "thread_cpu_ms": None
+                    if delta.thread_cpu_s is None
+                    else round(delta.thread_cpu_s * 1000.0, 4),
+                    "gc_count_deltas": list(delta.gc_count_deltas),
+                    "gc_collections_delta": delta.gc_collections_delta,
+                    "rss_bytes_delta": delta.rss_bytes_delta,
+                }
+                for delta in deltas
+            ]
+
+            run = PerfRunResult(
+                run_id=f"resource-trend-{uuid.uuid4().hex[:8]}",
+                created_at=utc_now_iso(),
+                app_version=None,
+                git_sha=None,
+                machine={"runner": "pytest-opt-in"},
+                config={
+                    "scenario": "resource_usage_phase_trend",
+                    "phases": [snap.label for snap in snapshots],
+                },
+                scenarios=[
+                    PerfScenarioResult(
+                        scenario_id="hidden_hotspot_browse_sweep",
+                        category="resource_trend",
+                        status="pass",
+                        elapsed_s=round(sum(delta.elapsed_s for delta in deltas), 6),
+                        metrics=metrics,
+                        counters={
+                            "snapshot_count": len(snapshots),
+                            "delta_count": len(deltas),
+                        },
+                        metadata={
+                            "snapshots": metadata_snapshots,
+                            "deltas": metadata_deltas,
                             "visualizer_id": app._active_visualizer_id,
                         },
                     )
