@@ -11,6 +11,7 @@ import io
 import os
 import pstats
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -20,7 +21,7 @@ DEFAULT_LOCAL_PERF_PROFILE_DIR = Path(".local/perf_profiles")
 
 
 def resolve_perf_profile_dir(
-    *, cwd: Path | None = None, env: dict[str, str] | None = None
+    *, cwd: Path | None = None, env: Mapping[str, str] | None = None
 ) -> Path:
     """Resolve local profile artifact directory path."""
     if env is None:

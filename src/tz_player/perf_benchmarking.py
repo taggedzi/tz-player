@@ -10,10 +10,12 @@ import json
 import math
 import os
 import statistics
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TypeAlias
+
+from typing_extensions import TypeAlias
 
 PERF_RESULT_SCHEMA_VERSION = 1
 PERF_MEDIA_DIR_ENV = "TZ_PLAYER_PERF_MEDIA_DIR"
@@ -46,8 +48,8 @@ PERF_SCENARIO_IDS: tuple[str, ...] = (
     SCENARIO_HIDDEN_HOTSPOT_BROWSE_SWEEP,
 )
 
-JsonScalar: TypeAlias = str | int | float | bool | None
-JsonValue: TypeAlias = JsonScalar | list["JsonValue"] | dict[str, "JsonValue"]
+JsonScalar: TypeAlias = object
+JsonValue: TypeAlias = object
 
 
 def utc_now_iso() -> str:
@@ -56,7 +58,7 @@ def utc_now_iso() -> str:
 
 
 def resolve_perf_media_dir(
-    *, cwd: Path | None = None, env: dict[str, str] | None = None
+    *, cwd: Path | None = None, env: Mapping[str, str] | None = None
 ) -> Path | None:
     """Resolve local perf media corpus directory from env or default path."""
     if env is None:
@@ -76,7 +78,7 @@ def resolve_perf_media_dir(
 
 
 def resolve_perf_results_dir(
-    *, cwd: Path | None = None, env: dict[str, str] | None = None
+    *, cwd: Path | None = None, env: Mapping[str, str] | None = None
 ) -> Path:
     """Resolve local perf benchmark results directory path."""
     if env is None:
@@ -366,26 +368,33 @@ def compare_perf_run_payloads(
         cand_med = cand_metric.get("median_value")
         base_p95 = base_metric.get("p95_value")
         cand_p95 = cand_metric.get("p95_value")
-        if not all(
-            isinstance(value, (int, float))
-            for value in (base_med, cand_med, base_p95, cand_p95)
-        ):
+        if not isinstance(base_med, (int, float)):
+            continue
+        if not isinstance(cand_med, (int, float)):
+            continue
+        if not isinstance(base_p95, (int, float)):
+            continue
+        if not isinstance(cand_p95, (int, float)):
             continue
         scenario_id, metric_name = key.split(".", 1)
-        delta_median = float(cand_med) - float(base_med)
-        delta_p95 = float(cand_p95) - float(base_p95)
-        pct_median = _safe_pct(delta_median, float(base_med))
-        pct_p95 = _safe_pct(delta_p95, float(base_p95))
+        base_med_f = float(base_med)
+        cand_med_f = float(cand_med)
+        base_p95_f = float(base_p95)
+        cand_p95_f = float(cand_p95)
+        delta_median = cand_med_f - base_med_f
+        delta_p95 = cand_p95_f - base_p95_f
+        pct_median = _safe_pct(delta_median, base_med_f)
+        pct_p95 = _safe_pct(delta_p95, base_p95_f)
         delta = PerfMetricDelta(
             scenario_id=scenario_id,
             metric_name=metric_name,
             unit=base_unit,
-            baseline_median=float(base_med),
-            candidate_median=float(cand_med),
+            baseline_median=base_med_f,
+            candidate_median=cand_med_f,
             delta_median=delta_median,
             pct_median=pct_median,
-            baseline_p95=float(base_p95),
-            candidate_p95=float(cand_p95),
+            baseline_p95=base_p95_f,
+            candidate_p95=cand_p95_f,
             delta_p95=delta_p95,
             pct_p95=pct_p95,
         )
@@ -421,7 +430,7 @@ def write_perf_run_artifact(
     *,
     results_dir: Path | None = None,
     cwd: Path | None = None,
-    env: dict[str, str] | None = None,
+    env: Mapping[str, str] | None = None,
 ) -> Path:
     """Write benchmark result artifact JSON to local perf-results directory."""
     if results_dir is None:

@@ -67,40 +67,28 @@ def analyze_track_analysis_bundle(
     spectrum_ms = 0.0
     beat_ms = 0.0
     waveform_ms = 0.0
-    spectrum = (
-        _timed_spectrum(
+    spectrum: SpectrumAnalysisResult | None = None
+    if include_spectrum:
+        spectrum, spectrum_ms = _timed_spectrum(
             decoded,
             band_count=spectrum_band_count,
             hop_ms=spectrum_hop_ms,
             max_frames=max_spectrum_frames,
         )
-        if include_spectrum
-        else None
-    )
-    if include_spectrum:
-        spectrum, spectrum_ms = spectrum
-    beat = (
-        _timed_beat(
+    beat: BeatAnalysisResult | None = None
+    if include_beat:
+        beat, beat_ms = _timed_beat(
             decoded,
             hop_ms=beat_hop_ms,
             max_frames=max_beat_frames,
         )
-        if include_beat
-        else None
-    )
-    if include_beat:
-        beat, beat_ms = beat
-    waveform_proxy = (
-        _timed_waveform_proxy(
+    waveform_proxy: WaveformProxyAnalysisResult | None = None
+    if include_waveform_proxy:
+        waveform_proxy, waveform_ms = _timed_waveform_proxy(
             decoded,
             hop_ms=waveform_hop_ms,
             max_frames=max_waveform_frames,
         )
-        if include_waveform_proxy
-        else None
-    )
-    if include_waveform_proxy:
-        waveform_proxy, waveform_ms = waveform_proxy
     total_ms = (time.perf_counter() - bundle_start) * 1000.0
 
     return AnalysisBundleResult(

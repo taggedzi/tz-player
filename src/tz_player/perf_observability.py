@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from functools import wraps
 from typing import Any
 
+_resource: Any
 try:
     import resource as _resource
 except Exception:  # pragma: no cover - platform dependent
@@ -310,13 +311,13 @@ def summarize_captured_events(
             context_key=spec.context_key,
         )
 
-    for spec in numeric_summary_specs or []:
-        key = spec.alias or f"{spec.event_name}.{spec.context_key}"
+    for num_spec in numeric_summary_specs or []:
+        key = num_spec.alias or f"{num_spec.event_name}.{num_spec.context_key}"
         summary = summarize_numeric_event_context(
             events,
-            event_name=spec.event_name,
-            context_key=spec.context_key,
-            context_equals=spec.context_equals,
+            event_name=num_spec.event_name,
+            context_key=num_spec.context_key,
+            context_equals=num_spec.context_equals,
         )
         numeric_summaries[key] = (
             {}
