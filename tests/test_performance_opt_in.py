@@ -91,6 +91,7 @@ ADVANCED_VIZ_PANE_HEIGHT = 50
 PROFILE_MATRIX_FRAME_COUNT = 80
 VISUALIZER_BENCH_ARTIFACT_FRAME_COUNT = 40
 PROFILE_INTERACTION_BUDGET_S = 0.12
+LOCAL_CORPUS_VARIETY_TRACK_COUNT = 10
 PROFILE_RENDER_BUDGETS = {
     "safe": {"fps": 10, "median_s": 0.050, "max_s": 0.180, "max_throttle_rate": 0.01},
     "balanced": {
@@ -184,6 +185,44 @@ def _perf_results_dir(tmp_path: Path) -> Path:
     if os.getenv("TZ_PLAYER_PERF_RESULTS_DIR"):
         return resolve_perf_results_dir()
     return tmp_path / "perf_results"
+
+
+def _local_perf_corpus_audio_files(media_dir: Path) -> list[Path]:
+    return sorted(
+        path
+        for path in media_dir.rglob("*")
+        if path.is_file()
+        and path.suffix.lower() in {".mp3", ".flac", ".wav", ".ogg", ".m4a"}
+    )
+
+
+def _select_varied_tracks_by_size(
+    corpus_files: list[Path], *, target_count: int = LOCAL_CORPUS_VARIETY_TRACK_COUNT
+) -> list[Path]:
+    """Pick a size-stratified subset of tracks for varied perf coverage."""
+    if not corpus_files:
+        return []
+    sorted_files = sorted(
+        corpus_files, key=lambda path: (path.stat().st_size, str(path))
+    )
+    count = min(max(1, int(target_count)), len(sorted_files))
+    if count == len(sorted_files):
+        return sorted_files
+
+    chosen_indices: set[int] = set()
+    if count == 1:
+        chosen_indices.add(len(sorted_files) // 2)
+    else:
+        max_index = len(sorted_files) - 1
+        for slot in range(count):
+            idx = round((slot * max_index) / (count - 1))
+            chosen_indices.add(int(idx))
+        # Fill gaps if rounding collapsed indices.
+        cursor = 0
+        while len(chosen_indices) < count and cursor < len(sorted_files):
+            chosen_indices.add(cursor)
+            cursor += 1
+    return [sorted_files[idx] for idx in sorted(chosen_indices)]
 
 
 def _active_visualizer_id(app: TzPlayerApp) -> str | None:
@@ -821,15 +860,10 @@ def test_player_service_track_switch_and_preload_benchmark_smoke(tmp_path) -> No
         pytest.skip(skip_reason)
     assert media_dir is not None
 
-    corpus_files = sorted(
-        path
-        for path in media_dir.rglob("*")
-        if path.is_file()
-        and path.suffix.lower() in {".mp3", ".flac", ".wav", ".ogg", ".m4a"}
-    )
+    corpus_files = _local_perf_corpus_audio_files(media_dir)
     if len(corpus_files) < 3:
         pytest.skip("Need at least 3 audio files in perf corpus for switch benchmark.")
-    sample_files = corpus_files[:5]
+    sample_files = _select_varied_tracks_by_size(corpus_files, target_count=10)
 
     async def emit_event(_event: object) -> None:
         return None
@@ -932,6 +966,7 @@ def test_player_service_track_switch_and_preload_benchmark_smoke(tmp_path) -> No
                                     "corpus_manifest": build_perf_media_manifest(
                                         media_dir, probe_durations=False
                                     ),
+                                    "track_selection_mode": "size_stratified",
                                     "tracks_used": [str(path) for path in sample_files],
                                 },
                             )
@@ -963,19 +998,12 @@ def test_real_analysis_cache_cold_warm_benchmark_artifact(tmp_path) -> None:
         pytest.skip(skip_reason)
     assert media_dir is not None
 
-    corpus_files = sorted(
-        (
-            path
-            for path in media_dir.rglob("*")
-            if path.is_file()
-            and path.suffix.lower() in {".mp3", ".flac", ".wav", ".ogg", ".m4a"}
-        ),
-        key=lambda path: path.stat().st_size,
-    )
+    corpus_files = _local_perf_corpus_audio_files(media_dir)
     if not corpus_files:
         pytest.skip("No audio files found in perf corpus.")
-    track_path = corpus_files[0]
-    track_path_str = str(track_path)
+    sample_tracks = _select_varied_tracks_by_size(corpus_files, target_count=10)
+    if not sample_tracks:
+        pytest.skip("No sample tracks selected from perf corpus.")
 
     spectrum_params = SpectrumParams(band_count=48, hop_ms=32)
     beat_params = BeatParams(hop_ms=32)
@@ -999,83 +1027,6 @@ def test_real_analysis_cache_cold_warm_benchmark_artifact(tmp_path) -> None:
 
         cold_metrics_samples: dict[str, list[float]] = {}
         warm_metrics_samples: dict[str, list[float]] = {}
-        metadata: dict[str, object] = {
-            "track_path": track_path_str,
-            "track_size_bytes": track_path.stat().st_size,
-        }
-
-        start = time.perf_counter()
-        bundle = analyze_track_analysis_bundle(
-            track_path,
-            spectrum_band_count=spectrum_params.band_count,
-            spectrum_hop_ms=spectrum_params.hop_ms,
-            beat_hop_ms=beat_params.hop_ms,
-            waveform_hop_ms=waveform_params.hop_ms,
-        )
-        cold_metrics_samples["bundle_analyze_ms"] = [
-            (time.perf_counter() - start) * 1000.0
-        ]
-        if bundle is None:
-            pytest.skip(f"Unable to analyze track via shared bundle: {track_path}")
-        assert bundle.spectrum is not None
-        assert bundle.beat is not None
-        assert bundle.waveform_proxy is not None
-
-        start = time.perf_counter()
-        await spectrum_store.upsert_spectrum(
-            track_path,
-            duration_ms=bundle.spectrum.duration_ms,
-            params=spectrum_params,
-            frames=bundle.spectrum.frames,
-        )
-        cold_metrics_samples["spectrum_upsert_ms"] = [
-            (time.perf_counter() - start) * 1000.0
-        ]
-
-        start = time.perf_counter()
-        await beat_store.upsert_beats(
-            track_path,
-            duration_ms=bundle.beat.duration_ms,
-            params=beat_params,
-            bpm=bundle.beat.bpm,
-            frames=bundle.beat.frames,
-        )
-        cold_metrics_samples["beat_upsert_ms"] = [
-            (time.perf_counter() - start) * 1000.0
-        ]
-
-        start = time.perf_counter()
-        await wave_store.upsert_waveform_proxy(
-            track_path,
-            duration_ms=bundle.waveform_proxy.duration_ms,
-            params=waveform_params,
-            frames=bundle.waveform_proxy.frames,
-        )
-        cold_metrics_samples["waveform_upsert_ms"] = [
-            (time.perf_counter() - start) * 1000.0
-        ]
-
-        envelope_result = None
-        envelope_required_ffmpeg = requires_ffmpeg_for_envelope(track_path)
-        metadata["envelope_requires_ffmpeg"] = envelope_required_ffmpeg
-        metadata["ffmpeg_available"] = ffmpeg_available()
-        if (not envelope_required_ffmpeg) or bool(metadata["ffmpeg_available"]):
-            start = time.perf_counter()
-            envelope_result = analyze_track_envelope(track_path, bucket_ms=50)
-            cold_metrics_samples["envelope_analyze_ms"] = [
-                (time.perf_counter() - start) * 1000.0
-            ]
-            if envelope_result is not None:
-                start = time.perf_counter()
-                await envelope_store.upsert_envelope(
-                    track_path,
-                    envelope_result.points,
-                    duration_ms=envelope_result.duration_ms,
-                )
-                cold_metrics_samples["envelope_upsert_ms"] = [
-                    (time.perf_counter() - start) * 1000.0
-                ]
-
         spectrum_service = SpectrumService(cache_provider=spectrum_store)
         beat_service = BeatService(cache_provider=beat_store)
         wave_service = WaveformProxyService(cache_provider=wave_store)
@@ -1084,137 +1035,235 @@ def test_real_analysis_cache_cold_warm_benchmark_artifact(tmp_path) -> None:
             envelope_provider=envelope_store,
         )
 
-        sample_positions = [0, 250, 500, 1000, 2000, 4000, 8000, 12000]
-        duration_ms = max(
-            bundle.spectrum.duration_ms,
-            bundle.beat.duration_ms,
-            bundle.waveform_proxy.duration_ms,
-            envelope_result.duration_ms if envelope_result is not None else 0,
-        )
-        sample_positions = [min(duration_ms, pos) for pos in sample_positions]
+        ffmpeg_ok = ffmpeg_available()
+        track_metadata: list[dict[str, object]] = []
+        total_sample_positions = 0
 
-        for pos in sample_positions:
+        for track_path in sample_tracks:
+            track_path_str = str(track_path)
+            per_track_meta: dict[str, object] = {
+                "track_path": track_path_str,
+                "track_size_bytes": track_path.stat().st_size,
+            }
+
             start = time.perf_counter()
-            spec = await spectrum_service.sample(
-                track_path=track_path_str,
-                position_ms=pos,
+            bundle = analyze_track_analysis_bundle(
+                track_path,
+                spectrum_band_count=spectrum_params.band_count,
+                spectrum_hop_ms=spectrum_params.hop_ms,
+                beat_hop_ms=beat_params.hop_ms,
+                waveform_hop_ms=waveform_params.hop_ms,
+            )
+            cold_metrics_samples.setdefault("bundle_analyze_ms", []).append(
+                (time.perf_counter() - start) * 1000.0
+            )
+            if bundle is None:
+                continue
+            assert bundle.spectrum is not None
+            assert bundle.beat is not None
+            assert bundle.waveform_proxy is not None
+
+            start = time.perf_counter()
+            await spectrum_store.upsert_spectrum(
+                track_path,
+                duration_ms=bundle.spectrum.duration_ms,
                 params=spectrum_params,
+                frames=bundle.spectrum.frames,
             )
-            warm_metrics_samples.setdefault("spectrum_db_sample_ms", []).append(
+            cold_metrics_samples.setdefault("spectrum_upsert_ms", []).append(
                 (time.perf_counter() - start) * 1000.0
             )
-            assert spec.status == "ready"
 
             start = time.perf_counter()
-            beat = await beat_service.sample(
-                track_path=track_path_str,
-                position_ms=pos,
+            await beat_store.upsert_beats(
+                track_path,
+                duration_ms=bundle.beat.duration_ms,
                 params=beat_params,
+                bpm=bundle.beat.bpm,
+                frames=bundle.beat.frames,
             )
-            warm_metrics_samples.setdefault("beat_db_sample_ms", []).append(
+            cold_metrics_samples.setdefault("beat_upsert_ms", []).append(
                 (time.perf_counter() - start) * 1000.0
             )
-            assert beat.status == "ready"
 
             start = time.perf_counter()
-            wave = await wave_service.sample(
-                track_path=track_path_str,
-                position_ms=pos,
+            await wave_store.upsert_waveform_proxy(
+                track_path,
+                duration_ms=bundle.waveform_proxy.duration_ms,
                 params=waveform_params,
+                frames=bundle.waveform_proxy.frames,
             )
-            warm_metrics_samples.setdefault("waveform_db_sample_ms", []).append(
+            cold_metrics_samples.setdefault("waveform_upsert_ms", []).append(
                 (time.perf_counter() - start) * 1000.0
             )
-            assert wave.status == "ready"
 
-            if envelope_result is not None:
+            envelope_result = None
+            envelope_required_ffmpeg = requires_ffmpeg_for_envelope(track_path)
+            per_track_meta["envelope_requires_ffmpeg"] = envelope_required_ffmpeg
+            if (not envelope_required_ffmpeg) or ffmpeg_ok:
                 start = time.perf_counter()
-                level = await level_service.sample(
-                    status="playing",
-                    position_ms=pos,
-                    duration_ms=duration_ms,
-                    volume=50,
-                    speed=1.0,
-                    track_path=track_path_str,
-                )
-                warm_metrics_samples.setdefault("envelope_db_sample_ms", []).append(
+                envelope_result = analyze_track_envelope(track_path, bucket_ms=50)
+                cold_metrics_samples.setdefault("envelope_analyze_ms", []).append(
                     (time.perf_counter() - start) * 1000.0
                 )
-                assert level is not None and level.status == "ready"
+                if envelope_result is not None:
+                    start = time.perf_counter()
+                    await envelope_store.upsert_envelope(
+                        track_path,
+                        envelope_result.points,
+                        duration_ms=envelope_result.duration_ms,
+                    )
+                    cold_metrics_samples.setdefault("envelope_upsert_ms", []).append(
+                        (time.perf_counter() - start) * 1000.0
+                    )
 
-        start = time.perf_counter()
-        preload_counts = {
-            "spectrum": await spectrum_service.preload_track(
-                track_path_str, params=spectrum_params
-            ),
-            "beat": await beat_service.preload_track(
-                track_path_str, params=beat_params
-            ),
-            "waveform_proxy": await wave_service.preload_track(
-                track_path_str, params=waveform_params
-            ),
-            "envelope": await level_service.preload_envelope_track(track_path_str),
-        }
-        warm_metrics_samples["memory_preload_all_ms"] = [
-            (time.perf_counter() - start) * 1000.0
-        ]
+            sample_positions = [0, 250, 500, 1000, 2000, 4000, 8000, 12000]
+            duration_ms = max(
+                bundle.spectrum.duration_ms,
+                bundle.beat.duration_ms,
+                bundle.waveform_proxy.duration_ms,
+                envelope_result.duration_ms if envelope_result is not None else 0,
+            )
+            sample_positions = [min(duration_ms, pos) for pos in sample_positions]
+            total_sample_positions += len(sample_positions)
 
-        for pos in sample_positions:
-            start = time.perf_counter()
-            spec = await spectrum_service.sample(
-                track_path=track_path_str,
-                position_ms=pos,
-                params=spectrum_params,
-            )
-            warm_metrics_samples.setdefault("spectrum_memory_sample_ms", []).append(
-                (time.perf_counter() - start) * 1000.0
-            )
-            assert spec.status == "ready"
-
-            start = time.perf_counter()
-            beat = await beat_service.sample(
-                track_path=track_path_str,
-                position_ms=pos,
-                params=beat_params,
-            )
-            warm_metrics_samples.setdefault("beat_memory_sample_ms", []).append(
-                (time.perf_counter() - start) * 1000.0
-            )
-            assert beat.status == "ready"
-
-            start = time.perf_counter()
-            wave = await wave_service.sample(
-                track_path=track_path_str,
-                position_ms=pos,
-                params=waveform_params,
-            )
-            warm_metrics_samples.setdefault("waveform_memory_sample_ms", []).append(
-                (time.perf_counter() - start) * 1000.0
-            )
-            assert wave.status == "ready"
-
-            if envelope_result is not None:
+            for pos in sample_positions:
                 start = time.perf_counter()
-                level = await level_service.sample(
-                    status="playing",
-                    position_ms=pos,
-                    duration_ms=duration_ms,
-                    volume=50,
-                    speed=1.0,
+                spec = await spectrum_service.sample(
                     track_path=track_path_str,
+                    position_ms=pos,
+                    params=spectrum_params,
                 )
-                warm_metrics_samples.setdefault("envelope_memory_sample_ms", []).append(
+                warm_metrics_samples.setdefault("spectrum_db_sample_ms", []).append(
                     (time.perf_counter() - start) * 1000.0
                 )
-                assert level is not None and level.status == "ready"
+                assert spec.status == "ready"
 
-        metadata["frame_counts"] = {
-            "spectrum": len(bundle.spectrum.frames),
-            "beat": len(bundle.beat.frames),
-            "waveform_proxy": len(bundle.waveform_proxy.frames),
-            "envelope": 0 if envelope_result is None else len(envelope_result.points),
+                start = time.perf_counter()
+                beat = await beat_service.sample(
+                    track_path=track_path_str,
+                    position_ms=pos,
+                    params=beat_params,
+                )
+                warm_metrics_samples.setdefault("beat_db_sample_ms", []).append(
+                    (time.perf_counter() - start) * 1000.0
+                )
+                assert beat.status == "ready"
+
+                start = time.perf_counter()
+                wave = await wave_service.sample(
+                    track_path=track_path_str,
+                    position_ms=pos,
+                    params=waveform_params,
+                )
+                warm_metrics_samples.setdefault("waveform_db_sample_ms", []).append(
+                    (time.perf_counter() - start) * 1000.0
+                )
+                assert wave.status == "ready"
+
+                if envelope_result is not None:
+                    start = time.perf_counter()
+                    level = await level_service.sample(
+                        status="playing",
+                        position_ms=pos,
+                        duration_ms=duration_ms,
+                        volume=50,
+                        speed=1.0,
+                        track_path=track_path_str,
+                    )
+                    warm_metrics_samples.setdefault("envelope_db_sample_ms", []).append(
+                        (time.perf_counter() - start) * 1000.0
+                    )
+                    assert level is not None and level.status == "ready"
+
+            start = time.perf_counter()
+            preload_counts = {
+                "spectrum": await spectrum_service.preload_track(
+                    track_path_str, params=spectrum_params
+                ),
+                "beat": await beat_service.preload_track(
+                    track_path_str, params=beat_params
+                ),
+                "waveform_proxy": await wave_service.preload_track(
+                    track_path_str, params=waveform_params
+                ),
+                "envelope": await level_service.preload_envelope_track(track_path_str),
+            }
+            warm_metrics_samples.setdefault("memory_preload_all_ms", []).append(
+                (time.perf_counter() - start) * 1000.0
+            )
+
+            for pos in sample_positions:
+                start = time.perf_counter()
+                spec = await spectrum_service.sample(
+                    track_path=track_path_str,
+                    position_ms=pos,
+                    params=spectrum_params,
+                )
+                warm_metrics_samples.setdefault("spectrum_memory_sample_ms", []).append(
+                    (time.perf_counter() - start) * 1000.0
+                )
+                assert spec.status == "ready"
+
+                start = time.perf_counter()
+                beat = await beat_service.sample(
+                    track_path=track_path_str,
+                    position_ms=pos,
+                    params=beat_params,
+                )
+                warm_metrics_samples.setdefault("beat_memory_sample_ms", []).append(
+                    (time.perf_counter() - start) * 1000.0
+                )
+                assert beat.status == "ready"
+
+                start = time.perf_counter()
+                wave = await wave_service.sample(
+                    track_path=track_path_str,
+                    position_ms=pos,
+                    params=waveform_params,
+                )
+                warm_metrics_samples.setdefault("waveform_memory_sample_ms", []).append(
+                    (time.perf_counter() - start) * 1000.0
+                )
+                assert wave.status == "ready"
+
+                if envelope_result is not None:
+                    start = time.perf_counter()
+                    level = await level_service.sample(
+                        status="playing",
+                        position_ms=pos,
+                        duration_ms=duration_ms,
+                        volume=50,
+                        speed=1.0,
+                        track_path=track_path_str,
+                    )
+                    warm_metrics_samples.setdefault(
+                        "envelope_memory_sample_ms", []
+                    ).append((time.perf_counter() - start) * 1000.0)
+                    assert level is not None and level.status == "ready"
+
+            per_track_meta["frame_counts"] = {
+                "spectrum": len(bundle.spectrum.frames),
+                "beat": len(bundle.beat.frames),
+                "waveform_proxy": len(bundle.waveform_proxy.frames),
+                "envelope": 0
+                if envelope_result is None
+                else len(envelope_result.points),
+            }
+            per_track_meta["preload_counts"] = preload_counts
+            per_track_meta["duration_ms"] = duration_ms
+            track_metadata.append(per_track_meta)
+
+        if not cold_metrics_samples.get("bundle_analyze_ms"):
+            pytest.skip("Unable to analyze any selected tracks via shared bundle.")
+
+        metadata: dict[str, object] = {
+            "track_selection_mode": "size_stratified",
+            "tracks_requested": len(sample_tracks),
+            "tracks_analyzed": len(track_metadata),
+            "ffmpeg_available": ffmpeg_ok,
+            "tracks": track_metadata,
         }
-        metadata["preload_counts"] = preload_counts
         metadata["corpus_manifest"] = build_perf_media_manifest(
             media_dir, probe_durations=False
         )
@@ -1246,7 +1295,9 @@ def test_real_analysis_cache_cold_warm_benchmark_artifact(tmp_path) -> None:
                         for name, samples in cold_metrics_samples.items()
                     },
                     counters={
-                        "sample_positions_count": len(sample_positions),
+                        "tracks_requested": len(sample_tracks),
+                        "tracks_analyzed": len(track_metadata),
+                        "sample_positions_count": total_sample_positions,
                     },
                     metadata=metadata,
                 ),
@@ -1264,7 +1315,9 @@ def test_real_analysis_cache_cold_warm_benchmark_artifact(tmp_path) -> None:
                         for name, samples in warm_metrics_samples.items()
                     },
                     counters={
-                        "sample_positions_count": len(sample_positions),
+                        "tracks_requested": len(sample_tracks),
+                        "tracks_analyzed": len(track_metadata),
+                        "sample_positions_count": total_sample_positions,
                     },
                     metadata=metadata,
                 ),
