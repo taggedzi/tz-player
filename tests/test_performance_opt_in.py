@@ -1578,6 +1578,137 @@ def test_hidden_hotspot_state_save_and_logging_overhead_artifact(
     assert artifact_path.exists()
 
 
+def test_hidden_hotspot_frame_input_and_host_render_overhead_artifact(tmp_path) -> None:
+    registry = VisualizerRegistry.built_in()
+    context = VisualizerContext(ansi_enabled=False, unicode_enabled=True)
+    spectrum = bytes(((idx * 13) % 256) for idx in range(48))
+
+    def run_scenario() -> Path:
+        host = VisualizerHost(registry, target_fps=12)
+        host.activate("basic", context)
+        build_samples_ms: list[float] = []
+        render_samples_ms: list[float] = []
+        combined_samples_ms: list[float] = []
+        throttled = 0
+        outputs = 0
+
+        with probe_method_calls(
+            [(host, "render_frame", "visualizer_host.render_frame")]
+        ) as probe:
+            for frame_idx in range(240):
+                frame_start = time.perf_counter()
+
+                build_start = time.perf_counter()
+                frame = VisualizerFrameInput(
+                    frame_index=frame_idx,
+                    monotonic_s=frame_idx / 60.0,
+                    width=120,
+                    height=34,
+                    status="playing",
+                    position_s=frame_idx * 0.05,
+                    duration_s=180.0,
+                    volume=65.0,
+                    speed=1.0,
+                    repeat_mode="OFF",
+                    shuffle=False,
+                    track_id=1,
+                    track_path="/perf/frame-build.mp3",
+                    title="Perf Frame Build",
+                    artist="Bench",
+                    album="Bench",
+                    level_left=0.45 + ((frame_idx % 7) * 0.01),
+                    level_right=0.41 + ((frame_idx % 5) * 0.01),
+                    level_source="cache",
+                    level_status="ready",
+                    spectrum_bands=spectrum,
+                    spectrum_source="cache",
+                    spectrum_status="ready",
+                    waveform_min_left=-0.5,
+                    waveform_max_left=0.7,
+                    waveform_min_right=-0.45,
+                    waveform_max_right=0.66,
+                    waveform_source="cache",
+                    waveform_status="ready",
+                    beat_strength=0.8 if frame_idx % 24 == 0 else 0.2,
+                    beat_is_onset=(frame_idx % 24 == 0),
+                    beat_bpm=124.0,
+                    beat_source="cache",
+                    beat_status="ready",
+                )
+                build_samples_ms.append((time.perf_counter() - build_start) * 1000.0)
+
+                render_start = time.perf_counter()
+                output = host.render_frame(frame, context)
+                render_samples_ms.append((time.perf_counter() - render_start) * 1000.0)
+
+                if output == "Visualizer throttled":
+                    throttled += 1
+                else:
+                    outputs += 1
+                    assert output
+                combined_samples_ms.append((time.perf_counter() - frame_start) * 1000.0)
+
+        host_stats = probe.snapshot()
+        host.shutdown()
+
+        metrics = {
+            "frame_input_build_ms": summarize_samples(build_samples_ms, unit="ms"),
+            "host_render_frame_call_ms": summarize_samples(
+                render_samples_ms, unit="ms"
+            ),
+            "frame_build_plus_render_ms": summarize_samples(
+                combined_samples_ms, unit="ms"
+            ),
+        }
+        metadata_top = [
+            {
+                "name": stat.name,
+                "count": stat.count,
+                "total_ms": round(stat.total_s * 1000.0, 4),
+                "max_ms": round(stat.max_s * 1000.0, 4),
+                "mean_ms": round(stat.mean_s * 1000.0, 4),
+            }
+            for stat in host_stats
+        ]
+
+        run = PerfRunResult(
+            run_id=f"hidden-hotspot-frame-host-{uuid.uuid4().hex[:8]}",
+            created_at=utc_now_iso(),
+            app_version=None,
+            git_sha=None,
+            machine={"runner": "pytest-opt-in"},
+            config={
+                "scenario": "hidden_hotspot_frame_input_and_host_render_overhead",
+                "frame_count": 240,
+                "plugin_id": "basic",
+                "target_fps": 12,
+            },
+            scenarios=[
+                PerfScenarioResult(
+                    scenario_id="hidden_hotspot_idle_playback_sweep",
+                    category="hidden_hotspot",
+                    status="pass",
+                    elapsed_s=round(sum(combined_samples_ms) / 1000.0, 6),
+                    metrics=metrics,
+                    counters={
+                        "frame_count": 240,
+                        "render_output_frames": outputs,
+                        "throttled_frames": throttled,
+                        "probed_method_count": len(host_stats),
+                    },
+                    metadata={
+                        "top_cumulative_methods": metadata_top,
+                        "visualizer_id": "basic",
+                    },
+                )
+            ],
+        )
+        return write_perf_run_artifact(run, results_dir=_perf_results_dir(tmp_path))
+
+    artifact_path = run_scenario()
+    assert artifact_path.exists()
+
+
 def test_resource_usage_phase_trend_artifact(tmp_path, monkeypatch) -> None:
     _setup_dirs(tmp_path, monkeypatch)
     app = TzPlayerApp(auto_init=False, backend_name="fake")
