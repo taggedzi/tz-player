@@ -3,11 +3,19 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import subprocess
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 
-from tz_player.perf_benchmarking import resolve_perf_results_dir
+from tz_player.perf_benchmarking import (
+    build_perf_media_manifest,
+    perf_media_skip_reason,
+    resolve_perf_media_dir,
+    resolve_perf_results_dir,
+)
 
 SCENARIO_TESTS: dict[str, str] = {
     "track-switch": "test_player_service_track_switch_and_preload_benchmark_smoke",
@@ -20,6 +28,32 @@ SCENARIO_TESTS: dict[str, str] = {
     "resource-trend": "test_resource_usage_phase_trend_artifact",
 }
 
+SUITE_SCENARIOS: dict[str, list[str]] = {
+    "user-feel": [
+        "analysis-cache",
+        "track-switch",
+        "controls",
+        "visualizer-matrix",
+        "db-query-matrix",
+        "hidden-hotspot-call-probe",
+        "hidden-hotspot-save-log",
+        "resource-trend",
+    ],
+    "analysis": ["analysis-cache", "track-switch"],
+    "visualizers": ["visualizer-matrix"],
+    "controls-ui": ["controls", "hidden-hotspot-call-probe", "hidden-hotspot-save-log"],
+    "database": ["db-query-matrix"],
+    "hidden-hotspot": [
+        "hidden-hotspot-call-probe",
+        "hidden-hotspot-save-log",
+        "resource-trend",
+    ],
+}
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -28,6 +62,12 @@ def _parse_args() -> argparse.Namespace:
         action="append",
         choices=sorted(SCENARIO_TESTS),
         help="Scenario to run (repeatable). Default: all supported scenarios.",
+    )
+    parser.add_argument(
+        "--suite",
+        action="append",
+        choices=sorted(SUITE_SCENARIOS),
+        help="Named scenario suite to run (repeatable).",
     )
     parser.add_argument(
         "--repeat",
@@ -64,6 +104,15 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="List supported scenario names and exit.",
     )
+    parser.add_argument(
+        "--list-suites",
+        action="store_true",
+        help="List supported suites and their scenario members, then exit.",
+    )
+    parser.add_argument(
+        "--label",
+        help="Optional label included in suite summary artifact filename.",
+    )
     return parser.parse_args()
 
 
@@ -94,6 +143,75 @@ def _run_pytest_scenario(
     return int(completed.returncode)
 
 
+def _expand_selection(
+    *,
+    scenarios: list[str] | None,
+    suites: list[str] | None,
+) -> tuple[list[str], list[str]]:
+    selected: list[str] = []
+    seen: set[str] = set()
+    suite_names = list(suites or [])
+    if suite_names:
+        for suite_name in suite_names:
+            for scenario in SUITE_SCENARIOS[suite_name]:
+                if scenario not in seen:
+                    seen.add(scenario)
+                    selected.append(scenario)
+    if scenarios:
+        for scenario in scenarios:
+            if scenario not in seen:
+                seen.add(scenario)
+                selected.append(scenario)
+    if not selected:
+        selected = list(SCENARIO_TESTS)
+    return selected, suite_names
+
+
+def _write_suite_summary_artifact(
+    *,
+    results_dir: Path,
+    label: str | None,
+    selected_scenarios: list[str],
+    selected_suites: list[str],
+    repeat: int,
+    media_dir: Path | None,
+    media_manifest: dict[str, object] | None,
+    media_skip_reason: str | None,
+    new_artifacts: list[Path],
+    failures: list[tuple[str, int, int]],
+) -> Path:
+    results_dir.mkdir(parents=True, exist_ok=True)
+    safe_label = "".join(
+        ch if ch.isalnum() or ch in "-._" else "_" for ch in (label or "perf-run")
+    )
+    run_id = f"suite-{safe_label}-{uuid.uuid4().hex[:8]}"
+    timestamp = _utc_now_iso()
+    path = results_dir / (
+        f"{timestamp.replace(':', '').replace('-', '')}_{safe_label}_suite_summary.json"
+    )
+    payload = {
+        "schema": "tz_player.perf_run_suite_summary.v1",
+        "run_id": run_id,
+        "created_at": timestamp,
+        "selected_suites": selected_suites,
+        "selected_scenarios": selected_scenarios,
+        "repeat": repeat,
+        "media_dir": None if media_dir is None else str(media_dir),
+        "media_skip_reason": media_skip_reason,
+        "media_manifest": media_manifest,
+        "results_dir": str(results_dir),
+        "new_artifact_count": len(new_artifacts),
+        "artifacts": [str(path) for path in new_artifacts],
+        "failures": [
+            {"scenario": scenario, "run_index": run_index, "exit_code": code}
+            for scenario, run_index, code in failures
+        ],
+        "status": "pass" if not failures else "fail",
+    }
+    path.write_text(json.dumps(payload, sort_keys=True, ensure_ascii=True) + "\n")
+    return path
+
+
 def main() -> int:
     args = _parse_args()
 
@@ -101,8 +219,15 @@ def main() -> int:
         for name, test_name in sorted(SCENARIO_TESTS.items()):
             print(f"{name}: {test_name}")
         return 0
+    if args.list_suites:
+        for name, scenarios in sorted(SUITE_SCENARIOS.items()):
+            print(f"{name}: {', '.join(scenarios)}")
+        return 0
 
-    selected = args.scenario or list(SCENARIO_TESTS)
+    selected, selected_suites = _expand_selection(
+        scenarios=args.scenario,
+        suites=args.suite,
+    )
     repeat = max(1, int(args.repeat))
     python_path = args.pytest_path.resolve()
     extra_pytest_args = list(args.pytest_args or [])
@@ -111,6 +236,13 @@ def main() -> int:
     env["TZ_PLAYER_RUN_PERF"] = "1"
     if args.media_dir is not None:
         env["TZ_PLAYER_PERF_MEDIA_DIR"] = str(args.media_dir.resolve())
+    media_dir = resolve_perf_media_dir(cwd=Path.cwd(), env=env)
+    media_reason = perf_media_skip_reason(media_dir)
+    media_manifest = (
+        None
+        if media_reason is not None or media_dir is None
+        else build_perf_media_manifest(media_dir, probe_durations=False)
+    )
     results_dir = (
         args.results_dir.resolve()
         if args.results_dir is not None
@@ -123,8 +255,19 @@ def main() -> int:
 
     print(f"results_dir={results_dir}")
     print(f"python={python_path}")
+    print(f"selected_suites={selected_suites}")
     print(f"selected_scenarios={selected}")
     print(f"repeat={repeat}")
+    if media_dir is not None:
+        print(f"media_dir={media_dir}")
+    if media_reason is not None:
+        print(f"media_status={media_reason}")
+    elif media_manifest is not None:
+        print(
+            "media_manifest="
+            f"tracks={media_manifest.get('track_count')} "
+            f"bytes={media_manifest.get('total_bytes')}"
+        )
 
     for scenario in selected:
         test_name = SCENARIO_TESTS[scenario]
@@ -146,6 +289,20 @@ def main() -> int:
     print(f"new_artifact_count={len(new_artifacts)}")
     for path in new_artifacts:
         print(f"artifact={path}")
+
+    suite_summary_path = _write_suite_summary_artifact(
+        results_dir=results_dir,
+        label=args.label,
+        selected_scenarios=selected,
+        selected_suites=selected_suites,
+        repeat=repeat,
+        media_dir=media_dir,
+        media_manifest=media_manifest,
+        media_skip_reason=media_reason,
+        new_artifacts=new_artifacts,
+        failures=failures,
+    )
+    print(f"suite_summary={suite_summary_path}")
 
     if failures:
         print("failures:")

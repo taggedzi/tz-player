@@ -25,6 +25,17 @@ Preferred workflow (persistent artifacts in `.local/perf_results/`):
 .ubuntu-venv/bin/python tools/perf_run.py --scenario analysis-cache --scenario visualizer-matrix
 ```
 
+Run the local-corpus user-perceived responsiveness suite:
+
+```bash
+.ubuntu-venv/bin/python tools/perf_run.py --suite user-feel --repeat 2
+```
+
+This suite composes existing opt-in scenarios (analysis/cache, track-switch, controls,
+visualizers, DB, hidden-hotspot, resource trend) and writes an additional suite summary
+artifact that records selected scenarios, local perf-media manifest, produced artifact
+paths, and pass/fail status.
+
 Run all supported scenarios once:
 
 ```bash
@@ -41,6 +52,12 @@ List supported scenario names:
 
 ```bash
 .ubuntu-venv/bin/python tools/perf_run.py --list-scenarios
+```
+
+List supported suites:
+
+```bash
+.ubuntu-venv/bin/python tools/perf_run.py --list-suites
 ```
 
 You can also pass through extra pytest flags:

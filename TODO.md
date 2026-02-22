@@ -179,6 +179,16 @@ Please see `AGENTS.md` for more instructions.
     - Capture coarse process-level resource signals during opt-in perf runs (CPU %, RSS/high-water mark where available, GC collections/time) alongside latency metrics.
     - Correlate resource spikes with benchmark phases/scenarios to distinguish CPU-bound rendering, DB contention, and memory churn.
     - Keep collection portable and optional so it does not destabilize benchmark comparability across machines.
+  - `T-052M` Local-corpus user-perceived responsiveness benchmark suite. Status: `in_progress`
+    - Add scriptable suite orchestration (`tools/perf_run.py --suite user-feel`) that runs a curated set of scenarios against `.local/perf_media/` and emits a suite summary artifact.
+    - Use real local media workflows to measure user-perceived responsiveness signals:
+      - cold/warm track play readiness
+      - cache preload timing and frame counts
+      - controls latency/jitter during load
+      - visualizer responsiveness/overrun behavior
+      - DB browse/search behavior during playback-oriented runs
+    - Record stable corpus selection/manifests and run mode metadata to support branch-to-branch comparison.
+    - Expand toward consolidated end-to-end user workflow runs (ingest/play/switch/control/browse) as findings justify deeper coverage.
 - Validation (per implementation change set):
   - `.ubuntu-venv/bin/python -m ruff check .`
   - `.ubuntu-venv/bin/python -m ruff format --check .`
