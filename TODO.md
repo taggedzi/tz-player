@@ -118,7 +118,7 @@ Please see `AGENTS.md` for more instructions.
       - large-playlist DB query matrix (FTS/fallback-aware)
     - Define per-scenario metrics and units (`ms`, `s`, hit rates, frame counts, overrun counts, p50/p95/max).
     - Freeze a machine-readable result schema (JSON) for future comparisons.
-  - `T-052B` Instrumentation normalization + event capture hooks. Status: `todo`
+  - `T-052B` Instrumentation normalization + event capture hooks. Status: `in_progress`
     - Standardize/expand structured perf events so tests can consume them deterministically (not just human log strings).
     - Ensure event payloads expose timestamps/IDs needed to correlate:
       - track switch start/end
