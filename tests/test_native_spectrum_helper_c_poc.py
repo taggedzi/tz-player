@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import shutil
 import subprocess
 import wave
@@ -26,11 +27,31 @@ def _write_wave(path: Path, *, frames: int = 22_050, sample_rate: int = 44_100) 
         handle.writeframes(bytes(payload))
 
 
-@pytest.mark.skipif(shutil.which("gcc") is None, reason="gcc not available")
-def test_native_spectrum_helper_c_poc_compiles_and_returns_valid_payload(
-    tmp_path,
-) -> None:
-    repo_root = Path(__file__).resolve().parents[1]
+def _build_helper_or_skip(repo_root: Path, tmp_path: Path) -> Path:
+    if os.name == "nt":
+        powershell = shutil.which("pwsh") or shutil.which("powershell")
+        if powershell is None:
+            pytest.skip("PowerShell not available")
+        bin_path = tmp_path / "native_spectrum_helper_c_poc.exe"
+        subprocess.run(
+            [
+                powershell,
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "tools/build_native_spectrum_helper_c_poc.ps1",
+                "-OutPath",
+                str(bin_path),
+            ],
+            cwd=repo_root,
+            check=True,
+            capture_output=True,
+        )
+        return bin_path
+
+    if shutil.which("gcc") is None:
+        pytest.skip("gcc not available")
     bin_path = tmp_path / "native_spectrum_helper_c_poc"
     subprocess.run(
         ["bash", "tools/build_native_spectrum_helper_c_poc.sh", str(bin_path)],
@@ -38,6 +59,14 @@ def test_native_spectrum_helper_c_poc_compiles_and_returns_valid_payload(
         check=True,
         capture_output=True,
     )
+    return bin_path
+
+
+def test_native_spectrum_helper_c_poc_compiles_and_returns_valid_payload(
+    tmp_path,
+) -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    bin_path = _build_helper_or_skip(repo_root, tmp_path)
     track = tmp_path / "tone.wav"
     _write_wave(track)
     request = {
@@ -72,16 +101,9 @@ def test_native_spectrum_helper_c_poc_compiles_and_returns_valid_payload(
     assert payload["timings"]["total_ms"] >= 0
 
 
-@pytest.mark.skipif(shutil.which("gcc") is None, reason="gcc not available")
 def test_native_spectrum_helper_c_poc_accepts_nested_request_objects(tmp_path) -> None:
     repo_root = Path(__file__).resolve().parents[1]
-    bin_path = tmp_path / "native_spectrum_helper_c_poc"
-    subprocess.run(
-        ["bash", "tools/build_native_spectrum_helper_c_poc.sh", str(bin_path)],
-        cwd=repo_root,
-        check=True,
-        capture_output=True,
-    )
+    bin_path = _build_helper_or_skip(repo_root, tmp_path)
     track = tmp_path / "tone.wav"
     _write_wave(track, frames=44_100)
     request = {
@@ -114,19 +136,10 @@ def test_native_spectrum_helper_c_poc_accepts_nested_request_objects(tmp_path) -
     assert payload["waveform_proxy"]["frames"][1][0] in {24, 25}
 
 
-@pytest.mark.skipif(
-    shutil.which("gcc") is None or shutil.which("ffmpeg") is None,
-    reason="gcc and ffmpeg required",
-)
+@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg required")
 def test_native_spectrum_helper_c_poc_supports_mp3_via_ffmpeg(tmp_path) -> None:
     repo_root = Path(__file__).resolve().parents[1]
-    bin_path = tmp_path / "native_spectrum_helper_c_poc"
-    subprocess.run(
-        ["bash", "tools/build_native_spectrum_helper_c_poc.sh", str(bin_path)],
-        cwd=repo_root,
-        check=True,
-        capture_output=True,
-    )
+    bin_path = _build_helper_or_skip(repo_root, tmp_path)
     wav_path = tmp_path / "tone source.wav"
     mp3_path = tmp_path / "tone's sample.mp3"
     _write_wave(wav_path)
