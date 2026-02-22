@@ -1043,7 +1043,9 @@ def test_real_analysis_cache_cold_warm_benchmark_artifact(tmp_path) -> None:
         waveform_backend_counts: dict[str, int] = {}
         analysis_fallback_reason_counts: dict[str, int] = {}
         native_helper_cmd = os.getenv("TZ_PLAYER_NATIVE_SPECTRUM_HELPER_CMD")
-        native_helper_timeout_s = os.getenv("TZ_PLAYER_NATIVE_SPECTRUM_HELPER_TIMEOUT_S")
+        native_helper_timeout_s = os.getenv(
+            "TZ_PLAYER_NATIVE_SPECTRUM_HELPER_TIMEOUT_S"
+        )
 
         for track_path in sample_tracks:
             track_path_str = str(track_path)
@@ -1069,7 +1071,9 @@ def test_real_analysis_cache_cold_warm_benchmark_artifact(tmp_path) -> None:
             assert bundle.beat is not None
             assert bundle.waveform_proxy is not None
             if bundle.backend_info is not None:
-                per_track_meta["analysis_backend"] = bundle.backend_info.analysis_backend
+                per_track_meta["analysis_backend"] = (
+                    bundle.backend_info.analysis_backend
+                )
                 if bundle.backend_info.spectrum_backend is not None:
                     per_track_meta["spectrum_backend"] = (
                         bundle.backend_info.spectrum_backend
@@ -1463,7 +1467,9 @@ def test_real_analysis_cache_cold_warm_benchmark_artifact(tmp_path) -> None:
     assert artifact_path.exists()
 
 
-def test_real_analysis_bundle_spectrum_waveform_cold_benchmark_artifact(tmp_path) -> None:
+def test_real_analysis_bundle_spectrum_waveform_cold_benchmark_artifact(
+    tmp_path,
+) -> None:
     media_dir = resolve_perf_media_dir()
     skip_reason = perf_media_skip_reason(media_dir)
     if skip_reason is not None:
@@ -1489,7 +1495,9 @@ def test_real_analysis_bundle_spectrum_waveform_cold_benchmark_artifact(tmp_path
         waveform_backend_counts: dict[str, int] = {}
         analysis_fallback_reason_counts: dict[str, int] = {}
         native_helper_cmd = os.getenv("TZ_PLAYER_NATIVE_SPECTRUM_HELPER_CMD")
-        native_helper_timeout_s = os.getenv("TZ_PLAYER_NATIVE_SPECTRUM_HELPER_TIMEOUT_S")
+        native_helper_timeout_s = os.getenv(
+            "TZ_PLAYER_NATIVE_SPECTRUM_HELPER_TIMEOUT_S"
+        )
 
         for track_path in sample_tracks:
             per_track_meta: dict[str, object] = {
@@ -1516,9 +1524,13 @@ def test_real_analysis_bundle_spectrum_waveform_cold_benchmark_artifact(tmp_path
             assert bundle.beat is None
 
             if bundle.backend_info is not None:
-                per_track_meta["analysis_backend"] = bundle.backend_info.analysis_backend
+                per_track_meta["analysis_backend"] = (
+                    bundle.backend_info.analysis_backend
+                )
                 if bundle.backend_info.spectrum_backend is not None:
-                    per_track_meta["spectrum_backend"] = bundle.backend_info.spectrum_backend
+                    per_track_meta["spectrum_backend"] = (
+                        bundle.backend_info.spectrum_backend
+                    )
                 if bundle.backend_info.waveform_proxy_backend is not None:
                     per_track_meta["waveform_proxy_backend"] = (
                         bundle.backend_info.waveform_proxy_backend
@@ -1549,7 +1561,9 @@ def test_real_analysis_bundle_spectrum_waveform_cold_benchmark_artifact(tmp_path
                     bundle.backend_info.duplicate_decode_for_mixed_bundle
                 )
                 backend = bundle.backend_info.analysis_backend
-                analysis_backend_counts[backend] = analysis_backend_counts.get(backend, 0) + 1
+                analysis_backend_counts[backend] = (
+                    analysis_backend_counts.get(backend, 0) + 1
+                )
 
             if bundle.timings is not None:
                 per_track_meta["bundle_timings_ms"] = {
@@ -1606,7 +1620,9 @@ def test_real_analysis_bundle_spectrum_waveform_cold_benchmark_artifact(tmp_path
             "ffmpeg_available": ffmpeg_ok,
             "tracks": track_metadata,
             "analysis_backend_counts": dict(sorted(analysis_backend_counts.items())),
-            "waveform_proxy_backend_counts": dict(sorted(waveform_backend_counts.items())),
+            "waveform_proxy_backend_counts": dict(
+                sorted(waveform_backend_counts.items())
+            ),
             "bundle_request_shape": "spectrum_plus_waveform_no_beat",
         }
         if beat_backend_counts:

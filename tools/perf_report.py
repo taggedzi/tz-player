@@ -105,7 +105,8 @@ def _analysis_backend_summary(payload: dict[str, Any]) -> str:
         parts.append(
             "beat="
             + ",".join(
-                f"{key}:{beat_backend_counts[key]}" for key in sorted(beat_backend_counts)
+                f"{key}:{beat_backend_counts[key]}"
+                for key in sorted(beat_backend_counts)
             )
         )
     if waveform_backend_counts:

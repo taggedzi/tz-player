@@ -27,7 +27,9 @@ def _write_wave(path: Path, *, frames: int = 22_050, sample_rate: int = 44_100) 
 
 
 @pytest.mark.skipif(shutil.which("gcc") is None, reason="gcc not available")
-def test_native_spectrum_helper_c_poc_compiles_and_returns_valid_payload(tmp_path) -> None:
+def test_native_spectrum_helper_c_poc_compiles_and_returns_valid_payload(
+    tmp_path,
+) -> None:
     repo_root = Path(__file__).resolve().parents[1]
     bin_path = tmp_path / "native_spectrum_helper_c_poc"
     subprocess.run(

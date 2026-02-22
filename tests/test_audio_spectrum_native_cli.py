@@ -98,7 +98,7 @@ def test_analyze_track_spectrum_via_native_cli_parses_response(monkeypatch) -> N
     assert result is not None
     assert list(captured["cmd"]) == ["native-helper"]
     request = json.loads((captured["input"] or b"").decode("utf-8"))
-    assert request["track_path"] == "/tmp/test.wav"
+    assert request["track_path"] == str(Path("/tmp/test.wav"))
     assert request["spectrum"]["band_count"] == 4
     assert request["beat_timeline_hop_ms"] == 40
     assert request["beat_timeline_max_frames"] == 300

@@ -145,7 +145,9 @@ def test_analyze_track_analysis_bundle_uses_native_spectrum_for_mixed_bundle(
         )
 
     def fail_python_spectrum(*args, **kwargs):  # noqa: ANN002, ANN003
-        raise AssertionError("python spectrum path should be skipped when helper succeeds")
+        raise AssertionError(
+            "python spectrum path should be skipped when helper succeeds"
+        )
 
     monkeypatch.setenv("TZ_PLAYER_NATIVE_SPECTRUM_HELPER_CMD", "fake-helper")
     monkeypatch.setattr(
@@ -343,6 +345,4 @@ def test_analyze_track_analysis_bundle_records_native_fallback_reason(
     assert result.backend_info is not None
     assert result.backend_info.analysis_backend == "python"
     assert result.backend_info.spectrum_backend == "python"
-    assert (
-        result.backend_info.fallback_reason == "native_helper_timeout"
-    )
+    assert result.backend_info.fallback_reason == "native_helper_timeout"

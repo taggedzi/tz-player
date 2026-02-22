@@ -122,7 +122,7 @@ def analyze_track_spectrum_via_native_cli_attempt(
     if config is None:
         return NativeSpectrumHelperAttempt(result=None, failure_reason=None)
 
-    request_payload = {
+    request_payload: dict[str, object] = {
         "schema": _REQUEST_SCHEMA,
         "track_path": str(track_path),
         "spectrum": {
@@ -157,7 +157,9 @@ def analyze_track_spectrum_via_native_cli_attempt(
             timeout=config.timeout_s,
         )
     except subprocess.TimeoutExpired:
-        return NativeSpectrumHelperAttempt(result=None, failure_reason="native_helper_timeout")
+        return NativeSpectrumHelperAttempt(
+            result=None, failure_reason="native_helper_timeout"
+        )
     except (OSError, subprocess.SubprocessError):
         return NativeSpectrumHelperAttempt(
             result=None, failure_reason="native_helper_invocation_error"

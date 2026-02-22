@@ -55,4 +55,3 @@ def test_native_spectrum_helper_stub_returns_valid_payload(tmp_path) -> None:
     assert isinstance(payload["frames"][0][0], int)
     assert isinstance(payload["frames"][0][1], list)
     assert payload["timings"]["total_ms"] >= 0
-

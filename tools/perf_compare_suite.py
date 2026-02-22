@@ -107,7 +107,8 @@ def _analysis_backend_summary(payload: dict[str, Any]) -> str:
         parts.append(
             "beat="
             + ",".join(
-                f"{key}:{beat_backend_counts[key]}" for key in sorted(beat_backend_counts)
+                f"{key}:{beat_backend_counts[key]}"
+                for key in sorted(beat_backend_counts)
             )
         )
     if waveform_backend_counts:
@@ -332,8 +333,7 @@ def main() -> int:
                 f"candidate={cand_entry.path.name} ---"
             )
             print(
-                "baseline_backend_meta="
-                + _analysis_backend_summary(base_entry.payload)
+                "baseline_backend_meta=" + _analysis_backend_summary(base_entry.payload)
             )
             print(
                 "candidate_backend_meta="

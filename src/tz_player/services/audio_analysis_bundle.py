@@ -117,7 +117,9 @@ def analyze_track_analysis_bundle(
                     0.0, helper_result.timings.waveform_proxy_ms or 0.0
                 )
             helper_beat = helper_result.beat if include_beat else None
-            helper_waveform = helper_result.waveform_proxy if include_waveform_proxy else None
+            helper_waveform = (
+                helper_result.waveform_proxy if include_waveform_proxy else None
+            )
             helper_satisfies_beat = (not include_beat) or (helper_beat is not None)
             helper_satisfies_waveform = (not include_waveform_proxy) or (
                 helper_waveform is not None
@@ -132,7 +134,9 @@ def analyze_track_analysis_bundle(
                         decode_ms=helper_decode_ms,
                         spectrum_ms=helper_spectrum_ms,
                         beat_ms=helper_beat_ms if helper_beat else 0.0,
-                        waveform_proxy_ms=helper_waveform_ms if helper_waveform else 0.0,
+                        waveform_proxy_ms=helper_waveform_ms
+                        if helper_waveform
+                        else 0.0,
                         total_ms=helper_result.timings.total_ms
                         if helper_result.timings is not None
                         and helper_result.timings.total_ms is not None
@@ -222,11 +226,12 @@ def analyze_track_analysis_bundle(
             max_frames=max_waveform_frames,
         )
     total_ms = (time.perf_counter() - bundle_start) * 1000.0
-    python_work_after_helper = (
-        (include_beat and helper_beat is None)
-        or (include_waveform_proxy and helper_waveform is None)
+    python_work_after_helper = (include_beat and helper_beat is None) or (
+        include_waveform_proxy and helper_waveform is None
     )
-    duplicate_decode_for_mixed_bundle = bool(used_native_spectrum and python_work_after_helper)
+    duplicate_decode_for_mixed_bundle = bool(
+        used_native_spectrum and python_work_after_helper
+    )
     decode_ms = python_decode_ms + (helper_decode_ms if used_native_spectrum else 0.0)
     if used_native_spectrum and python_work_after_helper:
         analysis_backend = "hybrid_native_spectrum_python_rest"
@@ -234,7 +239,11 @@ def analyze_track_analysis_bundle(
         analysis_backend = "native_helper"
     else:
         analysis_backend = "python"
-    spectrum_backend = "native_helper" if used_native_spectrum else ("python" if include_spectrum else None)
+    spectrum_backend = (
+        "native_helper"
+        if used_native_spectrum
+        else ("python" if include_spectrum else None)
+    )
     beat_backend = (
         "native_helper"
         if include_beat and helper_beat is not None
