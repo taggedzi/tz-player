@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import sqlite3
 from pathlib import Path
 
 from tz_player.services.spectrum_store import SpectrumParams, SqliteSpectrumStore
@@ -97,3 +98,36 @@ def test_spectrum_store_prune_enforces_size_limit(tmp_path) -> None:
         )
     )
     assert pruned >= 2
+
+
+def test_spectrum_store_get_frame_does_not_write_access_timestamp(tmp_path) -> None:
+    db_path = tmp_path / "library.sqlite"
+    store = SqliteSpectrumStore(db_path)
+    _run(store.initialize())
+
+    track = tmp_path / "song.mp3"
+    _touch(track, b"abcdef")
+    params = SpectrumParams(band_count=4, hop_ms=40)
+    _run(
+        store.upsert_spectrum(
+            track,
+            duration_ms=1000,
+            params=params,
+            frames=[(0, bytes([1, 2, 3, 4]))],
+        )
+    )
+
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            "UPDATE analysis_cache_entries SET last_accessed_at = 100 WHERE analysis_type = 'spectrum'"
+        )
+
+    sample = _run(store.get_frame_at(track, position_ms=0, params=params))
+    assert sample is not None
+
+    with sqlite3.connect(db_path) as conn:
+        row = conn.execute(
+            "SELECT last_accessed_at FROM analysis_cache_entries WHERE analysis_type = 'spectrum' LIMIT 1"
+        ).fetchone()
+    assert row is not None
+    assert int(row[0]) == 100

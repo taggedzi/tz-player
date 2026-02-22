@@ -48,16 +48,14 @@ from .runtime_config import (
     resolve_log_level,
 )
 from .services.analysis_cache_pruner import SqliteAnalysisCachePruner
-from .services.audio_beat_analysis import analyze_track_beats
+from .services.audio_analysis_bundle import analyze_track_analysis_bundle
 from .services.audio_envelope_analysis import (
     analyze_track_envelope,
     ffmpeg_available,
     requires_ffmpeg_for_envelope,
 )
 from .services.audio_envelope_store import SqliteEnvelopeStore
-from .services.audio_spectrum_analysis import analyze_track_spectrum
 from .services.audio_tags import read_audio_tags
-from .services.audio_waveform_proxy_analysis import analyze_track_waveform_proxy
 from .services.beat_service import BeatService
 from .services.beat_store import BeatParams, SqliteBeatStore
 from .services.fake_backend import FakePlaybackBackend
@@ -357,6 +355,7 @@ class TzPlayerApp(App):
         self._spectrum_analysis_tasks: dict[str, asyncio.Task[None]] = {}
         self._beat_analysis_tasks: dict[str, asyncio.Task[None]] = {}
         self._waveform_proxy_analysis_tasks: dict[str, asyncio.Task[None]] = {}
+        self._analysis_bundle_tasks: dict[str, asyncio.Task[None]] = {}
         self._envelope_analysis_last_scheduled: dict[str, float] = {}
         self._spectrum_analysis_last_scheduled: dict[str, float] = {}
         self._beat_analysis_last_scheduled: dict[str, float] = {}
@@ -365,6 +364,7 @@ class TzPlayerApp(App):
         self._spectrum_analysis_semaphore: asyncio.Semaphore | None = None
         self._beat_analysis_semaphore: asyncio.Semaphore | None = None
         self._waveform_proxy_analysis_semaphore: asyncio.Semaphore | None = None
+        self._analysis_bundle_semaphore: asyncio.Semaphore | None = None
         self._spectrum_params = SpectrumParams(band_count=48, hop_ms=40)
         self._beat_params = BeatParams(hop_ms=40)
         self._waveform_proxy_params = WaveformProxyParams(hop_ms=20)
@@ -640,6 +640,14 @@ class TzPlayerApp(App):
                 return_exceptions=True,
             )
             self._waveform_proxy_analysis_tasks.clear()
+        for task in self._analysis_bundle_tasks.values():
+            task.cancel()
+        if self._analysis_bundle_tasks:
+            await asyncio.gather(
+                *self._analysis_bundle_tasks.values(),
+                return_exceptions=True,
+            )
+            self._analysis_bundle_tasks.clear()
         self._cancel_next_track_prewarm()
         if self.player_service is not None:
             await self.player_service.shutdown()
@@ -968,29 +976,10 @@ class TzPlayerApp(App):
         if self.spectrum_store is None:
             return
         path = Path(track_path)
-        semaphore = self._ensure_spectrum_analysis_semaphore()
         try:
-            async with semaphore:
-                if await self.spectrum_store.has_spectrum(path, params=params):
-                    return
-                result = await run_cpu_bound(
-                    analyze_track_spectrum,
-                    path,
-                    band_count=params.band_count,
-                    hop_ms=params.hop_ms,
-                )
-                if result is None or not result.frames:
-                    return
-                await self.spectrum_store.upsert_spectrum(
-                    path,
-                    duration_ms=max(1, result.duration_ms),
-                    params=params,
-                    frames=result.frames,
-                )
-                self._schedule_analysis_cache_prune(reason="post_write", delay_s=0.0)
-                logger.info(
-                    "Spectrum analyzed for %s (%d frames)", path, len(result.frames)
-                )
+            if await self.spectrum_store.has_spectrum(path, params=params):
+                return
+            await self._ensure_analysis_bundle_for_track(track_path)
         except Exception as exc:
             logger.debug("Spectrum analysis failed for %s: %s", path, exc)
 
@@ -1019,31 +1008,10 @@ class TzPlayerApp(App):
         if self.beat_store is None:
             return
         path = Path(track_path)
-        semaphore = self._ensure_beat_analysis_semaphore()
         try:
-            async with semaphore:
-                if await self.beat_store.has_beats(path, params=params):
-                    return
-                result = await run_cpu_bound(
-                    analyze_track_beats,
-                    path,
-                    hop_ms=params.hop_ms,
-                )
-                if result is None or not result.frames:
-                    return
-                await self.beat_store.upsert_beats(
-                    path,
-                    duration_ms=max(1, result.duration_ms),
-                    params=params,
-                    bpm=result.bpm,
-                    frames=result.frames,
-                )
-                self._schedule_analysis_cache_prune(reason="post_write", delay_s=0.0)
-                logger.info(
-                    "Beat analysis completed for %s (%d frames)",
-                    path,
-                    len(result.frames),
-                )
+            if await self.beat_store.has_beats(path, params=params):
+                return
+            await self._ensure_analysis_bundle_for_track(track_path)
         except Exception as exc:
             logger.debug("Beat analysis failed for %s: %s", path, exc)
 
@@ -1083,34 +1051,134 @@ class TzPlayerApp(App):
         if self.waveform_proxy_store is None:
             return
         path = Path(track_path)
-        semaphore = self._ensure_waveform_proxy_analysis_semaphore()
         try:
-            async with semaphore:
-                if await self.waveform_proxy_store.has_waveform_proxy(
-                    path, params=params
-                ):
-                    return
-                result = await run_cpu_bound(
-                    analyze_track_waveform_proxy,
+            if await self.waveform_proxy_store.has_waveform_proxy(path, params=params):
+                return
+            await self._ensure_analysis_bundle_for_track(track_path)
+        except Exception as exc:
+            logger.debug("Waveform proxy analysis failed for %s: %s", path, exc)
+
+    async def _ensure_analysis_bundle_for_track(self, track_path: str) -> None:
+        key = (
+            f"{track_path}|spectrum={self._spectrum_params.band_count}/{self._spectrum_params.hop_ms}"
+            f"|beat={self._beat_params.hop_ms}|waveform={self._waveform_proxy_params.hop_ms}"
+        )
+        existing = self._analysis_bundle_tasks.get(key)
+        if existing is not None and not existing.done():
+            await existing
+            return
+        if len(self._analysis_bundle_tasks) >= ANALYSIS_MAX_PENDING_TASKS_PER_TYPE:
+            logger.debug("Skipping shared analysis bundle due to pending-task cap")
+            return
+        task = asyncio.create_task(self._run_analysis_bundle_for_track(track_path))
+        self._analysis_bundle_tasks[key] = task
+        task.add_done_callback(lambda _task: self._analysis_bundle_tasks.pop(key, None))
+        await task
+
+    async def _run_analysis_bundle_for_track(self, track_path: str) -> None:
+        if (
+            self.spectrum_store is None
+            and self.beat_store is None
+            and self.waveform_proxy_store is None
+        ):
+            return
+
+        path = Path(track_path)
+        spectrum_missing = (
+            self.spectrum_store is not None
+            and not await self.spectrum_store.has_spectrum(
+                path, params=self._spectrum_params
+            )
+        )
+        beat_missing = (
+            self.beat_store is not None
+            and not await self.beat_store.has_beats(path, params=self._beat_params)
+        )
+        waveform_missing = (
+            self.waveform_proxy_store is not None
+            and not await self.waveform_proxy_store.has_waveform_proxy(
+                path, params=self._waveform_proxy_params
+            )
+        )
+        if not (spectrum_missing or beat_missing or waveform_missing):
+            return
+
+        semaphore = self._ensure_analysis_bundle_semaphore()
+        async with semaphore:
+            bundle = await run_cpu_bound(
+                analyze_track_analysis_bundle,
+                path,
+                spectrum_band_count=self._spectrum_params.band_count,
+                spectrum_hop_ms=self._spectrum_params.hop_ms,
+                beat_hop_ms=self._beat_params.hop_ms,
+                waveform_hop_ms=self._waveform_proxy_params.hop_ms,
+                include_spectrum=spectrum_missing,
+                include_beat=beat_missing,
+                include_waveform_proxy=waveform_missing,
+            )
+            if bundle is None:
+                return
+
+            wrote_any = False
+            if (
+                spectrum_missing
+                and self.spectrum_store is not None
+                and bundle.spectrum is not None
+                and bundle.spectrum.frames
+            ):
+                await self.spectrum_store.upsert_spectrum(
                     path,
-                    hop_ms=params.hop_ms,
+                    duration_ms=max(1, bundle.spectrum.duration_ms),
+                    params=self._spectrum_params,
+                    frames=bundle.spectrum.frames,
                 )
-                if result is None or not result.frames:
-                    return
+                wrote_any = True
+                logger.info(
+                    "Spectrum analyzed for %s (%d frames)",
+                    path,
+                    len(bundle.spectrum.frames),
+                )
+            if (
+                beat_missing
+                and self.beat_store is not None
+                and bundle.beat is not None
+                and bundle.beat.frames
+            ):
+                await self.beat_store.upsert_beats(
+                    path,
+                    duration_ms=max(1, bundle.beat.duration_ms),
+                    params=self._beat_params,
+                    bpm=bundle.beat.bpm,
+                    frames=bundle.beat.frames,
+                )
+                wrote_any = True
+                logger.info(
+                    "Beat analysis completed for %s (%d frames)",
+                    path,
+                    len(bundle.beat.frames),
+                )
+            if (
+                waveform_missing
+                and self.waveform_proxy_store is not None
+                and bundle.waveform_proxy is not None
+                and bundle.waveform_proxy.frames
+            ):
                 await self.waveform_proxy_store.upsert_waveform_proxy(
                     path,
-                    duration_ms=max(1, result.duration_ms),
-                    params=params,
-                    frames=result.frames,
+                    duration_ms=max(1, bundle.waveform_proxy.duration_ms),
+                    params=self._waveform_proxy_params,
+                    frames=bundle.waveform_proxy.frames,
                 )
-                self._schedule_analysis_cache_prune(reason="post_write", delay_s=0.0)
+                wrote_any = True
                 logger.info(
                     "Waveform proxy analyzed for %s (%d frames)",
                     path,
-                    len(result.frames),
+                    len(bundle.waveform_proxy.frames),
                 )
-        except Exception as exc:
-            logger.debug("Waveform proxy analysis failed for %s: %s", path, exc)
+            if wrote_any and self.player_service is not None:
+                await self.player_service.prime_analysis_memory_cache(str(path))
+            if wrote_any:
+                self._schedule_analysis_cache_prune(reason="post_write", delay_s=0.0)
 
     def _schedule_analysis_cache_prune(
         self,
@@ -1291,6 +1359,8 @@ class TzPlayerApp(App):
                     result.points,
                     duration_ms=max(1, result.duration_ms),
                 )
+                if self.player_service is not None:
+                    await self.player_service.prime_analysis_memory_cache(str(path))
                 self._schedule_analysis_cache_prune(reason="post_write", delay_s=0.0)
                 logger.info(
                     "Envelope analyzed for %s (%d points)", path, len(result.points)
@@ -1329,6 +1399,13 @@ class TzPlayerApp(App):
         if semaphore is None:
             semaphore = asyncio.Semaphore(ANALYSIS_MAX_CONCURRENT_PER_TYPE)
             self._waveform_proxy_analysis_semaphore = semaphore
+        return semaphore
+
+    def _ensure_analysis_bundle_semaphore(self) -> asyncio.Semaphore:
+        semaphore = self._analysis_bundle_semaphore
+        if semaphore is None:
+            semaphore = asyncio.Semaphore(ANALYSIS_MAX_CONCURRENT_PER_TYPE)
+            self._analysis_bundle_semaphore = semaphore
         return semaphore
 
     def _mark_analysis_schedule(
@@ -1382,6 +1459,11 @@ class TzPlayerApp(App):
         _cancel_matching(
             self._waveform_proxy_analysis_tasks,
             self._waveform_proxy_analysis_last_scheduled,
+            lambda key: key.split("|", 1)[0],
+        )
+        _cancel_matching(
+            self._analysis_bundle_tasks,
+            {},
             lambda key: key.split("|", 1)[0],
         )
 

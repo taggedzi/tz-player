@@ -52,8 +52,16 @@ class SqliteEnvelopeStore(EnvelopeLevelProvider):
             self._get_level_at_sync, Path(track_path), position_ms
         )
 
+    async def list_levels(
+        self, track_path: Path | str
+    ) -> list[tuple[int, float, float]]:
+        return await run_blocking(self._list_levels_sync, Path(track_path))
+
     async def has_envelope(self, track_path: Path | str) -> bool:
         return await run_blocking(self._has_envelope_sync, Path(track_path))
+
+    async def touch_envelope_access(self, track_path: Path | str) -> None:
+        await run_blocking(self._touch_envelope_access_sync, Path(track_path))
 
     def _connect(self) -> sqlite3.Connection:
         """Create SQLite connection configured for envelope lookups/writes."""
@@ -245,10 +253,6 @@ class SqliteEnvelopeStore(EnvelopeLevelProvider):
             if row is None:
                 return None
             entry_id = int(row["id"])
-            conn.execute(
-                "UPDATE analysis_cache_entries SET last_accessed_at = strftime('%s','now') WHERE id = ?",
-                (entry_id,),
-            )
             pos = max(0, int(position_ms))
             prev_row = conn.execute(
                 """
@@ -295,6 +299,79 @@ class SqliteEnvelopeStore(EnvelopeLevelProvider):
                 left=_clamp(l0 + ((l1 - l0) * ratio)),
                 right=_clamp(r0 + ((r1 - r0) * ratio)),
             )
+
+    def _touch_envelope_access_sync(self, track_path: Path) -> None:
+        path_norm = _normalize_path(track_path)
+        mtime_ns, size_bytes = _stat_path(track_path)
+        params_hash = _params_hash(_params_json(self._bucket_ms))
+        with self._connect() as conn:
+            conn.execute(
+                """
+                UPDATE analysis_cache_entries
+                SET last_accessed_at = strftime('%s','now')
+                WHERE analysis_type = ?
+                  AND path_norm = ?
+                  AND analysis_version = ?
+                  AND params_hash = ?
+                  AND mtime_ns IS ?
+                  AND size_bytes IS ?
+                """,
+                (
+                    self.ANALYSIS_TYPE,
+                    path_norm,
+                    self._analysis_version,
+                    params_hash,
+                    mtime_ns,
+                    size_bytes,
+                ),
+            )
+
+    def _list_levels_sync(self, track_path: Path) -> list[tuple[int, float, float]]:
+        path_norm = _normalize_path(track_path)
+        mtime_ns, size_bytes = _stat_path(track_path)
+        params_hash = _params_hash(_params_json(self._bucket_ms))
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT id
+                FROM analysis_cache_entries
+                WHERE analysis_type = ?
+                  AND path_norm = ?
+                  AND analysis_version = ?
+                  AND params_hash = ?
+                  AND mtime_ns IS ?
+                  AND size_bytes IS ?
+                LIMIT 1
+                """,
+                (
+                    self.ANALYSIS_TYPE,
+                    path_norm,
+                    self._analysis_version,
+                    params_hash,
+                    mtime_ns,
+                    size_bytes,
+                ),
+            ).fetchone()
+            if row is None:
+                return []
+            entry_id = int(row["id"])
+            points = conn.execute(
+                """
+                SELECT position_ms, level_left, level_right
+                FROM analysis_scalar_frames
+                WHERE entry_id = ?
+                ORDER BY position_ms ASC
+                """,
+                (entry_id,),
+            ).fetchall()
+            return [
+                (
+                    int(point["position_ms"]),
+                    _clamp(float(point["level_left"])),
+                    _clamp(float(point["level_right"])),
+                )
+                for point in points
+            ]
 
     def _has_envelope_sync(self, track_path: Path) -> bool:
         """Return whether valid envelope cache exists for current file fingerprint."""

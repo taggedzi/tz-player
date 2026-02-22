@@ -25,11 +25,18 @@ class _NoLiveProvider:
 class _EnvelopeProvider:
     """Envelope provider stub returning deterministic cached levels."""
 
+    def __init__(self) -> None:
+        self.touch_calls = 0
+
     async def get_level_at(
         self, track_path: str, position_ms: int
     ) -> LevelSample | None:
         del track_path, position_ms
         return LevelSample(left=0.4, right=0.5)
+
+    async def touch_envelope_access(self, track_path: str) -> None:
+        del track_path
+        self.touch_calls += 1
 
 
 class _MissingEnvelopeProvider:
@@ -79,9 +86,10 @@ def test_audio_level_service_prefers_live_source() -> None:
 
 def test_audio_level_service_uses_envelope_when_live_unavailable() -> None:
     async def run() -> None:
+        envelope_provider = _EnvelopeProvider()
         service = AudioLevelService(
             live_provider=_NoLiveProvider(),
-            envelope_provider=_EnvelopeProvider(),
+            envelope_provider=envelope_provider,
         )
         reading = await service.sample(
             status="playing",
@@ -96,6 +104,30 @@ def test_audio_level_service_uses_envelope_when_live_unavailable() -> None:
         assert reading.left == 0.4
         assert reading.right == 0.5
         assert reading.status == "ready"
+        assert envelope_provider.touch_calls == 1
+
+    _run(run())
+
+
+def test_audio_level_service_throttles_envelope_access_touches() -> None:
+    async def run() -> None:
+        envelope_provider = _EnvelopeProvider()
+        service = AudioLevelService(
+            live_provider=_NoLiveProvider(),
+            envelope_provider=envelope_provider,
+        )
+        for position_ms in (10, 20):
+            reading = await service.sample(
+                status="playing",
+                position_ms=position_ms,
+                duration_ms=5000,
+                volume=60,
+                speed=1.0,
+                track_path="/tmp/song.mp3",
+            )
+            assert reading is not None
+            assert reading.source == "envelope"
+        assert envelope_provider.touch_calls == 1
 
     _run(run())
 

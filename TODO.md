@@ -14,6 +14,66 @@ Please see `AGENTS.md` for more instructions.
 
 ## Active Backlog
 
+### T-050 Analysis Pipeline Consolidation + Read-Path Write Elimination
+- Spec Ref: Section `5` (analysis/service model), Section `7` (persistence), Section `8` (non-blocking reliability), `WF-06`
+- Status: `in_progress`
+- Goal:
+  - Reduce analysis-path contention and duplicate decode cost by removing hot-path cache writes during frame sampling and consolidating multi-analysis decode work into one pass.
+- Scope:
+  - Stop per-sample `last_accessed_at` writes from scalar/spectrum/beat/waveform read paths; retain retention correctness via throttled/batched touch semantics.
+  - Add a shared decode/analysis pipeline that computes spectrum + beat + waveform outputs from one decoded PCM pass per track/parameter set.
+  - Keep lazy cache scheduling behavior and plugin capability gating unchanged.
+- Non-goals:
+  - Replacing SQLite-backed analysis cache architecture.
+  - Changing visualizer plugin contracts or capability flags.
+  - Adding live backend PCM extraction in this task.
+- Tasks:
+  - `T-050A` Remove per-sample `last_accessed_at` updates from hot read paths. Status: `in_progress`
+    - Refactor stores so `get_*_at(...)` does not issue write statements per playback poll sample.
+    - Introduce bounded access-touch updates that preserve pruning usefulness without high-frequency lock contention.
+    - Add regression coverage validating read-path lookups remain write-free and cache/prune metadata still updates on bounded cadence.
+  - `T-050B` Shared decode pipeline for spectrum + beat + waveform analysis. Status: `in_progress`
+    - Add shared PCM decode/mono conversion/resample helper reused across analysis modules.
+    - Compute spectrum bands, beat timeline, and waveform proxy from a single decoded track pass.
+    - Update scheduling/write path to upsert all available outputs coherently while preserving lazy/on-demand semantics.
+- Validation (per implementation change set):
+  - `.ubuntu-venv/bin/python -m ruff check .`
+  - `.ubuntu-venv/bin/python -m ruff format --check .`
+  - `.ubuntu-venv/bin/python -m mypy src`
+  - `.ubuntu-venv/bin/python -m pytest`
+
+### T-051 Active-Track In-Memory Analysis Frame Cache
+- Spec Ref: Section `5` (analysis/service model), Section `6` (visualizer/plugin contract), Section `8` (non-blocking reliability/performance), `WF-06`
+- Status: `in_progress`
+- Goal:
+  - Eliminate per-poll analysis frame DB lookups by preloading active-track analysis frames into memory and serving render-time reads from in-memory indexed structures.
+- Scope:
+  - Add store methods to bulk-load cached frames for scalar/spectrum/beat/waveform by track fingerprint + params.
+  - Add service-side in-memory frame caches with nearest-frame/interpolated lookup.
+  - Trigger async preload on active track changes and clear stale in-memory caches on track switch/stop.
+  - Keep existing lazy cache miss scheduling behavior as fallback.
+- Non-goals:
+  - Removing transport polling.
+  - Replacing SQLite persistence for analysis caches.
+  - Broad visualizer algorithm rewrites in this task.
+- Tasks:
+  - `T-051A` Store bulk-read API for analysis frames. Status: `in_progress`
+    - Add `list_*` methods for scalar/spectrum/beat/waveform caches.
+    - Keep fingerprint/version/params filtering consistent with point-lookups.
+  - `T-051B` Service in-memory frame indexes + lookup path. Status: `in_progress`
+    - Add memory-first lookup path with bounded cache keying.
+    - Preserve fallback behavior and status/source semantics on cache miss.
+  - `T-051C` PlayerService preload lifecycle wiring. Status: `in_progress`
+    - Schedule preload on track play/change and cancel stale preload jobs.
+    - Keep poll loop non-blocking while preloading.
+  - `T-051D` Tests for memory-first analysis sampling. Status: `in_progress`
+    - Add/adjust tests to validate preload usage and DB fallback behavior.
+- Validation (per implementation change set):
+  - `.ubuntu-venv/bin/python -m ruff check .`
+  - `.ubuntu-venv/bin/python -m ruff format --check .`
+  - `.ubuntu-venv/bin/python -m mypy src`
+  - `.ubuntu-venv/bin/python -m pytest`
+
 ### T-049 Async/UI Non-Blocking Hardening (Post-#16 Recovery)
 - Spec Ref: Section `5` (analysis/service model), Section `6` (visualizer/plugin contract), Section `7` (persistence), Section `8` (non-blocking reliability), `WF-02`, `WF-06`, `WF-07`
 - Status: `done`
