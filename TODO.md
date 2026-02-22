@@ -150,7 +150,7 @@ Please see `AGENTS.md` for more instructions.
     - Keep/extend synthetic large-playlist tests in `tests/test_performance_opt_in.py` for fetch/search/list/random.
     - Add scenario coverage for viewport-style repeated nearby window fetches and mixed search patterns.
     - Correlate benchmark failures with slow-query events and operation/mode fields.
-  - `T-052H` Result artifact storage + comparison tooling. Status: `todo`
+  - `T-052H` Result artifact storage + comparison tooling. Status: `in_progress`
     - Emit benchmark summaries to a local git-ignored directory (for example `.local/perf_results/`) with timestamp + git SHA metadata.
     - Add a small comparison utility/script that diff-compares two runs and highlights regressions/improvements by metric and threshold.
     - Keep output human-readable and scriptable (JSON + concise text summary).

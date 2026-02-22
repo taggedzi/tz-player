@@ -17,7 +17,9 @@ from typing import TypeAlias
 
 PERF_RESULT_SCHEMA_VERSION = 1
 PERF_MEDIA_DIR_ENV = "TZ_PLAYER_PERF_MEDIA_DIR"
+PERF_RESULTS_DIR_ENV = "TZ_PLAYER_PERF_RESULTS_DIR"
 DEFAULT_LOCAL_PERF_MEDIA_DIR = Path(".local/perf_media")
+DEFAULT_LOCAL_PERF_RESULTS_DIR = Path(".local/perf_results")
 PERF_MEDIA_AUDIO_SUFFIXES = frozenset(
     {".mp3", ".flac", ".wav", ".ogg", ".m4a", ".aac", ".opus", ".wma"}
 )
@@ -71,6 +73,23 @@ def resolve_perf_media_dir(
     if candidate.exists():
         return candidate
     return None
+
+
+def resolve_perf_results_dir(
+    *, cwd: Path | None = None, env: dict[str, str] | None = None
+) -> Path:
+    """Resolve local perf benchmark results directory path."""
+    if env is None:
+        env = os.environ
+    if cwd is None:
+        cwd = Path.cwd()
+    explicit = env.get(PERF_RESULTS_DIR_ENV)
+    if explicit:
+        path = Path(explicit).expanduser()
+        if not path.is_absolute():
+            path = (cwd / path).resolve()
+        return path
+    return (cwd / DEFAULT_LOCAL_PERF_RESULTS_DIR).resolve()
 
 
 def perf_media_skip_reason(media_dir: Path | None) -> str | None:
@@ -247,6 +266,225 @@ class PerfRunResult:
     def to_json(self) -> str:
         """Serialize benchmark artifact to canonical JSON text."""
         return json.dumps(self.to_dict(), sort_keys=True, ensure_ascii=True)
+
+
+@dataclass(frozen=True)
+class PerfMetricDelta:
+    """Comparison of one scenario metric between two benchmark runs."""
+
+    scenario_id: str
+    metric_name: str
+    unit: str
+    baseline_median: float
+    candidate_median: float
+    delta_median: float
+    pct_median: float | None
+    baseline_p95: float
+    candidate_p95: float
+    delta_p95: float
+    pct_p95: float | None
+
+
+@dataclass(frozen=True)
+class PerfComparisonResult:
+    """Structured comparison output for two perf benchmark runs."""
+
+    baseline_run_id: str
+    candidate_run_id: str
+    comparable_metric_count: int
+    regressed_metrics: list[PerfMetricDelta]
+    improved_metrics: list[PerfMetricDelta]
+    unchanged_metrics: list[PerfMetricDelta]
+    missing_in_candidate: list[str]
+    new_in_candidate: list[str]
+
+
+def _safe_pct(delta: float, baseline: float) -> float | None:
+    if baseline == 0:
+        return None
+    return (delta / baseline) * 100.0
+
+
+def _scenario_metric_key(scenario_id: str, metric_name: str) -> str:
+    return f"{scenario_id}.{metric_name}"
+
+
+def _flatten_run_metrics(
+    payload: dict[str, JsonValue],
+) -> dict[str, dict[str, JsonValue]]:
+    scenarios = payload.get("scenarios")
+    if not isinstance(scenarios, list):
+        return {}
+    flat: dict[str, dict[str, JsonValue]] = {}
+    for scenario in scenarios:
+        if not isinstance(scenario, dict):
+            continue
+        scenario_id = scenario.get("scenario_id")
+        metrics = scenario.get("metrics")
+        if not isinstance(scenario_id, str) or not isinstance(metrics, dict):
+            continue
+        for metric_name, metric in metrics.items():
+            if not isinstance(metric_name, str) or not isinstance(metric, dict):
+                continue
+            flat[_scenario_metric_key(scenario_id, metric_name)] = metric
+    return flat
+
+
+def compare_perf_run_payloads(
+    baseline: dict[str, JsonValue],
+    candidate: dict[str, JsonValue],
+    *,
+    regression_pct_threshold: float = 5.0,
+    improvement_pct_threshold: float = -5.0,
+) -> PerfComparisonResult:
+    """Compare two perf benchmark payloads using metric median/p95 values.
+
+    Positive deltas/percentages indicate slower/larger values in the candidate
+    run and are treated as regressions for latency-like metrics. This assumes
+    metric values are "lower is better".
+    """
+    base_flat = _flatten_run_metrics(baseline)
+    cand_flat = _flatten_run_metrics(candidate)
+    base_keys = set(base_flat)
+    cand_keys = set(cand_flat)
+    shared_keys = sorted(base_keys & cand_keys)
+
+    regressed: list[PerfMetricDelta] = []
+    improved: list[PerfMetricDelta] = []
+    unchanged: list[PerfMetricDelta] = []
+
+    for key in shared_keys:
+        base_metric = base_flat[key]
+        cand_metric = cand_flat[key]
+        base_unit = base_metric.get("unit")
+        cand_unit = cand_metric.get("unit")
+        if not isinstance(base_unit, str) or not isinstance(cand_unit, str):
+            continue
+        if base_unit != cand_unit:
+            continue
+        base_med = base_metric.get("median_value")
+        cand_med = cand_metric.get("median_value")
+        base_p95 = base_metric.get("p95_value")
+        cand_p95 = cand_metric.get("p95_value")
+        if not all(
+            isinstance(value, (int, float))
+            for value in (base_med, cand_med, base_p95, cand_p95)
+        ):
+            continue
+        scenario_id, metric_name = key.split(".", 1)
+        delta_median = float(cand_med) - float(base_med)
+        delta_p95 = float(cand_p95) - float(base_p95)
+        pct_median = _safe_pct(delta_median, float(base_med))
+        pct_p95 = _safe_pct(delta_p95, float(base_p95))
+        delta = PerfMetricDelta(
+            scenario_id=scenario_id,
+            metric_name=metric_name,
+            unit=base_unit,
+            baseline_median=float(base_med),
+            candidate_median=float(cand_med),
+            delta_median=delta_median,
+            pct_median=pct_median,
+            baseline_p95=float(base_p95),
+            candidate_p95=float(cand_p95),
+            delta_p95=delta_p95,
+            pct_p95=pct_p95,
+        )
+        if pct_median is not None and pct_median >= regression_pct_threshold:
+            regressed.append(delta)
+        elif pct_median is not None and pct_median <= improvement_pct_threshold:
+            improved.append(delta)
+        else:
+            unchanged.append(delta)
+
+    def _sorted_deltas(values: list[PerfMetricDelta]) -> list[PerfMetricDelta]:
+        return sorted(
+            values,
+            key=lambda value: (
+                float("-inf") if value.pct_median is None else -value.pct_median
+            ),
+        )
+
+    return PerfComparisonResult(
+        baseline_run_id=str(baseline.get("run_id") or "baseline"),
+        candidate_run_id=str(candidate.get("run_id") or "candidate"),
+        comparable_metric_count=len(shared_keys),
+        regressed_metrics=_sorted_deltas(regressed),
+        improved_metrics=_sorted_deltas(improved),
+        unchanged_metrics=unchanged,
+        missing_in_candidate=sorted(base_keys - cand_keys),
+        new_in_candidate=sorted(cand_keys - base_keys),
+    )
+
+
+def write_perf_run_artifact(
+    run: PerfRunResult,
+    *,
+    results_dir: Path | None = None,
+    cwd: Path | None = None,
+    env: dict[str, str] | None = None,
+) -> Path:
+    """Write benchmark result artifact JSON to local perf-results directory."""
+    if results_dir is None:
+        results_dir = resolve_perf_results_dir(cwd=cwd, env=env)
+    results_dir.mkdir(parents=True, exist_ok=True)
+    safe_run_id = "".join(
+        ch if ch.isalnum() or ch in "-._" else "_" for ch in run.run_id
+    )
+    stem = f"{run.created_at.replace(':', '').replace('-', '')}_{safe_run_id}"
+    path = results_dir / f"{stem}.json"
+    path.write_text(run.to_json() + "\n", encoding="utf-8")
+    return path
+
+
+def load_perf_run_payload(path: Path) -> dict[str, JsonValue]:
+    """Load and validate a benchmark result payload from JSON artifact."""
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("perf artifact root must be a JSON object")
+    errors = validate_perf_run_payload(payload)
+    if errors:
+        joined = "; ".join(errors[:5])
+        raise ValueError(f"invalid perf artifact payload: {joined}")
+    return payload
+
+
+def render_perf_comparison_text(
+    comparison: PerfComparisonResult, *, max_rows_per_section: int = 10
+) -> str:
+    """Render human-readable comparison summary."""
+    lines = [
+        "Perf comparison",
+        f"baseline={comparison.baseline_run_id}",
+        f"candidate={comparison.candidate_run_id}",
+        f"comparable_metrics={comparison.comparable_metric_count}",
+        f"regressed={len(comparison.regressed_metrics)} improved={len(comparison.improved_metrics)} unchanged={len(comparison.unchanged_metrics)}",
+    ]
+
+    def _append_section(title: str, rows: list[PerfMetricDelta]) -> None:
+        lines.append(f"{title}:")
+        if not rows:
+            lines.append("  none")
+            return
+        for row in rows[:max_rows_per_section]:
+            pct = "n/a" if row.pct_median is None else f"{row.pct_median:+.1f}%"
+            lines.append(
+                "  "
+                f"{row.scenario_id}.{row.metric_name} "
+                f"median {row.baseline_median:.3f}->{row.candidate_median:.3f} {row.unit} "
+                f"({pct})"
+            )
+
+    _append_section("Regressions", comparison.regressed_metrics)
+    _append_section("Improvements", comparison.improved_metrics)
+    if comparison.missing_in_candidate:
+        lines.append("Missing metrics in candidate:")
+        for key in comparison.missing_in_candidate[:max_rows_per_section]:
+            lines.append(f"  {key}")
+    if comparison.new_in_candidate:
+        lines.append("New metrics in candidate:")
+        for key in comparison.new_in_candidate[:max_rows_per_section]:
+            lines.append(f"  {key}")
+    return "\n".join(lines)
 
 
 def validate_perf_run_payload(payload: dict[str, JsonValue]) -> list[str]:
