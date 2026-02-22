@@ -37,4 +37,5 @@ Thumbs.db
 .config/
 *.sqlite
 *.log
-.local/perf_media
+.local/perf_media/*
+!.local/perf_media/.gitkeep
