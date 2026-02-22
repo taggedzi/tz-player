@@ -74,6 +74,8 @@ def analyze_spectrum_from_mono(
     hop_samples = max(1, int(sample_rate * (hop_ms / 1000.0)))
     window_size = _window_size(hop_samples)
     freqs = _log_frequencies(band_count, sample_rate)
+    hann_weights = _hann_weights(window_size)
+    goertzel_coeffs = _goertzel_coeffs(sample_rate, freqs, window_size)
 
     magnitudes: list[list[float]] = []
     frame_positions: list[int] = []
@@ -82,8 +84,8 @@ def analyze_spectrum_from_mono(
         window = mono_samples[start : start + window_size]
         if len(window) < window_size:
             window = [*window, *([0.0] * (window_size - len(window)))]
-        windowed = _hann_window(window)
-        magnitudes.append(_frame_magnitudes(windowed, sample_rate, freqs))
+        windowed = _apply_hann_window(window, hann_weights)
+        magnitudes.append(_frame_magnitudes(windowed, goertzel_coeffs))
 
     if not magnitudes:
         return None
@@ -123,22 +125,37 @@ def _log_frequencies(band_count: int, sample_rate: int) -> list[float]:
     return [min_freq * (ratio**idx) for idx in range(band_count)]
 
 
-def _hann_window(values: list[float]) -> list[float]:
-    size = len(values)
+def _hann_weights(size: int) -> list[float]:
     if size <= 1:
-        return values
+        return [1.0 for _ in range(max(1, size))]
     return [
-        values[idx] * (0.5 - (0.5 * math.cos((2.0 * math.pi * idx) / (size - 1))))
+        0.5 - (0.5 * math.cos((2.0 * math.pi * idx) / (size - 1)))
         for idx in range(size)
     ]
 
 
+def _apply_hann_window(values: list[float], weights: list[float]) -> list[float]:
+    return [value * weight for value, weight in zip(values, weights)]
+
+
 def _frame_magnitudes(
     window: list[float],
-    sample_rate: int,
-    freqs: list[float],
+    coeffs: list[float],
 ) -> list[float]:
-    return [_goertzel_power(window, sample_rate, freq) for freq in freqs]
+    return [_goertzel_power_with_coeff(window, coeff) for coeff in coeffs]
+
+
+def _goertzel_coeffs(
+    sample_rate: int, freqs: list[float], sample_count: int
+) -> list[float]:
+    if sample_count <= 0 or sample_rate <= 0:
+        return [0.0 for _ in freqs]
+    coeffs: list[float] = []
+    for freq_hz in freqs:
+        k = int(0.5 + ((sample_count * freq_hz) / sample_rate))
+        omega = (2.0 * math.pi * k) / sample_count
+        coeffs.append(2.0 * math.cos(omega))
+    return coeffs
 
 
 def _goertzel_power(samples: list[float], sample_rate: int, freq_hz: float) -> float:
@@ -148,6 +165,21 @@ def _goertzel_power(samples: list[float], sample_rate: int, freq_hz: float) -> f
     k = int(0.5 + ((sample_count * freq_hz) / sample_rate))
     omega = (2.0 * math.pi * k) / sample_count
     coeff = 2.0 * math.cos(omega)
+    s_prev = 0.0
+    s_prev2 = 0.0
+    for sample in samples:
+        s = sample + (coeff * s_prev) - s_prev2
+        s_prev2 = s_prev
+        s_prev = s
+    power = (s_prev2 * s_prev2) + (s_prev * s_prev) - (coeff * s_prev * s_prev2)
+    if power <= 0.0:
+        return 0.0
+    return math.log1p(power)
+
+
+def _goertzel_power_with_coeff(samples: list[float], coeff: float) -> float:
+    if not samples:
+        return 0.0
     s_prev = 0.0
     s_prev2 = 0.0
     for sample in samples:

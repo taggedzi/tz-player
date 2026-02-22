@@ -1062,6 +1062,22 @@ def test_real_analysis_cache_cold_warm_benchmark_artifact(tmp_path) -> None:
             assert bundle.spectrum is not None
             assert bundle.beat is not None
             assert bundle.waveform_proxy is not None
+            if bundle.timings is not None:
+                cold_metrics_samples.setdefault("bundle_decode_ms", []).append(
+                    bundle.timings.decode_ms
+                )
+                cold_metrics_samples.setdefault("bundle_spectrum_ms", []).append(
+                    bundle.timings.spectrum_ms
+                )
+                cold_metrics_samples.setdefault("bundle_beat_ms", []).append(
+                    bundle.timings.beat_ms
+                )
+                cold_metrics_samples.setdefault("bundle_waveform_ms", []).append(
+                    bundle.timings.waveform_proxy_ms
+                )
+                cold_metrics_samples.setdefault("bundle_total_ms", []).append(
+                    bundle.timings.total_ms
+                )
 
             start = time.perf_counter()
             await spectrum_store.upsert_spectrum(
