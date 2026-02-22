@@ -1283,6 +1283,23 @@ def test_real_analysis_cache_cold_warm_benchmark_artifact(tmp_path) -> None:
         metadata["corpus_manifest"] = build_perf_media_manifest(
             media_dir, probe_durations=False
         )
+        cold_elapsed_metric_names = set(cold_metrics_samples)
+        if "bundle_total_ms" in cold_elapsed_metric_names:
+            cold_elapsed_metric_names.discard("bundle_analyze_ms")
+            cold_elapsed_metric_names.discard("bundle_decode_ms")
+            cold_elapsed_metric_names.discard("bundle_spectrum_ms")
+            cold_elapsed_metric_names.discard("bundle_beat_ms")
+            cold_elapsed_metric_names.discard("bundle_waveform_ms")
+        elif "bundle_analyze_ms" in cold_elapsed_metric_names:
+            cold_elapsed_metric_names.discard("bundle_decode_ms")
+            cold_elapsed_metric_names.discard("bundle_spectrum_ms")
+            cold_elapsed_metric_names.discard("bundle_beat_ms")
+            cold_elapsed_metric_names.discard("bundle_waveform_ms")
+        cold_elapsed_ms = sum(
+            sum(cold_metrics_samples[name])
+            for name in sorted(cold_elapsed_metric_names)
+        )
+        warm_elapsed_ms = sum(sum(values) for values in warm_metrics_samples.values())
 
         run = PerfRunResult(
             run_id=f"analysis-cache-real-{uuid.uuid4().hex[:8]}",
@@ -1301,11 +1318,7 @@ def test_real_analysis_cache_cold_warm_benchmark_artifact(tmp_path) -> None:
                     scenario_id="cold_cache_track_play",
                     category="analysis_cache",
                     status="pass",
-                    elapsed_s=round(
-                        sum(sum(values) for values in cold_metrics_samples.values())
-                        / 1000.0,
-                        6,
-                    ),
+                    elapsed_s=round(cold_elapsed_ms / 1000.0, 6),
                     metrics={
                         name: summarize_samples(samples, unit="ms")
                         for name, samples in cold_metrics_samples.items()
@@ -1321,11 +1334,7 @@ def test_real_analysis_cache_cold_warm_benchmark_artifact(tmp_path) -> None:
                     scenario_id="warm_cache_track_play",
                     category="analysis_cache",
                     status="pass",
-                    elapsed_s=round(
-                        sum(sum(values) for values in warm_metrics_samples.values())
-                        / 1000.0,
-                        6,
-                    ),
+                    elapsed_s=round(warm_elapsed_ms / 1000.0, 6),
                     metrics={
                         name: summarize_samples(samples, unit="ms")
                         for name, samples in warm_metrics_samples.items()

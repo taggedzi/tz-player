@@ -79,13 +79,22 @@ def analyze_spectrum_from_mono(
 
     magnitudes: list[list[float]] = []
     frame_positions: list[int] = []
-    for start in range(0, len(mono_samples), hop_samples):
+    window_buffer = [0.0] * window_size
+    windowed_buffer = [0.0] * window_size
+    total_samples = len(mono_samples)
+    for frame_count, start in enumerate(range(0, total_samples, hop_samples)):
+        if frame_count >= max_frames:
+            break
         frame_positions.append(int((start * 1000) / sample_rate))
-        window = mono_samples[start : start + window_size]
-        if len(window) < window_size:
-            window = [*window, *([0.0] * (window_size - len(window)))]
-        windowed = _apply_hann_window(window, hann_weights)
-        magnitudes.append(_frame_magnitudes(windowed, goertzel_coeffs))
+        _fill_window_buffer(
+            mono_samples,
+            start,
+            window_size,
+            total_samples,
+            window_buffer,
+        )
+        _apply_hann_window_inplace(window_buffer, hann_weights, windowed_buffer)
+        magnitudes.append(_frame_magnitudes(windowed_buffer, goertzel_coeffs))
 
     if not magnitudes:
         return None
@@ -96,8 +105,6 @@ def analyze_spectrum_from_mono(
 
     frames: list[tuple[int, bytes]] = []
     for idx, row in enumerate(magnitudes):
-        if idx >= max_frames:
-            break
         quantized = bytes(_quantize_level(value / max_mag) for value in row)
         frames.append((frame_positions[idx], quantized))
 
@@ -136,6 +143,32 @@ def _hann_weights(size: int) -> list[float]:
 
 def _apply_hann_window(values: list[float], weights: list[float]) -> list[float]:
     return [value * weight for value, weight in zip(values, weights)]
+
+
+def _apply_hann_window_inplace(
+    values: list[float],
+    weights: list[float],
+    out: list[float],
+) -> None:
+    for idx, (value, weight) in enumerate(zip(values, weights)):
+        out[idx] = value * weight
+
+
+def _fill_window_buffer(
+    source: list[float],
+    start: int,
+    window_size: int,
+    total_samples: int,
+    out: list[float],
+) -> None:
+    end = min(total_samples, start + window_size)
+    copied = 0
+    for sample_idx in range(start, end):
+        out[copied] = source[sample_idx]
+        copied += 1
+    while copied < window_size:
+        out[copied] = 0.0
+        copied += 1
 
 
 def _frame_magnitudes(
