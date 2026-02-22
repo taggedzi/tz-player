@@ -43,3 +43,5 @@ Thumbs.db
 !.local/perf_results/.gitkeep
 .local/perf_profiles/*
 !.local/perf_profiles/.gitkeep
+NOTE.md
+*.obj

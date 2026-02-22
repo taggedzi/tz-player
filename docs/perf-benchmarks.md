@@ -169,6 +169,219 @@ By default the report is written next to the suite summary as:
 
 - `*_suite_summary.report.html`
 
+## Native Spectrum Helper POC Workflow (Local/Dev)
+
+This repo includes a local/dev POC path for an optional native spectrum helper
+used by the `analysis-cache` benchmark and a focused `analysis-bundle-sw`
+benchmark (`spectrum + waveform`, no beat). The helper is selected via:
+
+- `TZ_PLAYER_NATIVE_SPECTRUM_HELPER_CMD`
+
+Current helper implementations (local/dev only):
+
+- Python stub helper: `tools/native_spectrum_helper_stub.py`
+- Compiled C helper POC: `tools/native_spectrum_helper_c_poc.c`
+  - WAV decode path built in
+  - non-WAV decode via local `ffmpeg` subprocess
+
+### POC Prerequisites
+
+- `.ubuntu-venv/bin/python`
+- `ffmpeg` on `PATH` (required for MP3/non-WAV corpus analysis)
+- `gcc` on `PATH` (only for compiled C helper POC)
+
+### Fast Path: Helper POC Runner Script
+
+Use the local helper benchmark runner script (builds the C helper automatically
+when `--helper c` is selected):
+
+```bash
+bash tools/run_native_spectrum_helper_poc_bench.sh --helper c
+```
+
+Run the focused bundle benchmark that can exercise the helper-only
+`spectrum+waveform` path (no beat):
+
+```bash
+bash tools/run_native_spectrum_helper_poc_bench.sh \
+  --helper c \
+  --scenario analysis-bundle-sw
+```
+
+Run against a small subset corpus while iterating:
+
+```bash
+bash tools/run_native_spectrum_helper_poc_bench.sh \
+  --helper c \
+  --media-dir /tmp/tz_player_perf_mp3_subset \
+  --label native-cli-c-poc-subset
+```
+
+Use the Python stub helper (increase timeout to avoid false fallbacks on larger MP3s):
+
+```bash
+bash tools/run_native_spectrum_helper_poc_bench.sh \
+  --helper stub \
+  --timeout-s 30 \
+  --media-dir /tmp/tz_player_perf_mp3_subset \
+  --label native-cli-stub-subset
+```
+
+### Manual Env-Var Invocation (Equivalent)
+
+Compiled helper:
+
+```bash
+bash tools/build_native_spectrum_helper_c_poc.sh /tmp/native_spectrum_helper_c_poc
+env \
+  TZ_PLAYER_RUN_PERF=1 \
+  TZ_PLAYER_NATIVE_SPECTRUM_HELPER_CMD=/tmp/native_spectrum_helper_c_poc \
+  .ubuntu-venv/bin/python tools/perf_run.py --scenario analysis-cache --repeat 1 --label native-cli-c-poc
+```
+
+Python stub helper:
+
+```bash
+env \
+  TZ_PLAYER_RUN_PERF=1 \
+  TZ_PLAYER_NATIVE_SPECTRUM_HELPER_CMD=".ubuntu-venv/bin/python tools/native_spectrum_helper_stub.py" \
+  TZ_PLAYER_NATIVE_SPECTRUM_HELPER_TIMEOUT_S=30 \
+  .ubuntu-venv/bin/python tools/perf_run.py --scenario analysis-cache --repeat 1 --label native-cli-stub
+```
+
+### Windows Local Build/Run (Dev POC)
+
+Windows support for the compiled helper is still local/dev POC quality, but the
+repo now includes a PowerShell build helper:
+
+- `tools/build_native_spectrum_helper_c_poc.ps1`
+
+Prerequisites (Windows):
+
+- `ffmpeg.exe` on `PATH` (required for MP3/non-WAV decode)
+- one C compiler on `PATH`:
+  - `cl.exe` (Visual Studio Developer PowerShell), or
+  - `gcc.exe` / `clang.exe` (MinGW/LLVM)
+
+Build (PowerShell):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools/build_native_spectrum_helper_c_poc.ps1 `
+  -OutPath "$env:TEMP\native_spectrum_helper_c_poc.exe"
+```
+
+The script will try to auto-detect Visual Studio Build Tools via `vswhere.exe`
+and re-run itself through `VsDevCmd.bat` when `cl.exe` is not already on
+`PATH`. If that fails, open `Developer PowerShell for VS` and run the same
+command again.
+
+Quick helper smoke invocation (PowerShell; replace track path):
+
+```powershell
+$helper = "$env:TEMP\native_spectrum_helper_c_poc.exe"
+$req = @{
+  schema = "tz_player.native_spectrum_helper_request.v1"
+  track_path = "C:\path\to\track.mp3"
+  spectrum = @{
+    mono_target_rate_hz = 11025
+    hop_ms = 40
+    band_count = 8
+    max_frames = 100
+  }
+  beat = @{
+    hop_ms = 40
+    max_frames = 100
+  }
+  waveform_proxy = @{
+    hop_ms = 20
+    max_frames = 200
+  }
+} | ConvertTo-Json -Depth 4 -Compress
+
+$req | & $helper
+```
+
+Using the helper from Python perf runs on Windows (PowerShell):
+
+```powershell
+$env:TZ_PLAYER_RUN_PERF = "1"
+$env:TZ_PLAYER_NATIVE_SPECTRUM_HELPER_CMD = "$env:TEMP\native_spectrum_helper_c_poc.exe"
+$env:TZ_PLAYER_NATIVE_SPECTRUM_HELPER_TIMEOUT_S = "30"
+python tools/perf_run.py --scenario analysis-cache --repeat 1 --label native-cli-c-poc-win
+```
+
+Notes:
+
+- The Windows helper `ffmpeg` path now uses `CreateProcessA` + pipes (not shell-string execution).
+- This workflow is documented from Linux-side development and is not yet runtime-validated on Windows in CI.
+
+### GitHub Actions Helper Artifacts (Manual)
+
+If you want helper binaries without installing a local compiler, use the manual
+workflow:
+
+- `.github/workflows/native-helper-artifacts.yml`
+
+It builds and uploads helper artifacts for:
+
+- `ubuntu-latest`
+- `windows-latest`
+
+Current scope:
+
+- helper binary build + artifact upload only (no signing, no release publishing)
+- manual trigger (`workflow_dispatch`)
+
+### Helper/Backend Metadata in Artifacts and Reports
+
+The `analysis-cache` benchmark and focused `analysis-bundle-sw` benchmark record
+helper/backend metadata, including:
+
+- per-track:
+  - `analysis_backend`
+  - `spectrum_backend`
+  - `beat_backend`
+  - `analysis_fallback_reason`
+  - `native_helper_version`
+  - `duplicate_decode_for_mixed_bundle`
+  - `waveform_proxy_backend` (`analysis-bundle-sw` includes this explicitly)
+- aggregate:
+  - `analysis_backend_counts`
+  - `beat_backend_counts`
+  - `waveform_proxy_backend_counts`
+  - `analysis_fallback_reason_counts` (when non-empty)
+  - helper command / timeout metadata
+
+`tools/perf_compare_suite.py` and `tools/perf_report.py` surface backend/helper
+metadata summaries and warnings.
+
+### `tracks_analyzed=0` Warning (Common Causes)
+
+If compare/report output shows `zero_tracks_analyzed=...` warnings:
+
+- local corpus requires `ffmpeg` (for example MP3 files) and `ffmpeg` is not on `PATH`
+- helper timeout is too low (especially the Python stub helper)
+- selected files are unsupported or failed to decode
+
+### Current POC Findings (Local, Directional)
+
+These are machine- and corpus-dependent, but current local runs showed:
+
+- The Python stub helper is useful for contract/plumbing validation but can hit helper
+  timeout on larger MP3s unless timeout is increased (for example `30s`).
+- The compiled C helper POC with `ffmpeg` decode (`c-poc-ffmpeg-v2`) produced strong
+  cold-path improvements versus the Python stub helper on a small MP3 subset
+  (`analysis-cache` scenario), including large reductions in:
+  - `bundle_decode_ms`
+  - `bundle_analyze_ms`
+  - `bundle_total_ms`
+  - `bundle_spectrum_ms`
+- A focused `analysis-bundle-sw` benchmark is available to measure the newer
+  helper-only `spectrum+waveform` optimization path without beat-path noise.
+
+Treat these as directional POC evidence. The mixed bundle path still uses duplicate
+decode (`native spectrum + Python beat/waveform`) and is not yet a final architecture.
+
 ## Recommended Workflow (Repeatable)
 
 1. Record machine context (same machine, same power mode, minimal background apps).

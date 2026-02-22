@@ -21,6 +21,7 @@ from tz_player.perf_benchmarking import (
 SCENARIO_TESTS: dict[str, str] = {
     "track-switch": "test_player_service_track_switch_and_preload_benchmark_smoke",
     "analysis-cache": "test_real_analysis_cache_cold_warm_benchmark_artifact",
+    "analysis-bundle-sw": "test_real_analysis_bundle_spectrum_waveform_cold_benchmark_artifact",
     "controls": "test_controls_latency_jitter_under_background_load_benchmark",
     "visualizer-matrix": "test_advanced_visualizer_matrix_benchmark_artifact",
     "db-query-matrix": "test_large_playlist_db_query_matrix_benchmark_artifact",
@@ -40,7 +41,7 @@ SUITE_SCENARIOS: dict[str, list[str]] = {
         "hidden-hotspot-save-log",
         "resource-trend",
     ],
-    "analysis": ["analysis-cache", "track-switch"],
+    "analysis": ["analysis-cache", "analysis-bundle-sw", "track-switch"],
     "visualizers": ["visualizer-matrix"],
     "controls-ui": ["controls", "hidden-hotspot-call-probe", "hidden-hotspot-save-log"],
     "database": ["db-query-matrix"],
