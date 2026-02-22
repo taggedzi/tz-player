@@ -142,7 +142,7 @@ Please see `AGENTS.md` for more instructions.
     - Expand current advanced visualizer perf checks to collect richer metrics (median/p95/max, overrun rate, runtime FPS backoff events).
     - Partition matrix into tiers (`cheap`, `medium`, `heavy`) so regressions are attributable and runtime stays bounded.
     - Include at least one beat-reactive and one waveform-proxy visualizer path per run.
-  - `T-052F` Controls and UI interaction benchmark coverage. Status: `todo`
+  - `T-052F` Controls and UI interaction benchmark coverage. Status: `in_progress`
     - Add opt-in latency checks for representative control actions (`play/pause`, `next`, `seek`, `volume`, visualizer cycle).
     - Measure while background analysis is active to catch event-loop starvation regressions.
     - Report interaction jitter, not only median latency.

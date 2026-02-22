@@ -9,6 +9,7 @@ import sqlite3
 import statistics
 import time
 import uuid
+from contextlib import suppress
 from pathlib import Path
 
 import pytest
@@ -32,6 +33,7 @@ from tz_player.services.player_service import PlayerService, TrackInfo
 from tz_player.services.playlist_store import POS_STEP, PlaylistStore
 from tz_player.services.spectrum_store import SpectrumParams
 from tz_player.services.waveform_proxy_store import WaveformProxyParams
+from tz_player.utils.async_utils import run_cpu_bound
 from tz_player.visualizers.base import VisualizerContext, VisualizerFrameInput
 from tz_player.visualizers.host import VisualizerHost
 from tz_player.visualizers.registry import VisualizerRegistry
@@ -105,6 +107,13 @@ class FakeAppDirs:
 def _run(coro):
     """Run async performance scenario from sync test body."""
     return asyncio.run(coro)
+
+
+def _cpu_spin(iterations: int) -> int:
+    total = 0
+    for idx in range(iterations):
+        total += (idx * idx) % 97
+    return total
 
 
 def _setup_dirs(tmp_path, monkeypatch) -> None:
@@ -579,3 +588,115 @@ def test_player_service_track_switch_and_preload_benchmark_smoke(tmp_path) -> No
     assert max(play_item_latencies_ms) < 500.0
     assert max(preload_event_latencies_ms) < 2000.0
     assert artifact_path.exists()
+
+
+def test_controls_latency_jitter_under_background_load_benchmark(
+    tmp_path, monkeypatch
+) -> None:
+    _setup_dirs(tmp_path, monkeypatch)
+    app = TzPlayerApp(auto_init=False, backend_name="fake")
+
+    async def run_scenario() -> tuple[dict[str, list[float]], Path]:
+        async with app.run_test():
+            await asyncio.sleep(0)
+            await app._initialize_state()
+
+            stop_event = asyncio.Event()
+
+            async def background_load() -> None:
+                while not stop_event.is_set():
+                    await run_cpu_bound(_cpu_spin, 80_000)
+                    await asyncio.sleep(0)
+
+            worker = asyncio.create_task(background_load())
+            action_samples_ms: dict[str, list[float]] = {
+                "volume_up_ms": [],
+                "volume_down_ms": [],
+                "speed_up_ms": [],
+                "speed_reset_ms": [],
+                "repeat_mode_ms": [],
+                "shuffle_ms": [],
+                "cycle_visualizer_ms": [],
+            }
+            action_steps = [
+                ("volume_up_ms", app.action_volume_up),
+                ("volume_down_ms", app.action_volume_down),
+                ("speed_up_ms", app.action_speed_up),
+                ("speed_reset_ms", app.action_speed_reset),
+                ("repeat_mode_ms", app.action_repeat_mode),
+                ("shuffle_ms", app.action_shuffle),
+                ("cycle_visualizer_ms", app.action_cycle_visualizer),
+            ]
+
+            try:
+                for _ in range(8):
+                    for metric_name, action in action_steps:
+                        start = time.perf_counter()
+                        await action()
+                        action_samples_ms[metric_name].append(
+                            (time.perf_counter() - start) * 1000.0
+                        )
+                        await asyncio.sleep(0)
+            finally:
+                stop_event.set()
+                worker.cancel()
+                with suppress(asyncio.CancelledError):
+                    await worker
+
+            metrics = {
+                metric_name: summarize_samples(samples, unit="ms")
+                for metric_name, samples in action_samples_ms.items()
+                if samples
+            }
+            jitter_counters = {
+                f"{metric_name}_p95_minus_p50_ms": round(
+                    summary.p95_value - summary.median_value,
+                    4,
+                )
+                for metric_name, summary in metrics.items()
+            }
+
+            run = PerfRunResult(
+                run_id=f"controls-jitter-{uuid.uuid4().hex[:8]}",
+                created_at=utc_now_iso(),
+                app_version=None,
+                git_sha=None,
+                machine={"runner": "pytest-opt-in"},
+                config={
+                    "scenario": "controls_latency_jitter_under_background_load",
+                    "iterations": 8,
+                    "background_load": "run_cpu_bound(_cpu_spin, 80000)",
+                },
+                scenarios=[
+                    PerfScenarioResult(
+                        scenario_id="controls_interaction_latency",
+                        category="controls",
+                        status="pass",
+                        elapsed_s=round(
+                            sum(sum(samples) for samples in action_samples_ms.values())
+                            / 1000.0,
+                            6,
+                        ),
+                        metrics=metrics,
+                        counters={
+                            "actions_per_type": 8,
+                            "total_action_invocations": sum(
+                                len(samples) for samples in action_samples_ms.values()
+                            ),
+                            **jitter_counters,
+                        },
+                        metadata={"visualizer_id": app._active_visualizer_id},
+                    )
+                ],
+            )
+            artifact_path = write_perf_run_artifact(
+                run, results_dir=tmp_path / "perf_results"
+            )
+            app.exit()
+            return action_samples_ms, artifact_path
+
+    action_samples_ms, artifact_path = _run(run_scenario())
+    assert artifact_path.exists()
+    for samples in action_samples_ms.values():
+        assert len(samples) == 8
+        assert max(samples) < 1000.0
