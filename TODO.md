@@ -131,7 +131,7 @@ Please see `AGENTS.md` for more instructions.
     - Add perf-test configuration/env support for a local corpus path (default `.local/perf_media/` if present).
     - Validate corpus presence/shape and skip with explicit reason when missing.
     - Record corpus manifest details in benchmark output (track count, durations, formats) for reproducibility.
-  - `T-052D` Track-switch and analysis-cache benchmark scenarios. Status: `todo`
+  - `T-052D` Track-switch and analysis-cache benchmark scenarios. Status: `in_progress`
     - Add opt-in perf tests/scripts that measure:
       - selected/play action -> first fallback frame visible
       - selected/play action -> `fallback -> envelope` transition

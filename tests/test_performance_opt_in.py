@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import sqlite3
 import statistics
 import time
+import uuid
 from pathlib import Path
 
 import pytest
@@ -14,11 +16,22 @@ import pytest
 import tz_player.paths as paths
 from tz_player.app import TzPlayerApp
 from tz_player.perf_benchmarking import (
+    PerfRunResult,
+    PerfScenarioResult,
     build_perf_media_manifest,
     perf_media_skip_reason,
     resolve_perf_media_dir,
+    summarize_samples,
+    utc_now_iso,
+    write_perf_run_artifact,
 )
+from tz_player.perf_observability import capture_perf_events
+from tz_player.services.beat_store import BeatParams
+from tz_player.services.fake_backend import FakePlaybackBackend
+from tz_player.services.player_service import PlayerService, TrackInfo
 from tz_player.services.playlist_store import POS_STEP, PlaylistStore
+from tz_player.services.spectrum_store import SpectrumParams
+from tz_player.services.waveform_proxy_store import WaveformProxyParams
 from tz_player.visualizers.base import VisualizerContext, VisualizerFrameInput
 from tz_player.visualizers.host import VisualizerHost
 from tz_player.visualizers.registry import VisualizerRegistry
@@ -375,3 +388,194 @@ def test_local_perf_media_corpus_manifest_smoke() -> None:
     assert int(manifest["track_count"]) > 0
     assert int(manifest["total_bytes"]) > 0
     assert isinstance(manifest["formats"], dict)
+
+
+class _DelayedFramePreloadStub:
+    def __init__(self, *, frame_count: int, delay_s: float) -> None:
+        self.frame_count = frame_count
+        self.delay_s = delay_s
+        self.preload_calls: list[str] = []
+        self.clear_calls: list[str] = []
+
+    async def preload_track(self, track_path: str, **_kwargs) -> int:
+        self.preload_calls.append(track_path)
+        await asyncio.sleep(self.delay_s)
+        return self.frame_count
+
+    def clear_track_cache(self, track_path: str | None = None) -> None:
+        if track_path is not None:
+            self.clear_calls.append(track_path)
+
+
+class _DelayedEnvelopeProvider:
+    def __init__(self, *, frame_count: int, delay_s: float) -> None:
+        self.frame_count = frame_count
+        self.delay_s = delay_s
+        self.calls: list[str] = []
+
+    async def get_level_at(self, track_path: str, position_ms: int):
+        _ = (track_path, position_ms)
+        return None
+
+    async def list_levels(self, track_path: str) -> list[tuple[int, float, float]]:
+        self.calls.append(track_path)
+        await asyncio.sleep(self.delay_s)
+        return [(idx * 20, 0.2, 0.25) for idx in range(self.frame_count)]
+
+    async def touch_envelope_access(self, track_path: str) -> None:
+        _ = track_path
+
+
+async def _wait_for_analysis_preload_event(
+    handler, *, track_path: str, timeout_s: float = 2.0
+):
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        for event in handler.snapshot():
+            if event.event != "analysis_preload_completed":
+                continue
+            if event.context.get("track_path") == track_path:
+                return event
+        await asyncio.sleep(0.01)
+    raise AssertionError(
+        f"Timed out waiting for analysis_preload_completed for {track_path}"
+    )
+
+
+def test_player_service_track_switch_and_preload_benchmark_smoke(tmp_path) -> None:
+    media_dir = resolve_perf_media_dir()
+    skip_reason = perf_media_skip_reason(media_dir)
+    if skip_reason is not None:
+        pytest.skip(skip_reason)
+    assert media_dir is not None
+
+    corpus_files = sorted(
+        path
+        for path in media_dir.rglob("*")
+        if path.is_file()
+        and path.suffix.lower() in {".mp3", ".flac", ".wav", ".ogg", ".m4a"}
+    )
+    if len(corpus_files) < 3:
+        pytest.skip("Need at least 3 audio files in perf corpus for switch benchmark.")
+    sample_files = corpus_files[:5]
+
+    async def emit_event(_event: object) -> None:
+        return None
+
+    async def track_info_provider(_playlist_id: int, item_id: int) -> TrackInfo | None:
+        if item_id < 1 or item_id > len(sample_files):
+            return None
+        path = sample_files[item_id - 1]
+        return TrackInfo(
+            title=path.stem,
+            artist="Perf",
+            album="Perf",
+            year=None,
+            path=str(path),
+            duration_ms=180_000,
+        )
+
+    async def run_scenario() -> tuple[list[float], list[float], Path]:
+        spectrum_stub = _DelayedFramePreloadStub(frame_count=4096, delay_s=0.008)
+        beat_stub = _DelayedFramePreloadStub(frame_count=4096, delay_s=0.006)
+        wave_stub = _DelayedFramePreloadStub(frame_count=6144, delay_s=0.010)
+        envelope_provider = _DelayedEnvelopeProvider(frame_count=3000, delay_s=0.005)
+        service = PlayerService(
+            emit_event=emit_event,
+            track_info_provider=track_info_provider,
+            backend=FakePlaybackBackend(tick_interval_ms=20),
+            envelope_provider=envelope_provider,
+            spectrum_service=spectrum_stub,  # type: ignore[arg-type]
+            spectrum_params=SpectrumParams(band_count=48, hop_ms=32),
+            should_sample_spectrum=lambda: False,
+            waveform_proxy_service=wave_stub,  # type: ignore[arg-type]
+            waveform_proxy_params=WaveformProxyParams(hop_ms=20),
+            should_sample_waveform=lambda: False,
+            beat_service=beat_stub,  # type: ignore[arg-type]
+            beat_params=BeatParams(hop_ms=32),
+            should_sample_beat=lambda: False,
+            poll_interval_s=0.05,
+        )
+        play_item_latencies_ms: list[float] = []
+        preload_event_latencies_ms: list[float] = []
+        root = logging.getLogger()
+        prior_level = root.level
+        root.setLevel(logging.INFO)
+        try:
+            with capture_perf_events(
+                logger=root,
+                event_names={"analysis_preload_completed"},
+            ) as capture:
+                await service.start()
+                try:
+                    for item_id, path in enumerate(sample_files, start=1):
+                        start = time.perf_counter()
+                        await service.play_item(playlist_id=1, item_id=item_id)
+                        play_item_latencies_ms.append(
+                            (time.perf_counter() - start) * 1000.0
+                        )
+                        event = await _wait_for_analysis_preload_event(
+                            capture, track_path=str(path)
+                        )
+                        preload_event_latencies_ms.append(
+                            (float(event.created_s) - start) * 1000.0
+                        )
+                    run = PerfRunResult(
+                        run_id=f"player-switch-smoke-{uuid.uuid4().hex[:8]}",
+                        created_at=utc_now_iso(),
+                        app_version=None,
+                        git_sha=None,
+                        machine={"runner": "pytest-opt-in"},
+                        config={
+                            "scenario": "player_service_track_switch_preload_smoke",
+                            "sample_tracks": len(sample_files),
+                        },
+                        scenarios=[
+                            PerfScenarioResult(
+                                scenario_id="warm_cache_track_play",
+                                category="track_switch",
+                                status="pass",
+                                elapsed_s=sum(play_item_latencies_ms) / 1000.0,
+                                metrics={
+                                    "play_item_latency_ms": summarize_samples(
+                                        play_item_latencies_ms,
+                                        unit="ms",
+                                    ),
+                                    "analysis_preload_event_latency_ms": summarize_samples(
+                                        preload_event_latencies_ms,
+                                        unit="ms",
+                                    ),
+                                },
+                                counters={"switch_count": len(sample_files)},
+                                metadata={
+                                    "stub_frame_counts": {
+                                        "spectrum": 4096,
+                                        "beat": 4096,
+                                        "waveform_proxy": 6144,
+                                        "envelope": 3000,
+                                    },
+                                    "corpus_manifest": build_perf_media_manifest(
+                                        media_dir, probe_durations=False
+                                    ),
+                                    "tracks_used": [str(path) for path in sample_files],
+                                },
+                            )
+                        ],
+                    )
+                    artifact_path = write_perf_run_artifact(
+                        run, results_dir=tmp_path / "perf_results"
+                    )
+                finally:
+                    await service.shutdown()
+        finally:
+            root.setLevel(prior_level)
+        return play_item_latencies_ms, preload_event_latencies_ms, artifact_path
+
+    play_item_latencies_ms, preload_event_latencies_ms, artifact_path = _run(
+        run_scenario()
+    )
+    assert len(play_item_latencies_ms) == len(sample_files)
+    assert len(preload_event_latencies_ms) == len(sample_files)
+    assert max(play_item_latencies_ms) < 500.0
+    assert max(preload_event_latencies_ms) < 2000.0
+    assert artifact_path.exists()
