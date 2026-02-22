@@ -1,14 +1,19 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
 from tz_player.perf_benchmarking import (
+    PERF_MEDIA_DIR_ENV,
     PERF_RESULT_SCHEMA_VERSION,
     PERF_SCENARIO_IDS,
     PerfRunResult,
     PerfScenarioResult,
+    build_perf_media_manifest,
+    perf_media_skip_reason,
+    resolve_perf_media_dir,
     summarize_samples,
     utc_now_iso,
     validate_perf_run_payload,
@@ -85,3 +90,43 @@ def test_perf_scenario_catalog_includes_hidden_hotspot_sweeps() -> None:
     assert "hidden_hotspot_idle_playback_sweep" in PERF_SCENARIO_IDS
     assert "hidden_hotspot_browse_sweep" in PERF_SCENARIO_IDS
     assert "visualizer_matrix_render" in PERF_SCENARIO_IDS
+
+
+def test_resolve_perf_media_dir_uses_default_if_present(tmp_path: Path) -> None:
+    perf_dir = tmp_path / ".local" / "perf_media"
+    perf_dir.mkdir(parents=True)
+
+    resolved = resolve_perf_media_dir(cwd=tmp_path, env={})
+    assert resolved == perf_dir.resolve()
+
+
+def test_resolve_perf_media_dir_prefers_env_override(tmp_path: Path) -> None:
+    explicit = tmp_path / "custom_media"
+    explicit.mkdir()
+
+    resolved = resolve_perf_media_dir(
+        cwd=tmp_path, env={PERF_MEDIA_DIR_ENV: str(explicit)}
+    )
+    assert resolved == explicit.resolve()
+
+
+def test_perf_media_skip_reason_and_manifest(tmp_path: Path) -> None:
+    media_dir = tmp_path / ".local" / "perf_media"
+    media_dir.mkdir(parents=True)
+    assert (
+        perf_media_skip_reason(media_dir)
+        == f"Perf media corpus directory is empty: {media_dir}"
+    )
+
+    (media_dir / "a.mp3").write_bytes(b"abc")
+    nested = media_dir / "nested"
+    nested.mkdir()
+    (nested / "b.flac").write_bytes(b"12345")
+    (nested / "ignore.txt").write_text("x", encoding="utf-8")
+
+    assert perf_media_skip_reason(media_dir) is None
+    manifest = build_perf_media_manifest(media_dir, probe_durations=False)
+    assert manifest["track_count"] == 2
+    assert manifest["total_bytes"] == 8
+    assert manifest["formats"] == {"flac": 1, "mp3": 1}
+    assert manifest["duration_probe_mode"] == "disabled"

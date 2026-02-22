@@ -8,12 +8,19 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import statistics
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import TypeAlias
 
 PERF_RESULT_SCHEMA_VERSION = 1
+PERF_MEDIA_DIR_ENV = "TZ_PLAYER_PERF_MEDIA_DIR"
+DEFAULT_LOCAL_PERF_MEDIA_DIR = Path(".local/perf_media")
+PERF_MEDIA_AUDIO_SUFFIXES = frozenset(
+    {".mp3", ".flac", ".wav", ".ogg", ".m4a", ".aac", ".opus", ".wma"}
+)
 
 SCENARIO_COLD_CACHE_TRACK_PLAY = "cold_cache_track_play"
 SCENARIO_WARM_CACHE_TRACK_PLAY = "warm_cache_track_play"
@@ -44,6 +51,108 @@ JsonValue: TypeAlias = JsonScalar | list["JsonValue"] | dict[str, "JsonValue"]
 def utc_now_iso() -> str:
     """Return current UTC timestamp formatted as an ISO-8601 `Z` string."""
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def resolve_perf_media_dir(
+    *, cwd: Path | None = None, env: dict[str, str] | None = None
+) -> Path | None:
+    """Resolve local perf media corpus directory from env or default path."""
+    if env is None:
+        env = os.environ
+    if cwd is None:
+        cwd = Path.cwd()
+    explicit = env.get(PERF_MEDIA_DIR_ENV)
+    if explicit:
+        path = Path(explicit).expanduser()
+        if not path.is_absolute():
+            path = (cwd / path).resolve()
+        return path
+    candidate = (cwd / DEFAULT_LOCAL_PERF_MEDIA_DIR).resolve()
+    if candidate.exists():
+        return candidate
+    return None
+
+
+def perf_media_skip_reason(media_dir: Path | None) -> str | None:
+    """Return a skip reason if local perf corpus is unavailable/unusable."""
+    if media_dir is None:
+        return (
+            "No local perf media corpus found. Set "
+            f"{PERF_MEDIA_DIR_ENV}=<path> or create .local/perf_media/."
+        )
+    if not media_dir.exists():
+        return f"Perf media corpus path does not exist: {media_dir}"
+    if not media_dir.is_dir():
+        return f"Perf media corpus path is not a directory: {media_dir}"
+    audio_files = [path for path in media_dir.rglob("*") if path.is_file()]
+    if not audio_files:
+        return f"Perf media corpus directory is empty: {media_dir}"
+    return None
+
+
+def _audio_files_under(root: Path) -> list[Path]:
+    return sorted(
+        path
+        for path in root.rglob("*")
+        if path.is_file() and path.suffix.lower() in PERF_MEDIA_AUDIO_SUFFIXES
+    )
+
+
+def _best_effort_duration_seconds(path: Path) -> float | None:
+    try:
+        from mutagen import File as MutagenFile
+    except Exception:
+        return None
+    try:
+        parsed = MutagenFile(path)
+    except Exception:
+        return None
+    if parsed is None or getattr(parsed, "info", None) is None:
+        return None
+    length = getattr(parsed.info, "length", None)
+    if isinstance(length, (int, float)) and length >= 0:
+        return float(length)
+    return None
+
+
+def build_perf_media_manifest(
+    media_dir: Path, *, probe_durations: bool = False, duration_probe_limit: int = 200
+) -> dict[str, JsonValue]:
+    """Build a reproducibility manifest for a local perf media corpus."""
+    audio_files = _audio_files_under(media_dir)
+    suffix_counts: dict[str, int] = {}
+    total_bytes = 0
+    for path in audio_files:
+        suffix = path.suffix.lower().lstrip(".") or "unknown"
+        suffix_counts[suffix] = suffix_counts.get(suffix, 0) + 1
+        total_bytes += path.stat().st_size
+
+    manifest: dict[str, JsonValue] = {
+        "root": str(media_dir),
+        "track_count": len(audio_files),
+        "total_bytes": total_bytes,
+        "formats": dict(sorted(suffix_counts.items())),
+    }
+    if not probe_durations:
+        manifest["duration_probe_mode"] = "disabled"
+        return manifest
+
+    duration_total = 0.0
+    probed = 0
+    missing = 0
+    for path in audio_files[: max(0, duration_probe_limit)]:
+        duration = _best_effort_duration_seconds(path)
+        if duration is None:
+            missing += 1
+            continue
+        duration_total += duration
+        probed += 1
+    manifest["duration_probe_mode"] = "mutagen_best_effort"
+    manifest["duration_probe_limit"] = max(0, duration_probe_limit)
+    manifest["duration_probed_count"] = probed
+    manifest["duration_missing_count"] = missing
+    manifest["duration_total_s"] = round(duration_total, 3)
+    return manifest
 
 
 def _percentile(sorted_samples: list[float], p: float) -> float:

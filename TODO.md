@@ -127,7 +127,7 @@ Please see `AGENTS.md` for more instructions.
       - visualizer frame overruns / effective runtime FPS
       - DB slow-query events (`playlist_store_slow_query`, search mode)
     - Keep instrumentation lightweight and disabled/low-cost outside perf runs.
-  - `T-052C` Local media corpus integration (opt-in). Status: `todo`
+  - `T-052C` Local media corpus integration (opt-in). Status: `in_progress`
     - Add perf-test configuration/env support for a local corpus path (default `.local/perf_media/` if present).
     - Validate corpus presence/shape and skip with explicit reason when missing.
     - Record corpus manifest details in benchmark output (track count, durations, formats) for reproducibility.

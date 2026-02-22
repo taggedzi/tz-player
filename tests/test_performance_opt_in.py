@@ -13,6 +13,11 @@ import pytest
 
 import tz_player.paths as paths
 from tz_player.app import TzPlayerApp
+from tz_player.perf_benchmarking import (
+    build_perf_media_manifest,
+    perf_media_skip_reason,
+    resolve_perf_media_dir,
+)
 from tz_player.services.playlist_store import POS_STEP, PlaylistStore
 from tz_player.visualizers.base import VisualizerContext, VisualizerFrameInput
 from tz_player.visualizers.host import VisualizerHost
@@ -357,3 +362,16 @@ def test_advanced_visualizer_large_pane_render_budget() -> None:
                 f"{profile}/{plugin_id} throttle rate {throttle_rate:.3f} exceeded "
                 f"budget {float(budget['max_throttle_rate']):.3f}"
             )
+
+
+def test_local_perf_media_corpus_manifest_smoke() -> None:
+    media_dir = resolve_perf_media_dir()
+    skip_reason = perf_media_skip_reason(media_dir)
+    if skip_reason is not None:
+        pytest.skip(skip_reason)
+    assert media_dir is not None
+
+    manifest = build_perf_media_manifest(media_dir, probe_durations=False)
+    assert int(manifest["track_count"]) > 0
+    assert int(manifest["total_bytes"]) > 0
+    assert isinstance(manifest["formats"], dict)
