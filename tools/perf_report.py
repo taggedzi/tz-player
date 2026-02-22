@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import html
 import json
+import webbrowser
 from dataclasses import dataclass
 from pathlib import Path, PureWindowsPath
 from statistics import fmean
@@ -35,6 +36,12 @@ def _parse_args() -> argparse.Namespace:
         "--output",
         type=Path,
         help="Output HTML path (default: alongside suite summary)",
+    )
+    parser.add_argument(
+        "--open",
+        action="store_true",
+        dest="open_report",
+        help="Open generated report in the default browser (best effort).",
     )
     parser.add_argument(
         "--max-metrics",
@@ -535,6 +542,14 @@ def main() -> int:
     )
     output_path.write_text(html_text, encoding="utf-8")
     print(f"Wrote perf report: {output_path}")
+    if args.open_report:
+        try:
+            opened = webbrowser.open(output_path.resolve().as_uri())
+            print(
+                f"Open report requested: {'ok' if opened else 'browser returned false'}"
+            )
+        except Exception as exc:
+            print(f"Open report failed (non-fatal): {exc}")
     return 0
 
 

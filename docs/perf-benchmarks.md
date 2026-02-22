@@ -149,6 +149,14 @@ Generate a simple HTML dashboard from one suite summary artifact:
   .local/perf_results/<suite>_suite_summary.json
 ```
 
+Open the generated report automatically (best effort):
+
+```bash
+.ubuntu-venv/bin/python tools/perf_report.py \
+  .local/perf_results/<suite>_suite_summary.json \
+  --open
+```
+
 Generate a comparison-oriented report (baseline + candidate suite):
 
 ```bash
