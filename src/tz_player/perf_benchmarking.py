@@ -13,6 +13,7 @@ import statistics
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
+from importlib import import_module
 from pathlib import Path
 
 from typing_extensions import TypeAlias
@@ -121,8 +122,11 @@ def _audio_files_under(root: Path) -> list[Path]:
 
 def _best_effort_duration_seconds(path: Path) -> float | None:
     try:
-        from mutagen import File as MutagenFile
+        mutagen_module = import_module("mutagen")
+        MutagenFile = getattr(mutagen_module, "File", None)
     except Exception:
+        return None
+    if not callable(MutagenFile):
         return None
     try:
         parsed = MutagenFile(path)
