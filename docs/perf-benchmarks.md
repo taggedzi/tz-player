@@ -140,6 +140,27 @@ the other suite has):
   .local/perf_results/<candidate-suite>_suite_summary.json
 ```
 
+### Generate a Readable HTML Report
+
+Generate a simple HTML dashboard from one suite summary artifact:
+
+```bash
+.ubuntu-venv/bin/python tools/perf_report.py \
+  .local/perf_results/<suite>_suite_summary.json
+```
+
+Generate a comparison-oriented report (baseline + candidate suite):
+
+```bash
+.ubuntu-venv/bin/python tools/perf_report.py \
+  .local/perf_results/<baseline-suite>_suite_summary.json \
+  --compare-suite .local/perf_results/<candidate-suite>_suite_summary.json
+```
+
+By default the report is written next to the suite summary as:
+
+- `*_suite_summary.report.html`
+
 ## Recommended Workflow (Repeatable)
 
 1. Record machine context (same machine, same power mode, minimal background apps).
