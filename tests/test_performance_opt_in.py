@@ -30,6 +30,8 @@ from tz_player.perf_benchmarking import (
     write_perf_run_artifact,
 )
 from tz_player.perf_observability import (
+    EventContextCountSpec,
+    EventNumericSummarySpec,
     capture_perf_events,
     capture_process_resource_snapshot,
     count_events_by_context_value,
@@ -37,6 +39,7 @@ from tz_player.perf_observability import (
     diff_process_resource_snapshots,
     event_latency_ms_since,
     probe_method_calls,
+    summarize_captured_events,
     summarize_numeric_event_context,
     wait_for_captured_event,
 )
@@ -453,6 +456,28 @@ def test_large_playlist_db_query_matrix_benchmark_artifact(
     finally:
         root.setLevel(prior_level)
 
+    event_summary = summarize_captured_events(
+        slow_events,
+        context_count_specs=[
+            EventContextCountSpec(
+                event_name="playlist_store_slow_query",
+                context_key="operation",
+                alias="slow_ops",
+            ),
+            EventContextCountSpec(
+                event_name="playlist_store_slow_query",
+                context_key="mode",
+                alias="slow_modes",
+            ),
+        ],
+        numeric_summary_specs=[
+            EventNumericSummarySpec(
+                event_name="playlist_store_slow_query",
+                context_key="elapsed_ms",
+                alias="slow_elapsed_ms",
+            )
+        ],
+    )
     event_counts = count_events_by_name(slow_events)
     slow_ops = count_events_by_context_value(
         slow_events,
@@ -514,6 +539,7 @@ def test_large_playlist_db_query_matrix_benchmark_artifact(
                     "slow_modes_distinct": len(slow_modes),
                 },
                 metadata={
+                    "event_summary": event_summary,
                     "slow_operation_counts": slow_ops,
                     "slow_mode_counts": slow_modes,
                     "captured_event_names": event_counts,

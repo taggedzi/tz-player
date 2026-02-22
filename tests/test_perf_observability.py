@@ -4,6 +4,8 @@ import logging
 import time
 
 from tz_player.perf_observability import (
+    EventContextCountSpec,
+    EventNumericSummarySpec,
     capture_perf_events,
     capture_process_resource_snapshot,
     count_events_by_context_value,
@@ -13,6 +15,7 @@ from tz_player.perf_observability import (
     filter_events,
     find_captured_event,
     probe_method_calls,
+    summarize_captured_events,
     summarize_numeric_event_context,
     wait_for_captured_event,
 )
@@ -306,5 +309,85 @@ def test_count_events_by_context_value_and_numeric_summary() -> None:
         assert filtered.count == 2
         assert filtered.min_value == 180.0
         assert filtered.max_value == 220.0
+    finally:
+        root.setLevel(prior_level)
+
+
+def test_summarize_captured_events_builds_artifact_ready_summary() -> None:
+    root = logging.getLogger()
+    prior_level = root.level
+    root.setLevel(logging.INFO)
+    try:
+        with capture_perf_events(logger=root) as handler:
+            logger = logging.getLogger("tz_player.services.playlist_store")
+            logger.info(
+                "PlaylistStore operation exceeded perf threshold",
+                extra={
+                    "event": "playlist_store_slow_query",
+                    "operation": "fetch_window",
+                    "elapsed_ms": 100.0,
+                    "mode": "fts",
+                },
+            )
+            logger.info(
+                "PlaylistStore operation exceeded perf threshold",
+                extra={
+                    "event": "playlist_store_slow_query",
+                    "operation": "search_item_ids",
+                    "elapsed_ms": 180.0,
+                    "mode": "like_fallback",
+                },
+            )
+            logger.info(
+                "PlaylistStore operation exceeded perf threshold",
+                extra={
+                    "event": "playlist_store_slow_query",
+                    "operation": "search_item_ids",
+                    "elapsed_ms": 210.0,
+                    "mode": "fts",
+                },
+            )
+            events = handler.snapshot()
+
+        summary = summarize_captured_events(
+            events,
+            context_count_specs=[
+                EventContextCountSpec(
+                    event_name="playlist_store_slow_query",
+                    context_key="operation",
+                    alias="slow_ops",
+                ),
+                EventContextCountSpec(
+                    event_name="playlist_store_slow_query",
+                    context_key="mode",
+                    alias="slow_modes",
+                ),
+            ],
+            numeric_summary_specs=[
+                EventNumericSummarySpec(
+                    event_name="playlist_store_slow_query",
+                    context_key="elapsed_ms",
+                    alias="slow_elapsed_ms",
+                ),
+                EventNumericSummarySpec(
+                    event_name="playlist_store_slow_query",
+                    context_key="elapsed_ms",
+                    context_equals={"operation": "search_item_ids"},
+                    alias="search_elapsed_ms",
+                ),
+            ],
+        )
+        assert summary["event_counts"] == {"playlist_store_slow_query": 3}
+        assert summary["context_counts"]["slow_ops"] == {
+            "fetch_window": 1,
+            "search_item_ids": 2,
+        }
+        assert summary["context_counts"]["slow_modes"] == {"fts": 2, "like_fallback": 1}
+        assert summary["numeric_summaries"]["slow_elapsed_ms"]["count"] == 3
+        assert summary["numeric_summaries"]["slow_elapsed_ms"]["min_value"] == 100.0
+        assert summary["numeric_summaries"]["slow_elapsed_ms"]["max_value"] == 210.0
+        assert summary["numeric_summaries"]["search_elapsed_ms"]["count"] == 2
+        assert summary["numeric_summaries"]["search_elapsed_ms"]["min_value"] == 180.0
+        assert summary["numeric_summaries"]["search_elapsed_ms"]["max_value"] == 210.0
     finally:
         root.setLevel(prior_level)

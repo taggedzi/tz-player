@@ -95,6 +95,25 @@ class NumericEventContextSummary:
     max_value: float
 
 
+@dataclass(frozen=True)
+class EventContextCountSpec:
+    """Request to count events grouped by a context field."""
+
+    event_name: str
+    context_key: str
+    alias: str | None = None
+
+
+@dataclass(frozen=True)
+class EventNumericSummarySpec:
+    """Request to summarize numeric event context values."""
+
+    event_name: str
+    context_key: str
+    alias: str | None = None
+    context_equals: dict[str, object] | None = None
+
+
 class PerfEventCaptureHandler(logging.Handler):
     """In-memory collector for structured perf events emitted via logging."""
 
@@ -271,6 +290,52 @@ def summarize_numeric_event_context(
         mean_value=statistics.fmean(values),
         max_value=max(values),
     )
+
+
+def summarize_captured_events(
+    events: list[CapturedPerfEvent],
+    *,
+    context_count_specs: list[EventContextCountSpec] | None = None,
+    numeric_summary_specs: list[EventNumericSummarySpec] | None = None,
+) -> dict[str, object]:
+    """Build an artifact-ready summary for a set of captured perf events."""
+    context_counts: dict[str, dict[str, int]] = {}
+    numeric_summaries: dict[str, dict[str, object]] = {}
+
+    for spec in context_count_specs or []:
+        key = spec.alias or f"{spec.event_name}.{spec.context_key}"
+        context_counts[key] = count_events_by_context_value(
+            events,
+            event_name=spec.event_name,
+            context_key=spec.context_key,
+        )
+
+    for spec in numeric_summary_specs or []:
+        key = spec.alias or f"{spec.event_name}.{spec.context_key}"
+        summary = summarize_numeric_event_context(
+            events,
+            event_name=spec.event_name,
+            context_key=spec.context_key,
+            context_equals=spec.context_equals,
+        )
+        numeric_summaries[key] = (
+            {}
+            if summary is None
+            else {
+                "event_name": summary.event_name,
+                "context_key": summary.context_key,
+                "count": summary.count,
+                "min_value": summary.min_value,
+                "mean_value": summary.mean_value,
+                "max_value": summary.max_value,
+            }
+        )
+
+    return {
+        "event_counts": count_events_by_name(events),
+        "context_counts": context_counts,
+        "numeric_summaries": numeric_summaries,
+    }
 
 
 async def wait_for_captured_event(
