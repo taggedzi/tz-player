@@ -27,7 +27,11 @@ from tz_player.perf_benchmarking import (
     utc_now_iso,
     write_perf_run_artifact,
 )
-from tz_player.perf_observability import capture_perf_events, count_events_by_name
+from tz_player.perf_observability import (
+    capture_perf_events,
+    count_events_by_name,
+    probe_method_calls,
+)
 from tz_player.services.beat_store import BeatParams
 from tz_player.services.fake_backend import FakePlaybackBackend
 from tz_player.services.player_service import PlayerService, TrackInfo
@@ -980,3 +984,111 @@ def test_controls_latency_jitter_under_background_load_benchmark(
     for samples in action_samples_ms.values():
         assert len(samples) == 8
         assert max(samples) < 1000.0
+
+
+def test_hidden_hotspot_idle_and_control_burst_call_probe_artifact(
+    tmp_path, monkeypatch
+) -> None:
+    _setup_dirs(tmp_path, monkeypatch)
+    app = TzPlayerApp(auto_init=False, backend_name="fake")
+
+    async def run_scenario() -> Path:
+        async with app.run_test():
+            await asyncio.sleep(0)
+            await app._initialize_state()
+            await asyncio.sleep(0.2)
+
+            targets: list[tuple[object, str, str | None]] = [
+                (app, "_update_status_pane", "app.update_status_pane"),
+                (app, "_update_current_track_pane", "app.update_current_track_pane"),
+                (app, "_schedule_state_save", "app.schedule_state_save"),
+                (app, "_save_state_debounced", "app.save_state_debounced"),
+            ]
+            player = getattr(app, "_player", None)
+            if player is not None:
+                targets.extend(
+                    [
+                        (player, "_emit_state", "player.emit_state"),
+                        (player, "_poll_position", "player.poll_position"),
+                    ]
+                )
+
+            with probe_method_calls(targets) as probe:
+                idle_start = time.perf_counter()
+                await asyncio.sleep(0.8)
+                idle_elapsed_ms = (time.perf_counter() - idle_start) * 1000.0
+
+                for _ in range(12):
+                    await app.action_volume_up()
+                    await app.action_volume_down()
+                    await app.action_speed_up()
+                    await app.action_speed_reset()
+                    await app.action_repeat_mode()
+                    await app.action_shuffle()
+                    await app.action_cycle_visualizer()
+                    await asyncio.sleep(0)
+
+                await asyncio.sleep(0.4)
+                stats = probe.snapshot()
+
+            top_stats = stats[:10]
+            metrics = {
+                stat.name.replace(".", "_") + "_mean_ms": summarize_samples(
+                    [stat.mean_s * 1000.0], unit="ms"
+                )
+                for stat in top_stats
+            }
+            counters: dict[str, int | float] = {
+                "probed_method_count": len(stats),
+                "idle_phase_elapsed_ms": round(idle_elapsed_ms, 3),
+            }
+            metadata_top: list[dict[str, object]] = []
+            for stat in top_stats:
+                key = stat.name.replace(".", "_")
+                counters[f"{key}_count"] = stat.count
+                counters[f"{key}_total_ms"] = round(stat.total_s * 1000.0, 4)
+                counters[f"{key}_max_ms"] = round(stat.max_s * 1000.0, 4)
+                metadata_top.append(
+                    {
+                        "name": stat.name,
+                        "count": stat.count,
+                        "total_ms": round(stat.total_s * 1000.0, 4),
+                        "max_ms": round(stat.max_s * 1000.0, 4),
+                        "mean_ms": round(stat.mean_s * 1000.0, 4),
+                    }
+                )
+
+            run = PerfRunResult(
+                run_id=f"hidden-hotspot-sweep-{uuid.uuid4().hex[:8]}",
+                created_at=utc_now_iso(),
+                app_version=None,
+                git_sha=None,
+                machine={"runner": "pytest-opt-in"},
+                config={
+                    "scenario": "hidden_hotspot_idle_and_control_burst_call_probe",
+                    "idle_sleep_s": 0.8,
+                    "control_iterations": 12,
+                },
+                scenarios=[
+                    PerfScenarioResult(
+                        scenario_id="hidden_hotspot_idle_playback_sweep",
+                        category="hidden_hotspot",
+                        status="pass",
+                        elapsed_s=round((idle_elapsed_ms / 1000.0) + 0.4, 6),
+                        metrics=metrics,
+                        counters=counters,
+                        metadata={
+                            "top_cumulative_methods": metadata_top,
+                            "visualizer_id": app._active_visualizer_id,
+                        },
+                    )
+                ],
+            )
+            artifact_path = write_perf_run_artifact(
+                run, results_dir=tmp_path / "perf_results"
+            )
+            app.exit()
+            return artifact_path
+
+    artifact_path = _run(run_scenario())
+    assert artifact_path.exists()

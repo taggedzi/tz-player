@@ -164,7 +164,7 @@ Please see `AGENTS.md` for more instructions.
   - `T-052J` Optional profile/deep-dive mode (non-default). Status: `todo`
     - Add a second opt-in mode for deeper profiling (`cProfile`/`pyinstrument`-style local runs or targeted timers) for diagnosing hotspots after a benchmark regression is found.
     - Keep this separate from standard perf benchmarks to preserve run-time stability and comparability.
-  - `T-052K` Broad hidden-hotspot sweep coverage (non-obvious paths). Status: `todo`
+  - `T-052K` Broad hidden-hotspot sweep coverage (non-obvious paths). Status: `in_progress`
     - Add opt-in benchmark/probe scenarios for code paths that are easy to overlook but can accumulate meaningful cost under frequent polling/UI updates:
       - state serialization/save-state cadence and file replace paths
       - log formatting/structured logging overhead under high event volume

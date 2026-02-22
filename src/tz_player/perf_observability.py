@@ -6,11 +6,15 @@ from tz-player modules without scraping human-readable log message strings.
 
 from __future__ import annotations
 
+import inspect
 import logging
 import threading
+import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from functools import wraps
+from typing import Any
 
 _LOG_RECORD_BASE_FIELDS = frozenset(logging.makeLogRecord({}).__dict__.keys())
 
@@ -25,6 +29,22 @@ class CapturedPerfEvent:
     event: str
     created_s: float
     context: dict[str, object]
+
+
+@dataclass(frozen=True)
+class CallProbeStat:
+    """Aggregated timing/count stats for a probed method."""
+
+    name: str
+    count: int
+    total_s: float
+    max_s: float
+
+    @property
+    def mean_s(self) -> float:
+        if self.count <= 0:
+            return 0.0
+        return self.total_s / self.count
 
 
 class PerfEventCaptureHandler(logging.Handler):
@@ -120,3 +140,96 @@ def filter_events(
     if event_name is None:
         return list(events)
     return [event for event in events if event.event == event_name]
+
+
+class MethodCallProbe:
+    """Wrap selected object methods and collect frequency x wall-time stats."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._counts: dict[str, int] = {}
+        self._totals: dict[str, float] = {}
+        self._maxima: dict[str, float] = {}
+        self._restores: list[tuple[object, str, Any]] = []
+
+    def wrap(self, obj: object, attr_name: str, *, alias: str | None = None) -> bool:
+        """Wrap one method on `obj`; return `False` if missing/not callable."""
+        if not hasattr(obj, attr_name):
+            return False
+        original = getattr(obj, attr_name)
+        if not callable(original):
+            return False
+        key = alias or f"{obj.__class__.__name__}.{attr_name}"
+
+        def _record(elapsed_s: float) -> None:
+            with self._lock:
+                self._counts[key] = self._counts.get(key, 0) + 1
+                self._totals[key] = self._totals.get(key, 0.0) + elapsed_s
+                current_max = self._maxima.get(key, 0.0)
+                if elapsed_s > current_max:
+                    self._maxima[key] = elapsed_s
+
+        if inspect.iscoroutinefunction(original):
+
+            @wraps(original)
+            async def async_wrapper(*args: Any, **kwargs: Any):
+                start = time.perf_counter()
+                try:
+                    return await original(*args, **kwargs)
+                finally:
+                    _record(time.perf_counter() - start)
+
+            replacement = async_wrapper
+        else:
+
+            @wraps(original)
+            def sync_wrapper(*args: Any, **kwargs: Any):
+                start = time.perf_counter()
+                try:
+                    return original(*args, **kwargs)
+                finally:
+                    _record(time.perf_counter() - start)
+
+            replacement = sync_wrapper
+
+        self._restores.append((obj, attr_name, original))
+        setattr(obj, attr_name, replacement)
+        return True
+
+    def snapshot(self) -> list[CallProbeStat]:
+        """Return probe stats sorted by cumulative time descending."""
+        with self._lock:
+            names = sorted(
+                self._counts,
+                key=lambda name: self._totals.get(name, 0.0),
+                reverse=True,
+            )
+            return [
+                CallProbeStat(
+                    name=name,
+                    count=self._counts.get(name, 0),
+                    total_s=self._totals.get(name, 0.0),
+                    max_s=self._maxima.get(name, 0.0),
+                )
+                for name in names
+            ]
+
+    def restore(self) -> None:
+        """Restore all wrapped methods."""
+        for obj, attr_name, original in reversed(self._restores):
+            setattr(obj, attr_name, original)
+        self._restores.clear()
+
+
+@contextmanager
+def probe_method_calls(
+    targets: list[tuple[object, str, str | None]],
+) -> Iterator[MethodCallProbe]:
+    """Temporarily wrap methods and collect call/timing stats."""
+    probe = MethodCallProbe()
+    try:
+        for obj, attr_name, alias in targets:
+            probe.wrap(obj, attr_name, alias=alias)
+        yield probe
+    finally:
+        probe.restore()

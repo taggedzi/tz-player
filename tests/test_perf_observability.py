@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import logging
+import time
 
 from tz_player.perf_observability import (
     capture_perf_events,
     count_events_by_name,
     filter_events,
+    probe_method_calls,
 )
 
 
@@ -73,3 +75,50 @@ def test_capture_perf_events_context_manager_detaches_handler() -> None:
     with capture_perf_events(logger=root):
         assert len(root.handlers) == initial_handler_count + 1
     assert len(root.handlers) == initial_handler_count
+
+
+def test_probe_method_calls_collects_sync_method_stats() -> None:
+    class Sample:
+        def __init__(self) -> None:
+            self.value = 0
+
+        def bump(self, amount: int) -> int:
+            time.sleep(0.001)
+            self.value += amount
+            return self.value
+
+    sample = Sample()
+    with probe_method_calls([(sample, "bump", "sample.bump")]) as probe:
+        assert sample.bump(1) == 1
+        assert sample.bump(2) == 3
+        stats = probe.snapshot()
+
+    assert len(stats) == 1
+    stat = stats[0]
+    assert stat.name == "sample.bump"
+    assert stat.count == 2
+    assert stat.total_s > 0
+    assert stat.max_s > 0
+    assert stat.mean_s > 0
+
+
+def test_probe_method_calls_collects_async_method_stats() -> None:
+    import asyncio
+
+    class Sample:
+        async def work(self) -> str:
+            await asyncio.sleep(0.001)
+            return "ok"
+
+    async def run() -> None:
+        sample = Sample()
+        with probe_method_calls([(sample, "work", "sample.work")]) as probe:
+            assert await sample.work() == "ok"
+            assert await sample.work() == "ok"
+            stats = probe.snapshot()
+        assert len(stats) == 1
+        assert stats[0].name == "sample.work"
+        assert stats[0].count == 2
+        assert stats[0].total_s > 0
+
+    asyncio.run(run())
