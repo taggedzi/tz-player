@@ -17,6 +17,7 @@ import pytest
 import tz_player.paths as paths
 import tz_player.services.playlist_store as playlist_store_module
 from tz_player.app import TzPlayerApp
+from tz_player.logging_utils import JsonLogFormatter
 from tz_player.perf_benchmarking import (
     PerfRunResult,
     PerfScenarioResult,
@@ -1430,6 +1431,124 @@ def test_hidden_hotspot_idle_and_control_burst_call_probe_artifact(
                         elapsed_s=round((idle_elapsed_ms / 1000.0) + 0.4, 6),
                         metrics=metrics,
                         counters=counters,
+                        metadata={
+                            "top_cumulative_methods": metadata_top,
+                            "visualizer_id": app._active_visualizer_id,
+                        },
+                    )
+                ],
+            )
+            artifact_path = write_perf_run_artifact(
+                run, results_dir=tmp_path / "perf_results"
+            )
+            app.exit()
+            return artifact_path
+
+    artifact_path = _run(run_scenario())
+    assert artifact_path.exists()
+
+
+def test_hidden_hotspot_state_save_and_logging_overhead_artifact(
+    tmp_path, monkeypatch
+) -> None:
+    _setup_dirs(tmp_path, monkeypatch)
+    app = TzPlayerApp(auto_init=False, backend_name="fake")
+
+    async def run_scenario() -> Path:
+        async with app.run_test():
+            await asyncio.sleep(0)
+            await app._initialize_state()
+
+            formatter = JsonLogFormatter()
+            state_save_samples_ms: list[float] = []
+            log_format_samples_ms: list[float] = []
+            formatted_bytes: list[int] = []
+
+            probe_targets: list[tuple[object, str, str | None]] = [
+                (app, "_save_state_snapshot", "app.save_state_snapshot"),
+                (formatter, "format", "logging.json_formatter.format"),
+            ]
+            with probe_method_calls(probe_targets) as probe:
+                for _ in range(10):
+                    start = time.perf_counter()
+                    await app._save_state_snapshot(app.state)
+                    state_save_samples_ms.append((time.perf_counter() - start) * 1000.0)
+
+                for idx in range(300):
+                    record = logging.makeLogRecord(
+                        {
+                            "name": "tz_player.perf.synthetic",
+                            "levelno": logging.INFO,
+                            "levelname": "INFO",
+                            "msg": "Synthetic perf event %s",
+                            "args": (idx,),
+                            "event": "synthetic_perf_event",
+                            "context_id": idx % 7,
+                            "payload": {
+                                "idx": idx,
+                                "bucket": idx % 11,
+                                "values": [idx, idx + 1, idx + 2],
+                            },
+                        }
+                    )
+                    start = time.perf_counter()
+                    rendered = formatter.format(record)
+                    log_format_samples_ms.append((time.perf_counter() - start) * 1000.0)
+                    formatted_bytes.append(len(rendered.encode("utf-8")))
+
+                probe_stats = probe.snapshot()
+
+            top_stats = probe_stats[:10]
+            metadata_top = [
+                {
+                    "name": stat.name,
+                    "count": stat.count,
+                    "total_ms": round(stat.total_s * 1000.0, 4),
+                    "max_ms": round(stat.max_s * 1000.0, 4),
+                    "mean_ms": round(stat.mean_s * 1000.0, 4),
+                }
+                for stat in top_stats
+            ]
+            metrics = {
+                "state_save_snapshot_ms": summarize_samples(
+                    state_save_samples_ms, unit="ms"
+                ),
+                "json_log_format_ms": summarize_samples(
+                    log_format_samples_ms, unit="ms"
+                ),
+                "json_log_output_bytes": summarize_samples(
+                    [float(value) for value in formatted_bytes], unit="bytes"
+                ),
+            }
+
+            run = PerfRunResult(
+                run_id=f"hidden-hotspot-save-log-{uuid.uuid4().hex[:8]}",
+                created_at=utc_now_iso(),
+                app_version=None,
+                git_sha=None,
+                machine={"runner": "pytest-opt-in"},
+                config={
+                    "scenario": "hidden_hotspot_state_save_and_logging_overhead",
+                    "state_save_iterations": 10,
+                    "log_format_iterations": 300,
+                },
+                scenarios=[
+                    PerfScenarioResult(
+                        scenario_id="hidden_hotspot_browse_sweep",
+                        category="hidden_hotspot",
+                        status="pass",
+                        elapsed_s=round(
+                            (sum(state_save_samples_ms) + sum(log_format_samples_ms))
+                            / 1000.0,
+                            6,
+                        ),
+                        metrics=metrics,
+                        counters={
+                            "state_save_iterations": 10,
+                            "log_format_iterations": 300,
+                            "probed_method_count": len(probe_stats),
+                            "top_cumulative_methods_count": len(top_stats),
+                        },
                         metadata={
                             "top_cumulative_methods": metadata_top,
                             "visualizer_id": app._active_visualizer_id,
