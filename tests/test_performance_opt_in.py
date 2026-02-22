@@ -32,6 +32,7 @@ from tz_player.perf_observability import (
     capture_process_resource_snapshot,
     count_events_by_name,
     diff_process_resource_snapshots,
+    event_latency_ms_since,
     probe_method_calls,
 )
 from tz_player.services.audio_analysis_bundle import analyze_track_analysis_bundle
@@ -827,7 +828,7 @@ def test_player_service_track_switch_and_preload_benchmark_smoke(tmp_path) -> No
                             capture, track_path=str(path)
                         )
                         preload_event_latencies_ms.append(
-                            (float(event.created_s) - start) * 1000.0
+                            event_latency_ms_since(start, event)
                         )
                     run = PerfRunResult(
                         run_id=f"player-switch-smoke-{uuid.uuid4().hex[:8]}",

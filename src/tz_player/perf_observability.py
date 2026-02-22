@@ -34,6 +34,7 @@ class CapturedPerfEvent:
     message: str
     event: str
     created_s: float
+    captured_monotonic_s: float
     context: dict[str, object]
 
 
@@ -120,6 +121,7 @@ class PerfEventCaptureHandler(logging.Handler):
             message=record.getMessage(),
             event=event_name,
             created_s=float(record.created),
+            captured_monotonic_s=time.perf_counter(),
             context=extras,
         )
         with self._lock:
@@ -173,6 +175,13 @@ def filter_events(
     if event_name is None:
         return list(events)
     return [event for event in events if event.event == event_name]
+
+
+def event_latency_ms_since(start_monotonic_s: float, event: CapturedPerfEvent) -> float:
+    """Return latency in ms from monotonic start time to captured event time."""
+    return max(
+        0.0, (float(event.captured_monotonic_s) - float(start_monotonic_s)) * 1000.0
+    )
 
 
 def capture_process_resource_snapshot(*, label: str) -> ProcessResourceSnapshot:

@@ -8,6 +8,7 @@ from tz_player.perf_observability import (
     capture_process_resource_snapshot,
     count_events_by_name,
     diff_process_resource_snapshots,
+    event_latency_ms_since,
     filter_events,
     probe_method_calls,
 )
@@ -35,6 +36,7 @@ def test_capture_perf_events_collects_structured_event_logs() -> None:
         event = events[0]
         assert event.event == "visualizer_frame_loop_overrun"
         assert event.logger_name == "tz_player.test_perf"
+        assert event.captured_monotonic_s > 0
         assert event.context["elapsed_s"] == 0.12
         assert event.context["frame_budget_s"] == 0.07
         assert count_events_by_name(events) == {"visualizer_frame_loop_overrun": 1}
@@ -140,3 +142,22 @@ def test_capture_process_resource_snapshot_and_delta() -> None:
     assert delta.elapsed_s >= 0
     assert delta.process_cpu_s >= 0
     assert len(delta.gc_count_deltas) == 3
+
+
+def test_event_latency_ms_since_uses_monotonic_time() -> None:
+    root = logging.getLogger()
+    prior_level = root.level
+    root.setLevel(logging.INFO)
+    try:
+        with capture_perf_events(logger=root) as handler:
+            start = time.perf_counter()
+            logging.getLogger("tz_player.test_perf").info(
+                "Analysis preload completed",
+                extra={"event": "analysis_preload_completed"},
+            )
+            event = handler.snapshot()[0]
+        latency_ms = event_latency_ms_since(start, event)
+        assert latency_ms >= 0.0
+        assert latency_ms < 1000.0
+    finally:
+        root.setLevel(prior_level)
