@@ -39,3 +39,7 @@ Thumbs.db
 *.log
 .local/perf_media/*
 !.local/perf_media/.gitkeep
+.local/perf_results/*
+!.local/perf_results/.gitkeep
+.local/perf_profiles/*
+!.local/perf_profiles/.gitkeep

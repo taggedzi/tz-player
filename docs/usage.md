@@ -152,6 +152,7 @@ Large-playlist guidance:
 - For benchmark-style checks, run opt-in perf tests:
   - `TZ_PLAYER_RUN_PERF=1 .ubuntu-venv/bin/python -m pytest tests/test_performance_opt_in.py`
 - For a repeatable local audio corpus for manual/perf testing, see `docs/perf-media.md` and store files under `.local/perf_media/` (git-ignored).
+- For the full benchmark workflow (artifacts, comparison tool, and interpretation guidance), see `docs/perf-benchmarks.md`.
 
 Drop-in local plugin folder:
 - `tz-player` always scans the user plugin folder:
