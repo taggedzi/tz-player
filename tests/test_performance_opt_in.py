@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 
 import tz_player.paths as paths
+import tz_player.services.playlist_store as playlist_store_module
 from tz_player.app import TzPlayerApp
 from tz_player.perf_benchmarking import (
     PerfRunResult,
@@ -26,7 +27,7 @@ from tz_player.perf_benchmarking import (
     utc_now_iso,
     write_perf_run_artifact,
 )
-from tz_player.perf_observability import capture_perf_events
+from tz_player.perf_observability import capture_perf_events, count_events_by_name
 from tz_player.services.beat_store import BeatParams
 from tz_player.services.fake_backend import FakePlaybackBackend
 from tz_player.services.player_service import PlayerService, TrackInfo
@@ -336,6 +337,145 @@ def test_large_playlist_store_navigation_search_and_random_budget(tmp_path) -> N
         f"Median get_random_item_id elapsed {median_random:.4f}s exceeded budget "
         f"{LARGE_RANDOM_MEDIAN_BUDGET_S:.4f}s"
     )
+
+
+def test_large_playlist_db_query_matrix_benchmark_artifact(
+    tmp_path, monkeypatch
+) -> None:
+    db_path = tmp_path / "library.sqlite"
+    store = PlaylistStore(db_path)
+    _run(store.initialize())
+    playlist_id = _run(store.create_playlist("PerfLargeArtifact"))
+    _seed_large_playlist(db_path, playlist_id, LARGE_PLAYLIST_SIZE)
+
+    monkeypatch.setattr(playlist_store_module, "_PERF_WARN_MS", 0.0)
+    root = logging.getLogger()
+    prior_level = root.level
+    root.setLevel(logging.INFO)
+
+    async def sample_random_latencies() -> list[float]:
+        samples: list[float] = []
+        for _ in range(20):
+            begin = time.perf_counter()
+            selected = await store.get_random_item_id(playlist_id)
+            samples.append((time.perf_counter() - begin) * 1000.0)
+            assert selected is not None
+        return samples
+
+    try:
+        with capture_perf_events(
+            logger=root,
+            event_names={"playlist_store_slow_query"},
+        ) as capture:
+            timings_ms: dict[str, list[float]] = {}
+
+            start = time.perf_counter()
+            rows = _run(store.fetch_window(playlist_id, LARGE_PLAYLIST_SIZE - 100, 100))
+            timings_ms["fetch_window_tail_ms"] = [
+                (time.perf_counter() - start) * 1000.0
+            ]
+            assert len(rows) == 100
+
+            start = time.perf_counter()
+            top_rows = _run(store.fetch_window(playlist_id, 0, 100))
+            timings_ms["fetch_window_head_ms"] = [
+                (time.perf_counter() - start) * 1000.0
+            ]
+            assert len(top_rows) == 100
+
+            start = time.perf_counter()
+            item_ids = _run(store.list_item_ids(playlist_id))
+            timings_ms["list_item_ids_ms"] = [(time.perf_counter() - start) * 1000.0]
+            assert len(item_ids) == LARGE_PLAYLIST_SIZE
+
+            start = time.perf_counter()
+            needle_ids = _run(store.search_item_ids(playlist_id, "needle", limit=1000))
+            timings_ms["search_needle_ms"] = [(time.perf_counter() - start) * 1000.0]
+            assert len(needle_ids) == LARGE_PLAYLIST_SIZE // 200
+
+            start = time.perf_counter()
+            broad_ids = _run(store.search_item_ids(playlist_id, "track", limit=1000))
+            timings_ms["search_broad_ms"] = [(time.perf_counter() - start) * 1000.0]
+            assert len(broad_ids) == 1000
+
+            start = time.perf_counter()
+            multi_ids = _run(
+                store.search_item_ids(playlist_id, "needle 000", limit=1000)
+            )
+            timings_ms["search_multi_token_ms"] = [
+                (time.perf_counter() - start) * 1000.0
+            ]
+            assert multi_ids
+
+            start = time.perf_counter()
+            miss_ids = _run(
+                store.search_item_ids(playlist_id, "zzzxxyyynotfound", limit=1000)
+            )
+            timings_ms["search_miss_ms"] = [(time.perf_counter() - start) * 1000.0]
+            assert miss_ids == []
+
+            timings_ms["random_item_ms"] = _run(sample_random_latencies())
+
+            slow_events = capture.snapshot()
+    finally:
+        root.setLevel(prior_level)
+
+    event_counts = count_events_by_name(slow_events)
+    slow_ops: dict[str, int] = {}
+    slow_modes: dict[str, int] = {}
+    for event in slow_events:
+        op = event.context.get("operation")
+        if isinstance(op, str):
+            slow_ops[op] = slow_ops.get(op, 0) + 1
+        mode = event.context.get("mode")
+        if isinstance(mode, str):
+            slow_modes[mode] = slow_modes.get(mode, 0) + 1
+
+    metrics = {
+        metric_name: summarize_samples(samples, unit="ms")
+        for metric_name, samples in timings_ms.items()
+    }
+    run = PerfRunResult(
+        run_id=f"db-query-matrix-{uuid.uuid4().hex[:8]}",
+        created_at=utc_now_iso(),
+        app_version=None,
+        git_sha=None,
+        machine={"runner": "pytest-opt-in"},
+        config={
+            "scenario": "large_playlist_db_query_matrix",
+            "playlist_size": LARGE_PLAYLIST_SIZE,
+            "perf_warn_ms_override": 0.0,
+        },
+        scenarios=[
+            PerfScenarioResult(
+                scenario_id="large_playlist_db_query_matrix",
+                category="database",
+                status="pass",
+                elapsed_s=round(
+                    sum(sum(samples) for samples in timings_ms.values()) / 1000.0,
+                    6,
+                ),
+                metrics=metrics,
+                counters={
+                    "playlist_size": LARGE_PLAYLIST_SIZE,
+                    "slow_event_count": len(slow_events),
+                    "playlist_store_slow_query_events": event_counts.get(
+                        "playlist_store_slow_query", 0
+                    ),
+                    "slow_ops_distinct": len(slow_ops),
+                    "slow_modes_distinct": len(slow_modes),
+                },
+                metadata={
+                    "slow_operation_counts": slow_ops,
+                    "slow_mode_counts": slow_modes,
+                    "captured_event_names": event_counts,
+                },
+            )
+        ],
+    )
+    artifact_path = write_perf_run_artifact(run, results_dir=tmp_path / "perf_results")
+    assert artifact_path.exists()
+    assert event_counts.get("playlist_store_slow_query", 0) >= 1
 
 
 def test_advanced_visualizer_large_pane_render_budget() -> None:

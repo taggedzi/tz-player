@@ -146,7 +146,7 @@ Please see `AGENTS.md` for more instructions.
     - Add opt-in latency checks for representative control actions (`play/pause`, `next`, `seek`, `volume`, visualizer cycle).
     - Measure while background analysis is active to catch event-loop starvation regressions.
     - Report interaction jitter, not only median latency.
-  - `T-052G` DB performance benchmark expansion + correlation. Status: `todo`
+  - `T-052G` DB performance benchmark expansion + correlation. Status: `in_progress`
     - Keep/extend synthetic large-playlist tests in `tests/test_performance_opt_in.py` for fetch/search/list/random.
     - Add scenario coverage for viewport-style repeated nearby window fetches and mixed search patterns.
     - Correlate benchmark failures with slow-query events and operation/mode fields.
