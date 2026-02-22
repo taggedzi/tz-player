@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 import subprocess
+import sys
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -91,8 +92,10 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--pytest-path",
         type=Path,
-        default=Path(".ubuntu-venv/bin/python"),
-        help="Python executable used to run pytest (default: .ubuntu-venv/bin/python).",
+        help=(
+            "Python executable used to run pytest "
+            "(default: auto-detect current interpreter / local venv)."
+        ),
     )
     parser.add_argument(
         "--pytest-args",
@@ -122,6 +125,39 @@ def _list_artifacts(results_dir: Path) -> set[Path]:
     return {path.resolve() for path in results_dir.glob("*.json") if path.is_file()}
 
 
+def _resolve_pytest_python(explicit: Path | None) -> Path:
+    """Pick a pytest runner interpreter that is valid on the current platform."""
+    if explicit is not None:
+        return explicit.resolve()
+
+    candidates = [Path(sys.executable)]
+    if os.name == "nt":
+        candidates.extend(
+            [
+                Path(".venv/Scripts/python.exe"),
+                Path(".ubuntu-venv/Scripts/python.exe"),
+                Path("venv/Scripts/python.exe"),
+            ]
+        )
+    else:
+        candidates.extend(
+            [
+                Path(".ubuntu-venv/bin/python"),
+                Path(".venv/bin/python"),
+                Path("venv/bin/python"),
+            ]
+        )
+
+    for candidate in candidates:
+        try:
+            resolved = candidate.resolve()
+        except Exception:
+            continue
+        if resolved.exists() and resolved.is_file():
+            return resolved
+    return Path(sys.executable).resolve()
+
+
 def _run_pytest_scenario(
     *,
     python_path: Path,
@@ -139,7 +175,13 @@ def _run_pytest_scenario(
         test_name,
     ]
     cmd.extend(extra_pytest_args)
-    completed = subprocess.run(cmd, env=env, check=False)
+    try:
+        completed = subprocess.run(cmd, env=env, check=False)
+    except OSError as exc:
+        raise RuntimeError(
+            f"Failed to launch pytest runner at {python_path!s}: {exc}. "
+            "Try --pytest-path pointing to your active venv interpreter."
+        ) from exc
     return int(completed.returncode)
 
 
@@ -229,7 +271,7 @@ def main() -> int:
         suites=args.suite,
     )
     repeat = max(1, int(args.repeat))
-    python_path = args.pytest_path.resolve()
+    python_path = _resolve_pytest_python(args.pytest_path)
     extra_pytest_args = list(args.pytest_args or [])
 
     env = dict(os.environ)
