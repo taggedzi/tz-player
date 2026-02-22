@@ -24,6 +24,138 @@ class SuiteArtifactEntry:
     payload: dict[str, Any]
 
 
+def _analysis_zero_tracks_warning(payload: dict[str, Any]) -> str | None:
+    scenarios = payload.get("scenarios")
+    if not isinstance(scenarios, list):
+        return None
+    affected: list[str] = []
+    for scenario in scenarios:
+        if not isinstance(scenario, dict):
+            continue
+        scenario_id = scenario.get("scenario_id")
+        counters = scenario.get("counters")
+        if not isinstance(counters, dict):
+            continue
+        analyzed = counters.get("tracks_analyzed")
+        requested = counters.get("tracks_requested")
+        if (
+            isinstance(analyzed, int)
+            and isinstance(requested, int)
+            and requested > 0
+            and analyzed == 0
+            and isinstance(scenario_id, str)
+            and scenario_id
+        ):
+            affected.append(scenario_id)
+    if not affected:
+        return None
+    return "zero_tracks_analyzed=" + ",".join(sorted(affected))
+
+
+def _analysis_backend_summary(payload: dict[str, Any]) -> str:
+    scenarios = payload.get("scenarios")
+    if not isinstance(scenarios, list):
+        return "n/a"
+    backend_counts: dict[str, int] = {}
+    beat_backend_counts: dict[str, int] = {}
+    waveform_backend_counts: dict[str, int] = {}
+    fallback_counts: dict[str, int] = {}
+    for scenario in scenarios:
+        if not isinstance(scenario, dict):
+            continue
+        metadata = scenario.get("metadata")
+        if not isinstance(metadata, dict):
+            continue
+        raw_backend_counts = metadata.get("analysis_backend_counts")
+        if isinstance(raw_backend_counts, dict):
+            for key, value in raw_backend_counts.items():
+                if isinstance(key, str) and isinstance(value, int):
+                    backend_counts[key] = backend_counts.get(key, 0) + value
+        raw_beat_backend_counts = metadata.get("beat_backend_counts")
+        if isinstance(raw_beat_backend_counts, dict):
+            for key, value in raw_beat_backend_counts.items():
+                if isinstance(key, str) and isinstance(value, int):
+                    beat_backend_counts[key] = beat_backend_counts.get(key, 0) + value
+        raw_waveform_backend_counts = metadata.get("waveform_proxy_backend_counts")
+        if isinstance(raw_waveform_backend_counts, dict):
+            for key, value in raw_waveform_backend_counts.items():
+                if isinstance(key, str) and isinstance(value, int):
+                    waveform_backend_counts[key] = (
+                        waveform_backend_counts.get(key, 0) + value
+                    )
+        raw_fallback_counts = metadata.get("analysis_fallback_reason_counts")
+        if isinstance(raw_fallback_counts, dict):
+            for key, value in raw_fallback_counts.items():
+                if isinstance(key, str) and isinstance(value, int):
+                    fallback_counts[key] = fallback_counts.get(key, 0) + value
+    if (
+        not backend_counts
+        and not beat_backend_counts
+        and not waveform_backend_counts
+        and not fallback_counts
+    ):
+        return "n/a"
+    parts: list[str] = []
+    if backend_counts:
+        parts.append(
+            "backends="
+            + ",".join(f"{key}:{backend_counts[key]}" for key in sorted(backend_counts))
+        )
+    if beat_backend_counts:
+        parts.append(
+            "beat="
+            + ",".join(
+                f"{key}:{beat_backend_counts[key]}" for key in sorted(beat_backend_counts)
+            )
+        )
+    if waveform_backend_counts:
+        parts.append(
+            "waveform="
+            + ",".join(
+                f"{key}:{waveform_backend_counts[key]}"
+                for key in sorted(waveform_backend_counts)
+            )
+        )
+    if fallback_counts:
+        parts.append(
+            "fallbacks="
+            + ",".join(
+                f"{key}:{fallback_counts[key]}" for key in sorted(fallback_counts)
+            )
+        )
+    return " ".join(parts)
+
+
+def _native_helper_meta_summary(payload: dict[str, Any]) -> str:
+    scenarios = payload.get("scenarios")
+    if not isinstance(scenarios, list):
+        return "n/a"
+    versions: set[str] = set()
+    helper_cmds: set[str] = set()
+    for scenario in scenarios:
+        if not isinstance(scenario, dict):
+            continue
+        metadata = scenario.get("metadata")
+        if not isinstance(metadata, dict):
+            continue
+        helper_cmd = metadata.get("native_helper_cmd")
+        if isinstance(helper_cmd, str) and helper_cmd:
+            helper_cmds.add(helper_cmd)
+        tracks = metadata.get("tracks")
+        if isinstance(tracks, list):
+            for track in tracks:
+                if isinstance(track, dict):
+                    version = track.get("native_helper_version")
+                    if isinstance(version, str) and version:
+                        versions.add(version)
+    parts: list[str] = []
+    if versions:
+        parts.append("versions=" + ",".join(sorted(versions)))
+    if helper_cmds:
+        parts.append("cmd=" + " | ".join(sorted(helper_cmds)))
+    return " ".join(parts) if parts else "n/a"
+
+
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("suite_summary", type=Path, help="Perf suite summary JSON")
@@ -275,6 +407,9 @@ def _render_group_table(
         f"<td>{_escape(entry.run_id)}</td>"
         f"<td>{_escape(entry.created_at)}</td>"
         f"<td>{_escape(len(entry.payload.get('scenarios', [])))}</td>"
+        f"<td>{_escape(_analysis_backend_summary(entry.payload))}</td>"
+        f"<td>{_escape(_native_helper_meta_summary(entry.payload))}</td>"
+        f"<td>{_escape(_analysis_zero_tracks_warning(entry.payload) or '')}</td>"
         "</tr>"
         for idx, entry in enumerate(entries)
     )
@@ -296,7 +431,7 @@ def _render_group_table(
     return (
         f'<section class="group"><h3>{_escape(group_key)}</h3>'
         "<details><summary>Artifacts / repeats</summary>"
-        "<table><thead><tr><th>#</th><th>Artifact</th><th>Run ID</th><th>Created</th><th>Scenarios</th></tr></thead>"
+        "<table><thead><tr><th>#</th><th>Artifact</th><th>Run ID</th><th>Created</th><th>Scenarios</th><th>Backend Meta</th><th>Helper Meta</th><th>Warnings</th></tr></thead>"
         f"<tbody>{entry_rows}</tbody></table></details>"
         "<table><thead><tr><th>Metric</th><th>Unit</th><th>Repeats</th><th>Median avg</th><th>P95 avg</th><th>Max avg</th><th>Median range</th><th>Bar</th></tr></thead>"
         f"<tbody>{metric_tbody}</tbody></table>"
@@ -377,6 +512,12 @@ def _render_compare_section(
             "<section class='group'>"
             f"<h3>{_escape(group_key)} (pair {pair_index})</h3>"
             f"<p class='muted'>baseline={_escape(base_entry.file_name)} | candidate={_escape(cand_entry.file_name)}</p>"
+            f"<p class='muted'>baseline backend: {_escape(_analysis_backend_summary(base_entry.payload))}</p>"
+            f"<p class='muted'>candidate backend: {_escape(_analysis_backend_summary(cand_entry.payload))}</p>"
+            f"<p class='muted'>baseline helper: {_escape(_native_helper_meta_summary(base_entry.payload))}</p>"
+            f"<p class='muted'>candidate helper: {_escape(_native_helper_meta_summary(cand_entry.payload))}</p>"
+            f"<p class='muted'>baseline warnings: {_escape(_analysis_zero_tracks_warning(base_entry.payload) or 'none')}</p>"
+            f"<p class='muted'>candidate warnings: {_escape(_analysis_zero_tracks_warning(cand_entry.payload) or 'none')}</p>"
             "<table><thead><tr><th colspan='5'>Top Regressions</th></tr>"
             "<tr><th>Metric</th><th>Unit</th><th>Base median</th><th>Cand median</th><th>Delta %</th></tr></thead>"
             f"<tbody>{reg_tbody}</tbody></table>"

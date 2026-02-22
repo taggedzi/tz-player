@@ -1,0 +1,56 @@
+name: Native Helper Artifacts (POC)
+
+on:
+  workflow_dispatch:
+    inputs:
+      helper_version_label:
+        description: "Optional label suffix for artifact names"
+        required: false
+        default: "poc"
+
+permissions:
+  contents: read
+
+jobs:
+  build-linux:
+    name: Build Helper (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build helper
+        run: |
+          bash tools/build_native_spectrum_helper_c_poc.sh /tmp/native_spectrum_helper_c_poc
+          /tmp/native_spectrum_helper_c_poc <<'EOF' >/tmp/native_helper_help_smoke.out || true
+          {}
+          EOF
+          ls -lh /tmp/native_spectrum_helper_c_poc
+
+      - name: Upload helper artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-spectrum-helper-linux-${{ inputs.helper_version_label }}
+          path: /tmp/native_spectrum_helper_c_poc
+          if-no-files-found: error
+
+  build-windows:
+    name: Build Helper (Windows)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build helper
+        shell: pwsh
+        run: |
+          $out = "$env:TEMP\native_spectrum_helper_c_poc.exe"
+          powershell -ExecutionPolicy Bypass -File tools/build_native_spectrum_helper_c_poc.ps1 -OutPath $out
+          Get-Item -LiteralPath $out | Format-List FullName,Length,LastWriteTime
+
+      - name: Upload helper artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-spectrum-helper-windows-${{ inputs.helper_version_label }}
+          path: ${{ runner.temp }}\native_spectrum_helper_c_poc.exe
+          if-no-files-found: error

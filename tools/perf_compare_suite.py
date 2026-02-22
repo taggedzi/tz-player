@@ -25,6 +25,139 @@ class SuiteArtifactEntry:
     payload: dict[str, Any]
 
 
+def _analysis_zero_tracks_warning(payload: dict[str, Any]) -> str | None:
+    scenarios = payload.get("scenarios")
+    if not isinstance(scenarios, list):
+        return None
+    affected: list[str] = []
+    for scenario in scenarios:
+        if not isinstance(scenario, dict):
+            continue
+        scenario_id = scenario.get("scenario_id")
+        counters = scenario.get("counters")
+        if not isinstance(counters, dict):
+            continue
+        analyzed = counters.get("tracks_analyzed")
+        requested = counters.get("tracks_requested")
+        if (
+            isinstance(analyzed, int)
+            and isinstance(requested, int)
+            and requested > 0
+            and analyzed == 0
+            and isinstance(scenario_id, str)
+            and scenario_id
+        ):
+            affected.append(scenario_id)
+    if not affected:
+        return None
+    return "zero_tracks_analyzed=" + ",".join(sorted(affected))
+
+
+def _analysis_backend_summary(payload: dict[str, Any]) -> str:
+    scenarios = payload.get("scenarios")
+    if not isinstance(scenarios, list):
+        return "n/a"
+    backend_counts: dict[str, int] = {}
+    beat_backend_counts: dict[str, int] = {}
+    waveform_backend_counts: dict[str, int] = {}
+    fallback_counts: dict[str, int] = {}
+    for scenario in scenarios:
+        if not isinstance(scenario, dict):
+            continue
+        metadata = scenario.get("metadata")
+        if isinstance(metadata, dict):
+            raw_backend_counts = metadata.get("analysis_backend_counts")
+            if isinstance(raw_backend_counts, dict):
+                for key, value in raw_backend_counts.items():
+                    if isinstance(key, str) and isinstance(value, int):
+                        backend_counts[key] = backend_counts.get(key, 0) + value
+            raw_beat_backend_counts = metadata.get("beat_backend_counts")
+            if isinstance(raw_beat_backend_counts, dict):
+                for key, value in raw_beat_backend_counts.items():
+                    if isinstance(key, str) and isinstance(value, int):
+                        beat_backend_counts[key] = (
+                            beat_backend_counts.get(key, 0) + value
+                        )
+            raw_waveform_backend_counts = metadata.get("waveform_proxy_backend_counts")
+            if isinstance(raw_waveform_backend_counts, dict):
+                for key, value in raw_waveform_backend_counts.items():
+                    if isinstance(key, str) and isinstance(value, int):
+                        waveform_backend_counts[key] = (
+                            waveform_backend_counts.get(key, 0) + value
+                        )
+            raw_fallback_counts = metadata.get("analysis_fallback_reason_counts")
+            if isinstance(raw_fallback_counts, dict):
+                for key, value in raw_fallback_counts.items():
+                    if isinstance(key, str) and isinstance(value, int):
+                        fallback_counts[key] = fallback_counts.get(key, 0) + value
+    if (
+        not backend_counts
+        and not beat_backend_counts
+        and not waveform_backend_counts
+        and not fallback_counts
+    ):
+        return "n/a"
+    parts: list[str] = []
+    if backend_counts:
+        parts.append(
+            "backends="
+            + ",".join(f"{key}:{backend_counts[key]}" for key in sorted(backend_counts))
+        )
+    if beat_backend_counts:
+        parts.append(
+            "beat="
+            + ",".join(
+                f"{key}:{beat_backend_counts[key]}" for key in sorted(beat_backend_counts)
+            )
+        )
+    if waveform_backend_counts:
+        parts.append(
+            "waveform="
+            + ",".join(
+                f"{key}:{waveform_backend_counts[key]}"
+                for key in sorted(waveform_backend_counts)
+            )
+        )
+    if fallback_counts:
+        parts.append(
+            "fallbacks="
+            + ",".join(
+                f"{key}:{fallback_counts[key]}" for key in sorted(fallback_counts)
+            )
+        )
+    return " ".join(parts)
+
+
+def _native_helper_summary(payload: dict[str, Any]) -> str | None:
+    scenarios = payload.get("scenarios")
+    if not isinstance(scenarios, list):
+        return None
+    versions: set[str] = set()
+    helper_cmds: set[str] = set()
+    for scenario in scenarios:
+        if not isinstance(scenario, dict):
+            continue
+        metadata = scenario.get("metadata")
+        if not isinstance(metadata, dict):
+            continue
+        tracks = metadata.get("tracks")
+        if isinstance(tracks, list):
+            for track in tracks:
+                if isinstance(track, dict):
+                    version = track.get("native_helper_version")
+                    if isinstance(version, str) and version:
+                        versions.add(version)
+        helper_cmd = metadata.get("native_helper_cmd")
+        if isinstance(helper_cmd, str) and helper_cmd:
+            helper_cmds.add(helper_cmd)
+    parts: list[str] = []
+    if versions:
+        parts.append("versions=" + ",".join(sorted(versions)))
+    if helper_cmds:
+        parts.append("cmd=" + " | ".join(sorted(helper_cmds)))
+    return " ".join(parts) if parts else None
+
+
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("baseline_suite", type=Path, help="Baseline suite summary JSON")
@@ -198,6 +331,26 @@ def main() -> int:
                 f"\n--- Pair {idx + 1}: baseline={base_entry.path.name} "
                 f"candidate={cand_entry.path.name} ---"
             )
+            print(
+                "baseline_backend_meta="
+                + _analysis_backend_summary(base_entry.payload)
+            )
+            print(
+                "candidate_backend_meta="
+                + _analysis_backend_summary(cand_entry.payload)
+            )
+            base_helper = _native_helper_summary(base_entry.payload)
+            cand_helper = _native_helper_summary(cand_entry.payload)
+            if base_helper is not None:
+                print(f"baseline_helper_meta={base_helper}")
+            if cand_helper is not None:
+                print(f"candidate_helper_meta={cand_helper}")
+            base_warning = _analysis_zero_tracks_warning(base_entry.payload)
+            cand_warning = _analysis_zero_tracks_warning(cand_entry.payload)
+            if base_warning is not None:
+                print(f"baseline_warning={base_warning}")
+            if cand_warning is not None:
+                print(f"candidate_warning={cand_warning}")
             print(
                 render_perf_comparison_text(
                     comparison, max_rows_per_section=max(1, int(args.max_rows))
