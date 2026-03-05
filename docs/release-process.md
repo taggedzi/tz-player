@@ -69,31 +69,30 @@ What `tools/release.py` does:
 3. Follow-up commands for GitHub release packaging:
 
 ```bash
-# Wait for the Release workflow to finish for the new tag:
-gh run list --workflow Release --branch v0.5.1 --limit 5
+# Wait for the Release workflow queue/runs for the pushed tag:
+gh run list --workflow Release --limit 10 --json databaseId,name,status,conclusion
 
-# View the workflow run and logs:
-gh run list --workflow Release --limit 5 --json databaseId,name,status,conclusion
+# Pick the relevant run ID above and stream logs:
 gh run view <run-id> --log
 
 # Confirm release exists and includes artifacts:
-gh release view v0.5.1 --json tagName,name,url --jq '.'
+gh release view v0.5.1 --json name,url,tagName,isPrerelease,assets
 ```
 
-If a rebuild is required (for example after a workflow fix), run:
+5. If a rebuild is required (for example after a workflow fix):
 
 ```bash
-gh workflow run Release --field version=0.5.1 --field prerelease=false --field sign_artifacts=false
+gh workflow run Release --field version=v0.5.1 --field prerelease=false --field sign_artifacts=false
 ```
 
-4. Verify outputs after success:
+6. Verify outputs after success:
 - Tag `v<version>` exists.
 - GitHub release `v<version>` exists with artifacts attached.
 - `CHANGELOG.md` includes a dated section for the released version.
 - `CHANGELOG.md` has reset `Unreleased` headings.
- - Attached artifacts include `SHA256SUMS` and checks/metadata files.
+ - Attached artifacts include Linux/Windows helper binaries, `SHA256SUMS`, and checks/metadata files.
 
-5. Optional publish step:
+7. Optional publish step:
 If you publish to package indexes, do it only after the GitHub release is verified.
 
 ## Failure Handling
