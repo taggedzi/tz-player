@@ -195,6 +195,8 @@ jobs:
 
       - name: Tests
         run: python -m pytest
+        env:
+          TZ_PLAYER_USE_BUNDLED_NATIVE_SPECTRUM_HELPER: "0"
 
       - name: Build artifacts
         run: |
