@@ -85,7 +85,14 @@ def _parse_version(raw: str) -> str:
 
 def _is_prerelease(version: str) -> bool:
     """Return True for common prerelease-style version strings."""
-    return re.search(r"(?:-|\\.)?(?:alpha|a|beta|b|rc|pre|preview|dev)\\d*", version, re.IGNORECASE) is not None
+    return (
+        re.search(
+            r"(?:-|\\.)?(?:alpha|a|beta|b|rc|pre|preview|dev)\\d*",
+            version,
+            re.IGNORECASE,
+        )
+        is not None
+    )
 
 
 def _print_github_followups(version: str, tag: str) -> None:
@@ -93,13 +100,17 @@ def _print_github_followups(version: str, tag: str) -> None:
     prerelease = str(_is_prerelease(version)).lower()
     _log("Release tag push is complete. Next:")
     _log("1) Watch the newest Release workflow runs:")
-    _log("   gh run list --workflow Release --limit 10 --json databaseId,name,status,conclusion")
+    _log(
+        "   gh run list --workflow Release --limit 10 --json databaseId,name,status,conclusion"
+    )
     _log("2) Pick the relevant run ID above and stream logs:")
     _log("   gh run view <RUN_ID> --log")
     _log("3) Confirm assets on GitHub release:")
     _log(f"   gh release view {tag} --json name,url,tagName,isPrerelease,assets")
     _log("4) If you need to rebuild this same tag:")
-    _log(f"   gh workflow run Release --field version={tag} --field prerelease={prerelease} --field sign_artifacts=false")
+    _log(
+        f"   gh workflow run Release --field version={tag} --field prerelease={prerelease} --field sign_artifacts=false"
+    )
 
 
 def _wait_for_merge(
