@@ -152,6 +152,52 @@ Please see `AGENTS.md` for more instructions.
   - `.ubuntu-venv/bin/python -m pytest`
   - `TZ_PLAYER_RUN_PERF=1 .ubuntu-venv/bin/python -m pytest tests/test_performance_opt_in.py`
 
+### T-054 Packaged Helper Binaries in Distribution (No post-install download)
+- Spec Ref: Section `5` (analysis/service model), Section `8` (non-blocking reliability/performance), `WF-06`
+- Status: `done`
+- Goal:
+  - Distribute native helper binaries inside release artifacts so helper-powered analysis is available immediately after install.
+- Why now:
+  - User requirement is explicit: one-time install, no runtime helper download.
+  - POC performance work is proven; shipping path is the remaining gap.
+- Scope:
+  - Build platform-specific helper binaries in CI and include them in release artifacts/package outputs.
+  - Add a deterministic loader that prefers packaged helpers by OS/architecture and falls back to Python path when needed.
+  - Preserve current external-media policy (VLC/FFmpeg remain user-installed dependencies).
+- Non-goals:
+  - Changing helper protocol contracts or analysis schema.
+  - Bundling VLC/libVLC/FFmpeg binaries.
+  - Introducing mandatory signing/cert setup by default.
+- Tasks:
+  - `T-054A` Package staging + manifest model. Status: `done`
+    - Added helper binary staging directories under `src/tz_player/binaries/<os>/<arch>/`.
+    - Added deterministic runtime mapping for Linux/Windows x86_64 helper names inside the helper adapter.
+    - Updated package metadata so packaged helper binaries are included in wheel artifacts.
+  - `T-054B` Release/build integration. Status: `done`
+    - Extended `.github/workflows/release.yml` with helper build jobs for Linux and Windows.
+    - Added release-stage download/copy steps to place helper binaries into package staging directories before `python -m build`.
+    - Added release packaging guard checks requiring both helper binaries in the built wheel.
+  - `T-054C` Runtime helper resolution and safe fallback. Status: `done`
+    - Updated adapter dispatch to check explicit env override first, then bundled helper, then Python fallback.
+    - Added tests for override precedence and packaged helper resolution.
+  - `T-054D` User-facing contract and docs. Status: `done`
+    - Update release docs with “no post-install downloads” behavior and binary size expectation.
+    - Document fallback behavior when helper is unavailable at runtime.
+  - `T-054E` Release checks. Status: `done`
+    - Add package integrity checks to `PRODUCTION_READY_CHECKLIST.md` for helper presence.
+    - Extend guardrail scan to also confirm helper files are present for supported OS classes.
+    - Keep existing external runtime exclusion checks for VLC/FFmpeg in place.
+    - Optional signed-binary follow-on:
+      - GPG signing remains opt-in in existing workflow.
+      - Windows authenticode signing can be added behind separate workflow inputs/secrets when needed, not required now.
+  - Validation (per implementation change set):
+    - `.ubuntu-venv/bin/python -m ruff check .`
+    - `.ubuntu-venv/bin/python -m ruff format --check .`
+    - `.ubuntu-venv/bin/python -m mypy src`
+    - `.ubuntu-venv/bin/python -m pytest`
+    - `TZ_PLAYER_RUN_PERF=1 .ubuntu-venv/bin/python -m pytest tests/test_performance_opt_in.py`
+    - `python -m build && python -m twine check dist/*`
+
 ### T-050 Analysis Pipeline Consolidation + Read-Path Write Elimination
 - Spec Ref: Section `5` (analysis/service model), Section `7` (persistence), Section `8` (non-blocking reliability), `WF-06`
 - Status: `in_progress`

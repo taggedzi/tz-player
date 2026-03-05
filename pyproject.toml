@@ -66,6 +66,12 @@ tz-player = "tz_player.app:main"
 [tool.setuptools]
 package-dir = { "" = "src" }
 
+[tool.setuptools.package-data]
+tz_player = [
+  "binaries/linux/x86_64/*",
+  "binaries/windows/x86_64/*",
+]
+
 [tool.setuptools.packages.find]
 where = ["src"]
 

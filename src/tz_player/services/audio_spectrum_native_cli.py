@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import json
 import os
+import platform
 import shlex
 import subprocess
+import sys
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -21,6 +23,10 @@ _DEFAULT_HELPER_TIMEOUT_S = 8.0
 _MONO_TARGET_RATE_HZ = 11_025
 _REQUEST_SCHEMA = "tz_player.native_spectrum_helper_request.v1"
 _RESPONSE_SCHEMA = "tz_player.native_spectrum_helper_response.v1"
+_PLATFORM_TO_NATIVE_HELPER: dict[tuple[str, str], str] = {
+    ("linux", "x86_64"): "linux/x86_64/native_spectrum_helper_c_poc",
+    ("win32", "x86_64"): "windows/x86_64/native_spectrum_helper_c_poc.exe",
+}
 
 
 @dataclass(frozen=True)
@@ -64,19 +70,69 @@ class NativeSpectrumHelperAttempt:
 def get_native_spectrum_helper_config(
     env: Mapping[str, str] | None = None,
 ) -> NativeSpectrumHelperConfig | None:
-    """Return helper config when the CLI helper env var is enabled."""
+    """Return helper config from override command, else bundled helper if present."""
     values = os.environ if env is None else env
-    raw_cmd = values.get(NATIVE_SPECTRUM_HELPER_CMD_ENV, "").strip()
-    if not raw_cmd:
-        return None
+
+    override_cmd = values.get(NATIVE_SPECTRUM_HELPER_CMD_ENV, "").strip()
+    if override_cmd:
+        env_cfg = _parse_helper_command(override_cmd)
+        if env_cfg is None:
+            return None
+        return NativeSpectrumHelperConfig(argv=env_cfg, timeout_s=_parse_timeout_s(
+            values.get(NATIVE_SPECTRUM_HELPER_TIMEOUT_ENV)
+        ))
+
+    bundled_cfg = get_bundled_native_spectrum_helper_config(env=values)
+    if bundled_cfg is not None:
+        return bundled_cfg
+    return None
+
+
+def _parse_helper_command(raw_cmd: str) -> tuple[str, ...] | None:
+    """Parse helper command from user input in a platform-safe way."""
     try:
         argv = tuple(shlex.split(raw_cmd, posix=(os.name != "nt")))
     except ValueError:
         return None
     if not argv:
         return None
-    timeout_s = _parse_timeout_s(values.get(NATIVE_SPECTRUM_HELPER_TIMEOUT_ENV))
-    return NativeSpectrumHelperConfig(argv=argv, timeout_s=timeout_s)
+
+    return argv
+
+
+def get_bundled_native_spectrum_helper_config(
+    *, env: Mapping[str, str] | None = None
+) -> NativeSpectrumHelperConfig | None:
+    """Return helper config from bundled binaries in package resources if present."""
+    helper_path = _bundled_native_spectrum_helper_path()
+    if helper_path is None:
+        return None
+    return NativeSpectrumHelperConfig(
+        argv=(str(helper_path),),
+        timeout_s=_parse_timeout_s(
+            None if env is None else env.get(NATIVE_SPECTRUM_HELPER_TIMEOUT_ENV)
+        ),
+    )
+
+
+def _bundled_native_spectrum_helper_path() -> Path | None:
+    """Resolve packaged helper path for current platform/architecture."""
+    platform_name = sys.platform
+    machine = _normalize_machine(platform.machine())
+    rel = _PLATFORM_TO_NATIVE_HELPER.get((platform_name, machine))
+    if rel is None:
+        return None
+    candidate = Path(__file__).resolve().parents[1] / "binaries" / rel
+    if not candidate.is_file():
+        return None
+    return candidate
+
+
+def _normalize_machine(machine: str) -> str:
+    normalized = machine.lower()
+    if normalized in {"x86_64", "amd64", "x64"}:
+        return "x86_64"
+    return normalized
 
 
 def analyze_track_spectrum_via_native_cli(
