@@ -28,8 +28,9 @@ Use forms like `0.3.0`, `0.3.1`, or `0.4.0rc1`. Tag format is always `v<version>
 ### Distribution behavior for native spectrum helper
 
 - Release packages now include native helper binaries for Linux and Windows under `tz_player/binaries/...` so the helper can be used immediately after install.
-- Users do not need to run a separate helper download step after installing the Python package.
-- On first analysis run, the app attempts to use the packaged helper binaries when available; if not present or failing, it falls back to the Python-only analysis path.
+- Users do not need a separate helper download step after installing the Python package.
+- By default, analysis uses Python backends.
+- To opt in to native helper analysis, set `TZ_PLAYER_USE_BUNDLED_NATIVE_SPECTRUM_HELPER=1` (for packaged helper binaries) or `TZ_PLAYER_NATIVE_SPECTRUM_HELPER_CMD` (custom command).
 
 2. Run the one-command local release entrypoint:
 

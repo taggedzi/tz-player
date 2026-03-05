@@ -10,6 +10,7 @@ from pathlib import Path
 from tz_player.services.audio_spectrum_native_cli import (
     NATIVE_SPECTRUM_HELPER_CMD_ENV,
     NATIVE_SPECTRUM_HELPER_TIMEOUT_ENV,
+    NATIVE_SPECTRUM_HELPER_USE_BUNDLED_ENV,
     analyze_track_spectrum_via_native_cli,
     analyze_track_spectrum_via_native_cli_attempt,
     get_bundled_native_spectrum_helper_config,
@@ -52,6 +53,26 @@ def test_get_native_spectrum_helper_config_prefers_env_override(
     assert cfg is not None
     assert cfg.argv == ("helper-bin", "--mode", "poc")
     assert cfg.timeout_s == 2.5
+
+
+def test_get_native_spectrum_helper_config_uses_bundled_only_when_enabled(
+    monkeypatch, tmp_path
+) -> None:
+    helper = tmp_path / "native_spectrum_helper_c_poc"
+    helper.write_bytes(b"bundled")
+    monkeypatch.setattr(
+        "tz_player.services.audio_spectrum_native_cli._bundled_native_spectrum_helper_path",
+        lambda: helper,
+    )
+    cfg = get_native_spectrum_helper_config(
+        {
+            NATIVE_SPECTRUM_HELPER_USE_BUNDLED_ENV: "true",
+            NATIVE_SPECTRUM_HELPER_TIMEOUT_ENV: "3.0",
+        }
+    )
+    assert cfg is not None
+    assert cfg.argv == (str(helper),)
+    assert cfg.timeout_s == 3.0
 
 
 def test_get_bundled_native_spectrum_helper_config_uses_packaged_binary(

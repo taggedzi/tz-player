@@ -19,6 +19,7 @@ from .audio_waveform_proxy_analysis import WaveformProxyAnalysisResult
 
 NATIVE_SPECTRUM_HELPER_CMD_ENV = "TZ_PLAYER_NATIVE_SPECTRUM_HELPER_CMD"
 NATIVE_SPECTRUM_HELPER_TIMEOUT_ENV = "TZ_PLAYER_NATIVE_SPECTRUM_HELPER_TIMEOUT_S"
+NATIVE_SPECTRUM_HELPER_USE_BUNDLED_ENV = "TZ_PLAYER_USE_BUNDLED_NATIVE_SPECTRUM_HELPER"
 _DEFAULT_HELPER_TIMEOUT_S = 8.0
 _MONO_TARGET_RATE_HZ = 11_025
 _REQUEST_SCHEMA = "tz_player.native_spectrum_helper_request.v1"
@@ -82,6 +83,9 @@ def get_native_spectrum_helper_config(
             argv=env_cfg,
             timeout_s=_parse_timeout_s(values.get(NATIVE_SPECTRUM_HELPER_TIMEOUT_ENV)),
         )
+
+    if not _parse_bool(values.get(NATIVE_SPECTRUM_HELPER_USE_BUNDLED_ENV, "")):
+        return None
 
     bundled_cfg = get_bundled_native_spectrum_helper_config(env=values)
     if bundled_cfg is not None:
@@ -252,6 +256,11 @@ def _parse_timeout_s(raw: str | None) -> float:
     except ValueError:
         return _DEFAULT_HELPER_TIMEOUT_S
     return max(0.1, parsed)
+
+
+def _parse_bool(raw: str) -> bool:
+    """Parse a permissive boolean environment value."""
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _parse_helper_response(payload: object) -> NativeSpectrumHelperResult | None:
