@@ -27,6 +27,17 @@ def _run(cmd: list[str], *, capture: bool = False) -> str:
     return result.stdout.strip() if capture else ""
 
 
+def _run_optional(cmd: list[str], *, capture: bool = False) -> tuple[bool, str]:
+    """Run subprocess command and return whether it succeeded."""
+    result = subprocess.run(
+        cmd,
+        text=True,
+        capture_output=capture,
+    )
+    output = result.stdout.strip() if capture else ""
+    return result.returncode == 0, output
+
+
 def _require_command(cmd: str) -> None:
     """Raise if required external command is unavailable on PATH."""
     if shutil.which(cmd) is None:
@@ -83,11 +94,16 @@ def _parse_version(raw: str) -> str:
     return version
 
 
+def _log_warning(message: str) -> None:
+    """Emit a warning progress line with a stable prefix."""
+    print(f"[release] WARN: {message}")
+
+
 def _is_prerelease(version: str) -> bool:
     """Return True for common prerelease-style version strings."""
     return (
         re.search(
-            r"(?:-|\\.)?(?:alpha|a|beta|b|rc|pre|preview|dev)\\d*",
+            r"(?:alpha|a|beta|b|rc|pre|preview|dev)\d*",
             version,
             re.IGNORECASE,
         )
@@ -111,6 +127,8 @@ def _print_github_followups(version: str, tag: str) -> None:
     _log(
         f"   gh workflow run Release --field version={tag} --field prerelease={prerelease} --field sign_artifacts=false"
     )
+    _log("5) If auto-merge was not enabled, you can merge PR manually and then run:")
+    _log(f"   gh workflow run Release --field version={tag} --field prerelease={prerelease} --field sign_artifacts=false")
 
 
 def _wait_for_merge(
@@ -143,6 +161,24 @@ def _wait_for_merge(
         time.sleep(poll_seconds)
 
     raise RuntimeError(f"Timed out waiting for PR merge: {pr_url}")
+
+
+def _wait_for_pr_checks(pr_url: str) -> None:
+    """Watch PR checks when available; continue if checks are not yet reporting."""
+    _log("Waiting for PR checks to finish")
+    ok, output = _run_optional(
+        ["gh", "pr", "checks", pr_url, "--watch", "--fail-fast"],
+        capture=True,
+    )
+    if ok:
+        return
+    _log_warning(
+        "No PR checks were reported yet or they are not available from this branch."
+    )
+    if output:
+        _log_warning(output)
+    _log("If checks are required by branch protection, they must complete before merge can finish.")
+    _log("If checks are missing, merge the PR manually and resume using the manual follow-up steps.")
 
 
 def run_release(raw_version: str) -> None:
@@ -213,11 +249,16 @@ def run_release(raw_version: str) -> None:
     )
     _log(f"PR: {pr_url}")
 
-    _log("Waiting for PR checks to finish")
-    _run(["gh", "pr", "checks", pr_url, "--watch", "--fail-fast"])
+    _wait_for_pr_checks(pr_url)
 
     _log("Enabling auto-merge for PR")
-    _run(["gh", "pr", "merge", pr_url, "--auto", "--squash", "--delete-branch"])
+    try:
+        _run(["gh", "pr", "merge", pr_url, "--auto", "--squash", "--delete-branch"])
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(
+            f"Could not enable auto-merge for {pr_url}. Merge manually, then run:"
+            f" gh workflow run Release --field version={tag} --field prerelease={str(_is_prerelease(version)).lower()} --field sign_artifacts=false"
+        ) from exc
 
     _log("Waiting for PR merge")
     merge_sha = _wait_for_merge(pr_url)

@@ -8,6 +8,11 @@ release_py="${script_dir}/release.py"
 
 cd "${repo_root}"
 
+if [[ ! -f "${release_py}" ]]; then
+  echo "ERROR: Missing helper script: ${release_py}" >&2
+  exit 1
+fi
+
 if [[ -x "${repo_root}/.ubuntu-venv/bin/python" ]]; then
   exec "${repo_root}/.ubuntu-venv/bin/python" "${release_py}" "$@"
 fi

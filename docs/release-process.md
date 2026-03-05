@@ -100,8 +100,8 @@ If you publish to package indexes, do it only after the GitHub release is verifi
 1. Script fails before PR creation:
 Fix local/tooling issue and re-run `python tools/release.py <version>`.
 
-2. Script fails waiting on PR checks:
-Open the PR URL printed by the script, fix CI issues, and re-run the command with a new version.
+2. Script reports `no checks reported`:
+`release.py` continues and tries auto-merge. If auto-merge is unavailable, merge the PR manually in GitHub and proceed with release workflow dispatch.
 
 3. Script fails to merge PR:
 Merge manually (respecting repo rules), create/push tag `v<version>`, then continue.
@@ -120,3 +120,59 @@ If PR merge is blocked, resolve required approvals/checks and rerun with a new v
 - Automated versioning is intentionally not used.
 - You manually choose the version at release time.
 - `tools/release.py` automates the release flow end to end.
+
+## Release Recovery Flows
+
+Use this section when the normal flow fails and you need to continue safely.
+
+### A) PR checks are missing or `gh pr checks` returns “no checks reported”
+
+This is now handled as a warning in `tools/release.py` and the script continues, then tries auto-merge.
+If auto-merge is unavailable, manual merge is expected:
+
+1. Open the PR URL printed by `release.py`.
+2. Merge the PR manually in GitHub.
+3. Continue release by rerunning the release workflow for the same version (see section B) below).
+
+### B) GitHub workflow dispatch returns `Could not create workflow dispatch event`
+
+Only use this when you are rebuilding an existing tag or re-running after workflow changes.
+
+1. Verify the tag exists on origin:
+
+```bash
+git ls-remote --tags origin | rg "refs/tags/v<version>"
+```
+
+2. If tag exists and you need a full rebuild:
+
+```bash
+gh workflow run Release --field version=<VERSION> --field prerelease=false --field sign_artifacts=false --ref main
+```
+
+3. If dispatch continues to fail, use the GitHub UI **Run workflow** button on `Release` and provide the same fields.
+
+### C) Workflow fails with `Tag vX.Y.Z not found`
+
+This means the tag was not pushed before dispatch. `Release` is designed to run from a real tag.
+
+1. Find the merged PR:
+
+```bash
+gh pr list --search "release: <VERSION>" --state merged --limit 1
+```
+
+2. If the tag is missing, tag the merged commit and push it:
+
+```bash
+git switch main
+git pull --ff-only origin main
+git tag -a <VERSION> <MERGE_SHA> -m "Release <VERSION>"
+git push origin <VERSION>
+```
+
+3. Trigger `Release` after the tag is present:
+
+```bash
+gh workflow run Release --field version=<VERSION> --field prerelease=false --field sign_artifacts=false --ref main
+```

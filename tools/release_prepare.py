@@ -6,6 +6,7 @@ import argparse
 import datetime as dt
 import re
 import subprocess
+import sys
 from collections.abc import Iterable
 from pathlib import Path
 
@@ -19,14 +20,17 @@ HEADING_RE = re.compile(r"^### (Added|Changed|Fixed)\s*$", re.MULTILINE)
 
 def _run_git(args: list[str]) -> str:
     """Run git command and return stripped stdout text."""
-    return subprocess.check_output(["git", *args], text=True).strip()
+    try:
+        return subprocess.check_output(["git", *args], text=True).strip()
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(f"git command failed: git {' '.join(args)}") from exc
 
 
 def _latest_tag() -> str | None:
     """Return latest `v*` tag or `None` when no matching tag exists."""
     try:
         tag = _run_git(["describe", "--tags", "--abbrev=0", "--match", "v*"])
-    except subprocess.CalledProcessError:
+    except RuntimeError:
         return None
     return tag or None
 
@@ -153,6 +157,11 @@ def prepare_release(
     version_file = repo_root / "src" / "tz_player" / "version.py"
     changelog_file = repo_root / "CHANGELOG.md"
 
+    if not version_file.exists():
+        raise ValueError(f"Missing required file: {version_file}")
+    if not changelog_file.exists():
+        raise ValueError(f"Missing required file: {changelog_file}")
+
     version_text = version_file.read_text(encoding="utf-8")
     updated_version_text, count = VERSION_LINE_RE.subn(
         f'__version__ = "{version}"', version_text, count=1
@@ -218,12 +227,16 @@ def main() -> int:
         if args.repo_root is not None
         else Path(__file__).resolve().parents[1]
     )
-    prepare_release(
-        repo_root=repo_root,
-        version=args.version,
-        release_date=args.date,
-        notes_file=args.notes_file,
-    )
+    try:
+        prepare_release(
+            repo_root=repo_root,
+            version=args.version,
+            release_date=args.date,
+            notes_file=args.notes_file,
+        )
+    except (RuntimeError, ValueError, OSError) as exc:
+        print(f"[release_prepare] ERROR: {exc}", file=sys.stderr)
+        return 1
     return 0
 
 
