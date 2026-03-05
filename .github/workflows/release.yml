@@ -25,7 +25,52 @@ permissions:
   contents: write
 
 jobs:
+  build-native-helper-linux:
+    name: Build bundled native helper (Linux)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build Linux native helper
+        run: |
+          bash tools/build_native_spectrum_helper_c_poc.sh /tmp/native_spectrum_helper_c_poc
+
+      - name: Upload Linux native helper
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-spectrum-helper-linux
+          path: /tmp/native_spectrum_helper_c_poc
+          if-no-files-found: error
+
+  build-native-helper-windows:
+    name: Build bundled native helper (Windows)
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build Windows native helper
+        shell: pwsh
+        run: |
+          $out = "${{ runner.temp }}\native_spectrum_helper_c_poc.exe"
+          powershell -ExecutionPolicy Bypass -File tools/build_native_spectrum_helper_c_poc.ps1 -OutPath $out
+
+      - name: Upload Windows native helper
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-spectrum-helper-windows
+          path: "${{ runner.temp }}\native_spectrum_helper_c_poc.exe"
+          if-no-files-found: error
+
   release:
+    needs:
+      - build-native-helper-linux
+      - build-native-helper-windows
     runs-on: ubuntu-latest
     env:
       RELEASE_SIGN_ARTIFACTS: ${{ inputs.sign_artifacts }}
@@ -48,6 +93,35 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev]"
           python -m pip install build twine
+
+      - name: Download native helper artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/native-spectrum-helpers
+          pattern: native-spectrum-helper-*
+          merge-multiple: false
+
+      - name: Stage bundled native helper binaries
+        run: |
+          mkdir -p src/tz_player/binaries/linux/x86_64 src/tz_player/binaries/windows/x86_64
+          cp "/tmp/native-spectrum-helpers/native-spectrum-helper-linux/native_spectrum_helper_c_poc" \
+            src/tz_player/binaries/linux/x86_64/native_spectrum_helper_c_poc
+          cp "/tmp/native-spectrum-helpers/native-spectrum-helper-windows/native_spectrum_helper_c_poc.exe" \
+            src/tz_player/binaries/windows/x86_64/native_spectrum_helper_c_poc.exe
+          chmod +x src/tz_player/binaries/linux/x86_64/native_spectrum_helper_c_poc
+          ls -l src/tz_player/binaries/linux/x86_64/native_spectrum_helper_c_poc \
+            src/tz_player/binaries/windows/x86_64/native_spectrum_helper_c_poc.exe
+
+      - name: Verify staged helper artifacts
+        run: |
+          if [ ! -f src/tz_player/binaries/linux/x86_64/native_spectrum_helper_c_poc ]; then
+            echo "Missing Linux bundled native helper."
+            exit 1
+          fi
+          if [ ! -f src/tz_player/binaries/windows/x86_64/native_spectrum_helper_c_poc.exe ]; then
+            echo "Missing Windows bundled native helper."
+            exit 1
+          fi
 
       - name: Resolve release tag/version
         run: |
@@ -111,11 +185,27 @@ jobs:
 
       - name: Release artifact guardrail
         run: |
-          if python -m zipfile -l dist/*.whl | rg -i "libvlc\.so|libvlc\.dylib|vlc\.dll|ffmpeg|avcodec|avformat|avutil|swresample|swscale"; then
+          if ! python -m zipfile -l dist/*.whl | rg -i "binaries/linux/x86_64/native_spectrum_helper_c_poc"; then
+            echo "Release package does not include bundled native helper binaries."
+            exit 1
+          fi
+          if ! python -m zipfile -l dist/*.whl | rg -i "binaries/windows/x86_64/native_spectrum_helper_c_poc\\.exe"; then
+            echo "Release package does not include Windows bundled helper binary."
+            exit 1
+          fi
+          if python -m zipfile -l dist/*.whl | rg -i "libvlc\\.so|libvlc\\.dylib|vlc\\.dll|ffmpeg|avcodec|avformat|avutil|swresample|swscale"; then
             echo "Release policy violation: found bundled media/runtime binaries in wheel."
             exit 1
           fi
-          if tar -tf dist/*.tar.gz | rg -i "libvlc\.so|libvlc\.dylib|vlc\.dll|ffmpeg|avcodec|avformat|avutil|swresample|swscale"; then
+          if ! tar -tf dist/*.tar.gz | rg -i "tz_player/binaries/linux/x86_64/native_spectrum_helper_c_poc"; then
+            echo "Source distribution does not include bundled Linux helper binary."
+            exit 1
+          fi
+          if ! tar -tf dist/*.tar.gz | rg -i "tz_player/binaries/windows/x86_64/native_spectrum_helper_c_poc\\.exe"; then
+            echo "Source distribution does not include bundled Windows helper binary."
+            exit 1
+          fi
+          if tar -tf dist/*.tar.gz | rg -i "libvlc\\.so|libvlc\\.dylib|vlc\\.dll|ffmpeg|avcodec|avformat|avutil|swresample|swscale"; then
             echo "Release policy violation: found bundled media/runtime binaries in sdist."
             exit 1
           fi

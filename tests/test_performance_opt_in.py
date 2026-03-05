@@ -1038,6 +1038,14 @@ def test_real_analysis_cache_cold_warm_benchmark_artifact(tmp_path) -> None:
         ffmpeg_ok = ffmpeg_available()
         track_metadata: list[dict[str, object]] = []
         total_sample_positions = 0
+        analysis_backend_counts: dict[str, int] = {}
+        beat_backend_counts: dict[str, int] = {}
+        waveform_backend_counts: dict[str, int] = {}
+        analysis_fallback_reason_counts: dict[str, int] = {}
+        native_helper_cmd = os.getenv("TZ_PLAYER_NATIVE_SPECTRUM_HELPER_CMD")
+        native_helper_timeout_s = os.getenv(
+            "TZ_PLAYER_NATIVE_SPECTRUM_HELPER_TIMEOUT_S"
+        )
 
         for track_path in sample_tracks:
             track_path_str = str(track_path)
@@ -1062,10 +1070,75 @@ def test_real_analysis_cache_cold_warm_benchmark_artifact(tmp_path) -> None:
             assert bundle.spectrum is not None
             assert bundle.beat is not None
             assert bundle.waveform_proxy is not None
+            if bundle.backend_info is not None:
+                per_track_meta["analysis_backend"] = (
+                    bundle.backend_info.analysis_backend
+                )
+                if bundle.backend_info.spectrum_backend is not None:
+                    per_track_meta["spectrum_backend"] = (
+                        bundle.backend_info.spectrum_backend
+                    )
+                if bundle.backend_info.beat_backend is not None:
+                    per_track_meta["beat_backend"] = bundle.backend_info.beat_backend
+                    beat_backend = bundle.backend_info.beat_backend
+                    beat_backend_counts[beat_backend] = (
+                        beat_backend_counts.get(beat_backend, 0) + 1
+                    )
+                if bundle.backend_info.waveform_proxy_backend is not None:
+                    per_track_meta["waveform_proxy_backend"] = (
+                        bundle.backend_info.waveform_proxy_backend
+                    )
+                    wave_backend = bundle.backend_info.waveform_proxy_backend
+                    waveform_backend_counts[wave_backend] = (
+                        waveform_backend_counts.get(wave_backend, 0) + 1
+                    )
+                if bundle.backend_info.fallback_reason is not None:
+                    per_track_meta["analysis_fallback_reason"] = (
+                        bundle.backend_info.fallback_reason
+                    )
+                if bundle.backend_info.native_helper_version is not None:
+                    per_track_meta["native_helper_version"] = (
+                        bundle.backend_info.native_helper_version
+                    )
+                per_track_meta["duplicate_decode_for_mixed_bundle"] = (
+                    bundle.backend_info.duplicate_decode_for_mixed_bundle
+                )
+                analysis_backend_counts[bundle.backend_info.analysis_backend] = (
+                    analysis_backend_counts.get(bundle.backend_info.analysis_backend, 0)
+                    + 1
+                )
+                if bundle.backend_info.fallback_reason is not None:
+                    reason = bundle.backend_info.fallback_reason
+                    analysis_fallback_reason_counts[reason] = (
+                        analysis_fallback_reason_counts.get(reason, 0) + 1
+                    )
             if bundle.timings is not None:
+                per_track_meta["bundle_timings_ms"] = {
+                    "decode_ms": round(bundle.timings.decode_ms, 3),
+                    "python_decode_ms": round(bundle.timings.python_decode_ms, 3),
+                    "native_helper_decode_ms": round(
+                        bundle.timings.native_helper_decode_ms, 3
+                    ),
+                    "native_helper_total_ms": round(
+                        bundle.timings.native_helper_total_ms, 3
+                    ),
+                    "spectrum_ms": round(bundle.timings.spectrum_ms, 3),
+                    "beat_ms": round(bundle.timings.beat_ms, 3),
+                    "waveform_ms": round(bundle.timings.waveform_proxy_ms, 3),
+                    "total_ms": round(bundle.timings.total_ms, 3),
+                }
                 cold_metrics_samples.setdefault("bundle_decode_ms", []).append(
                     bundle.timings.decode_ms
                 )
+                cold_metrics_samples.setdefault("bundle_python_decode_ms", []).append(
+                    bundle.timings.python_decode_ms
+                )
+                cold_metrics_samples.setdefault(
+                    "bundle_native_helper_decode_ms", []
+                ).append(bundle.timings.native_helper_decode_ms)
+                cold_metrics_samples.setdefault(
+                    "bundle_native_helper_total_ms", []
+                ).append(bundle.timings.native_helper_total_ms)
                 cold_metrics_samples.setdefault("bundle_spectrum_ms", []).append(
                     bundle.timings.spectrum_ms
                 )
@@ -1279,7 +1352,22 @@ def test_real_analysis_cache_cold_warm_benchmark_artifact(tmp_path) -> None:
             "tracks_analyzed": len(track_metadata),
             "ffmpeg_available": ffmpeg_ok,
             "tracks": track_metadata,
+            "analysis_backend_counts": dict(sorted(analysis_backend_counts.items())),
         }
+        if beat_backend_counts:
+            metadata["beat_backend_counts"] = dict(sorted(beat_backend_counts.items()))
+        if waveform_backend_counts:
+            metadata["waveform_proxy_backend_counts"] = dict(
+                sorted(waveform_backend_counts.items())
+            )
+        if native_helper_cmd:
+            metadata["native_helper_cmd"] = native_helper_cmd
+        if native_helper_timeout_s:
+            metadata["native_helper_timeout_s"] = native_helper_timeout_s
+        if analysis_fallback_reason_counts:
+            metadata["analysis_fallback_reason_counts"] = dict(
+                sorted(analysis_fallback_reason_counts.items())
+            )
         metadata["corpus_manifest"] = build_perf_media_manifest(
             media_dir, probe_durations=False
         )
@@ -1327,6 +1415,17 @@ def test_real_analysis_cache_cold_warm_benchmark_artifact(tmp_path) -> None:
                         "tracks_requested": len(sample_tracks),
                         "tracks_analyzed": len(track_metadata),
                         "sample_positions_count": total_sample_positions,
+                        "analysis_backend_python_tracks": analysis_backend_counts.get(
+                            "python", 0
+                        ),
+                        "analysis_backend_native_helper_tracks": (
+                            analysis_backend_counts.get("native_helper", 0)
+                        ),
+                        "analysis_backend_hybrid_tracks": (
+                            analysis_backend_counts.get(
+                                "hybrid_native_spectrum_python_rest", 0
+                            )
+                        ),
                     },
                     metadata=metadata,
                 ),
@@ -1343,9 +1442,257 @@ def test_real_analysis_cache_cold_warm_benchmark_artifact(tmp_path) -> None:
                         "tracks_requested": len(sample_tracks),
                         "tracks_analyzed": len(track_metadata),
                         "sample_positions_count": total_sample_positions,
+                        "analysis_backend_python_tracks": analysis_backend_counts.get(
+                            "python", 0
+                        ),
+                        "analysis_backend_native_helper_tracks": (
+                            analysis_backend_counts.get("native_helper", 0)
+                        ),
+                        "analysis_backend_hybrid_tracks": (
+                            analysis_backend_counts.get(
+                                "hybrid_native_spectrum_python_rest", 0
+                            )
+                        ),
                     },
                     metadata=metadata,
                 ),
+            ],
+        )
+        artifact_path = write_perf_run_artifact(
+            run, results_dir=_perf_results_dir(tmp_path)
+        )
+        return artifact_path
+
+    artifact_path = _run(run_scenario())
+    assert artifact_path.exists()
+
+
+def test_real_analysis_bundle_spectrum_waveform_cold_benchmark_artifact(
+    tmp_path,
+) -> None:
+    media_dir = resolve_perf_media_dir()
+    skip_reason = perf_media_skip_reason(media_dir)
+    if skip_reason is not None:
+        pytest.skip(skip_reason)
+    assert media_dir is not None
+
+    corpus_files = _local_perf_corpus_audio_files(media_dir)
+    if not corpus_files:
+        pytest.skip("No audio files found in perf corpus.")
+    sample_tracks = _select_varied_tracks_by_size(corpus_files, target_count=10)
+    if not sample_tracks:
+        pytest.skip("No sample tracks selected from perf corpus.")
+
+    spectrum_params = SpectrumParams(band_count=48, hop_ms=32)
+    waveform_params = WaveformProxyParams(hop_ms=20)
+
+    async def run_scenario() -> Path:
+        cold_metrics_samples: dict[str, list[float]] = {}
+        ffmpeg_ok = ffmpeg_available()
+        track_metadata: list[dict[str, object]] = []
+        analysis_backend_counts: dict[str, int] = {}
+        beat_backend_counts: dict[str, int] = {}
+        waveform_backend_counts: dict[str, int] = {}
+        analysis_fallback_reason_counts: dict[str, int] = {}
+        native_helper_cmd = os.getenv("TZ_PLAYER_NATIVE_SPECTRUM_HELPER_CMD")
+        native_helper_timeout_s = os.getenv(
+            "TZ_PLAYER_NATIVE_SPECTRUM_HELPER_TIMEOUT_S"
+        )
+
+        for track_path in sample_tracks:
+            per_track_meta: dict[str, object] = {
+                "track_path": str(track_path),
+                "track_size_bytes": track_path.stat().st_size,
+            }
+            start = time.perf_counter()
+            bundle = analyze_track_analysis_bundle(
+                track_path,
+                spectrum_band_count=spectrum_params.band_count,
+                spectrum_hop_ms=spectrum_params.hop_ms,
+                beat_hop_ms=spectrum_params.hop_ms,
+                waveform_hop_ms=waveform_params.hop_ms,
+                include_beat=False,
+                include_waveform_proxy=True,
+            )
+            cold_metrics_samples.setdefault("bundle_analyze_ms", []).append(
+                (time.perf_counter() - start) * 1000.0
+            )
+            if bundle is None:
+                continue
+            assert bundle.spectrum is not None
+            assert bundle.waveform_proxy is not None
+            assert bundle.beat is None
+
+            if bundle.backend_info is not None:
+                per_track_meta["analysis_backend"] = (
+                    bundle.backend_info.analysis_backend
+                )
+                if bundle.backend_info.spectrum_backend is not None:
+                    per_track_meta["spectrum_backend"] = (
+                        bundle.backend_info.spectrum_backend
+                    )
+                if bundle.backend_info.waveform_proxy_backend is not None:
+                    per_track_meta["waveform_proxy_backend"] = (
+                        bundle.backend_info.waveform_proxy_backend
+                    )
+                    wave_backend = bundle.backend_info.waveform_proxy_backend
+                    waveform_backend_counts[wave_backend] = (
+                        waveform_backend_counts.get(wave_backend, 0) + 1
+                    )
+                if bundle.backend_info.beat_backend is not None:
+                    per_track_meta["beat_backend"] = bundle.backend_info.beat_backend
+                    beat_backend = bundle.backend_info.beat_backend
+                    beat_backend_counts[beat_backend] = (
+                        beat_backend_counts.get(beat_backend, 0) + 1
+                    )
+                if bundle.backend_info.fallback_reason is not None:
+                    per_track_meta["analysis_fallback_reason"] = (
+                        bundle.backend_info.fallback_reason
+                    )
+                    reason = bundle.backend_info.fallback_reason
+                    analysis_fallback_reason_counts[reason] = (
+                        analysis_fallback_reason_counts.get(reason, 0) + 1
+                    )
+                if bundle.backend_info.native_helper_version is not None:
+                    per_track_meta["native_helper_version"] = (
+                        bundle.backend_info.native_helper_version
+                    )
+                per_track_meta["duplicate_decode_for_mixed_bundle"] = (
+                    bundle.backend_info.duplicate_decode_for_mixed_bundle
+                )
+                backend = bundle.backend_info.analysis_backend
+                analysis_backend_counts[backend] = (
+                    analysis_backend_counts.get(backend, 0) + 1
+                )
+
+            if bundle.timings is not None:
+                per_track_meta["bundle_timings_ms"] = {
+                    "decode_ms": round(bundle.timings.decode_ms, 3),
+                    "python_decode_ms": round(bundle.timings.python_decode_ms, 3),
+                    "native_helper_decode_ms": round(
+                        bundle.timings.native_helper_decode_ms, 3
+                    ),
+                    "native_helper_total_ms": round(
+                        bundle.timings.native_helper_total_ms, 3
+                    ),
+                    "spectrum_ms": round(bundle.timings.spectrum_ms, 3),
+                    "waveform_ms": round(bundle.timings.waveform_proxy_ms, 3),
+                    "total_ms": round(bundle.timings.total_ms, 3),
+                }
+                cold_metrics_samples.setdefault("bundle_decode_ms", []).append(
+                    bundle.timings.decode_ms
+                )
+                cold_metrics_samples.setdefault("bundle_python_decode_ms", []).append(
+                    bundle.timings.python_decode_ms
+                )
+                cold_metrics_samples.setdefault(
+                    "bundle_native_helper_decode_ms", []
+                ).append(bundle.timings.native_helper_decode_ms)
+                cold_metrics_samples.setdefault(
+                    "bundle_native_helper_total_ms", []
+                ).append(bundle.timings.native_helper_total_ms)
+                cold_metrics_samples.setdefault("bundle_spectrum_ms", []).append(
+                    bundle.timings.spectrum_ms
+                )
+                cold_metrics_samples.setdefault("bundle_waveform_ms", []).append(
+                    bundle.timings.waveform_proxy_ms
+                )
+                cold_metrics_samples.setdefault("bundle_total_ms", []).append(
+                    bundle.timings.total_ms
+                )
+
+            per_track_meta["frame_counts"] = {
+                "spectrum": len(bundle.spectrum.frames),
+                "waveform_proxy": len(bundle.waveform_proxy.frames),
+            }
+            per_track_meta["duration_ms"] = max(
+                bundle.spectrum.duration_ms, bundle.waveform_proxy.duration_ms
+            )
+            track_metadata.append(per_track_meta)
+
+        if not cold_metrics_samples.get("bundle_analyze_ms"):
+            pytest.skip("Unable to analyze any selected tracks via shared bundle.")
+
+        metadata: dict[str, object] = {
+            "track_selection_mode": "size_stratified",
+            "tracks_requested": len(sample_tracks),
+            "tracks_analyzed": len(track_metadata),
+            "ffmpeg_available": ffmpeg_ok,
+            "tracks": track_metadata,
+            "analysis_backend_counts": dict(sorted(analysis_backend_counts.items())),
+            "waveform_proxy_backend_counts": dict(
+                sorted(waveform_backend_counts.items())
+            ),
+            "bundle_request_shape": "spectrum_plus_waveform_no_beat",
+        }
+        if beat_backend_counts:
+            metadata["beat_backend_counts"] = dict(sorted(beat_backend_counts.items()))
+        if native_helper_cmd:
+            metadata["native_helper_cmd"] = native_helper_cmd
+        if native_helper_timeout_s:
+            metadata["native_helper_timeout_s"] = native_helper_timeout_s
+        if analysis_fallback_reason_counts:
+            metadata["analysis_fallback_reason_counts"] = dict(
+                sorted(analysis_fallback_reason_counts.items())
+            )
+        metadata["corpus_manifest"] = build_perf_media_manifest(
+            media_dir, probe_durations=False
+        )
+
+        cold_elapsed_metric_names = set(cold_metrics_samples)
+        if "bundle_total_ms" in cold_elapsed_metric_names:
+            cold_elapsed_metric_names.discard("bundle_analyze_ms")
+            cold_elapsed_metric_names.discard("bundle_decode_ms")
+            cold_elapsed_metric_names.discard("bundle_spectrum_ms")
+            cold_elapsed_metric_names.discard("bundle_waveform_ms")
+        elif "bundle_analyze_ms" in cold_elapsed_metric_names:
+            cold_elapsed_metric_names.discard("bundle_decode_ms")
+            cold_elapsed_metric_names.discard("bundle_spectrum_ms")
+            cold_elapsed_metric_names.discard("bundle_waveform_ms")
+        cold_elapsed_ms = sum(
+            sum(cold_metrics_samples[name])
+            for name in sorted(cold_elapsed_metric_names)
+        )
+
+        run = PerfRunResult(
+            run_id=f"analysis-bundle-sw-real-{uuid.uuid4().hex[:8]}",
+            created_at=utc_now_iso(),
+            app_version=None,
+            git_sha=None,
+            machine={"runner": "pytest-opt-in"},
+            config={
+                "scenario": "real_analysis_bundle_spectrum_waveform_cold",
+                "spectrum_hop_ms": spectrum_params.hop_ms,
+                "waveform_hop_ms": waveform_params.hop_ms,
+                "include_beat": False,
+            },
+            scenarios=[
+                PerfScenarioResult(
+                    scenario_id="cold_bundle_spectrum_waveform",
+                    category="analysis_bundle",
+                    status="pass",
+                    elapsed_s=round(cold_elapsed_ms / 1000.0, 6),
+                    metrics={
+                        name: summarize_samples(samples, unit="ms")
+                        for name, samples in cold_metrics_samples.items()
+                    },
+                    counters={
+                        "tracks_requested": len(sample_tracks),
+                        "tracks_analyzed": len(track_metadata),
+                        "analysis_backend_python_tracks": analysis_backend_counts.get(
+                            "python", 0
+                        ),
+                        "analysis_backend_native_helper_tracks": (
+                            analysis_backend_counts.get("native_helper", 0)
+                        ),
+                        "analysis_backend_hybrid_tracks": (
+                            analysis_backend_counts.get(
+                                "hybrid_native_spectrum_python_rest", 0
+                            )
+                        ),
+                    },
+                    metadata=metadata,
+                )
             ],
         )
         artifact_path = write_perf_run_artifact(

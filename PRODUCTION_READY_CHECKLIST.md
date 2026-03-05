@@ -29,7 +29,7 @@ Known remaining release tasks:
 - [x] Run VLC-specific smoke tests in an environment with `TZ_PLAYER_TEST_VLC=1` (see `docs/vlc-smoke-test.md`).
 - [ ] Run manual app startup check with VLC backend: `python -m tz_player.app --backend vlc`.
 - [x] Re-run VLC backend smoke test in a VLC-enabled environment (`TZ_PLAYER_TEST_VLC=1`).
-- [ ] Verify release artifacts do not bundle external media binaries (`ffmpeg`/`vlc`/`libvlc`) using commands in **Release Artifact Guardrail** below.
+- [ ] Verify release artifacts do not bundle external media binaries (`ffmpeg`/`vlc`/`libvlc`) using commands in **Release Artifact Guardrail** below, and verify bundled helper binaries are present in wheel artifacts.
 
 Deferred with rationale:
 
@@ -58,6 +58,18 @@ Inspect sdist contents for suspicious bundled media/runtime binaries:
 
 ```bash
 tar -tf dist/*.tar.gz | rg -i "ffmpeg|libvlc|vlc\\.dll|libvlc\\.so|libvlc\\.dylib|avcodec|avformat|avutil|swresample|swscale"
+```
+Verify helper presence in wheel artifacts:
+
+```bash
+python -m zipfile -l dist/*.whl | rg -i "tz_player/binaries/linux/x86_64/native_spectrum_helper_c_poc"
+python -m zipfile -l dist/*.whl | rg -i "tz_player/binaries/windows/x86_64/native_spectrum_helper_c_poc\\.exe"
+```
+Verify helper presence in sdist artifacts:
+
+```bash
+tar -tf dist/*.tar.gz | rg -i "tz_player/binaries/linux/x86_64/native_spectrum_helper_c_poc"
+tar -tf dist/*.tar.gz | rg -i "tz_player/binaries/windows/x86_64/native_spectrum_helper_c_poc\\.exe"
 ```
 
 Expected result:
