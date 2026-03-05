@@ -33,7 +33,9 @@ def test_get_native_spectrum_helper_config_parses_command_and_timeout() -> None:
     assert cfg.timeout_s == 2.5
 
 
-def test_get_native_spectrum_helper_config_prefers_env_override(monkeypatch, tmp_path) -> None:
+def test_get_native_spectrum_helper_config_prefers_env_override(
+    monkeypatch, tmp_path
+) -> None:
     helper = tmp_path / "native_spectrum_helper_c_poc"
     helper.write_bytes(b"bundled")
 

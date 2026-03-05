@@ -78,9 +78,10 @@ def get_native_spectrum_helper_config(
         env_cfg = _parse_helper_command(override_cmd)
         if env_cfg is None:
             return None
-        return NativeSpectrumHelperConfig(argv=env_cfg, timeout_s=_parse_timeout_s(
-            values.get(NATIVE_SPECTRUM_HELPER_TIMEOUT_ENV)
-        ))
+        return NativeSpectrumHelperConfig(
+            argv=env_cfg,
+            timeout_s=_parse_timeout_s(values.get(NATIVE_SPECTRUM_HELPER_TIMEOUT_ENV)),
+        )
 
     bundled_cfg = get_bundled_native_spectrum_helper_config(env=values)
     if bundled_cfg is not None:
