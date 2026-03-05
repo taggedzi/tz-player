@@ -20,6 +20,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - None.
 
 
+## [1.0.1] - 2026-03-05
+
+### Added
+
+- None.
+
+### Changed
+
+- Lint Fix
+- Updated Release process.
+- Explicitly disable bundled native helper during release test step
+- Make bundled native helper opt-in to keep default python path
+- Harden local release scripts and expand recovery runbook
+
+### Fixed
+
+- Fix release staging lookup for downloaded native helper artifacts
 ## [1.0.0] - 2026-03-05
 
 ### Added
