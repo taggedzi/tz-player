@@ -179,8 +179,12 @@ def _wait_for_pr_checks(pr_url: str) -> None:
     )
     if output:
         _log_warning(output)
-    _log("If checks are required by branch protection, they must complete before merge can finish.")
-    _log("If checks are missing, merge the PR manually and resume using the manual follow-up steps.")
+    _log(
+        "If checks are required by branch protection, they must complete before merge can finish."
+    )
+    _log(
+        "If checks are missing, merge the PR manually and resume using the manual follow-up steps."
+    )
 
 
 def run_release(raw_version: str) -> None:
