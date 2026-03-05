@@ -125,10 +125,12 @@ def _print_github_followups(version: str, tag: str) -> None:
     _log(f"   gh release view {tag} --json name,url,tagName,isPrerelease,assets")
     _log("4) If you need to rebuild this same tag:")
     _log(
-        f"   gh workflow run Release --field version={tag} --field prerelease={prerelease} --field sign_artifacts=false"
+        f"   gh workflow run Release --ref main --field version={tag} --field prerelease={prerelease} --field sign_artifacts=false"
     )
     _log("5) If auto-merge was not enabled, you can merge PR manually and then run:")
-    _log(f"   gh workflow run Release --field version={tag} --field prerelease={prerelease} --field sign_artifacts=false")
+    _log(
+        f"   gh workflow run Release --ref main --field version={tag} --field prerelease={prerelease} --field sign_artifacts=false"
+    )
 
 
 def _wait_for_merge(
@@ -257,7 +259,7 @@ def run_release(raw_version: str) -> None:
     except subprocess.CalledProcessError as exc:
         raise RuntimeError(
             f"Could not enable auto-merge for {pr_url}. Merge manually, then run:"
-            f" gh workflow run Release --field version={tag} --field prerelease={str(_is_prerelease(version)).lower()} --field sign_artifacts=false"
+            f" gh workflow run Release --ref main --field version={tag} --field prerelease={str(_is_prerelease(version)).lower()} --field sign_artifacts=false"
         ) from exc
 
     _log("Waiting for PR merge")

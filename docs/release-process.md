@@ -20,7 +20,7 @@ Optional key encoding helper:
 base64 -w0 < private.key.asc
 ```
 
-## Release Steps
+## Release Steps (explicit sequence)
 
 1. Choose the exact version string.
 Use forms like `0.3.0`, `0.3.1`, or `0.4.0rc1`. Tag format is always `v<version>` (example: `v0.3.0`).
@@ -32,13 +32,19 @@ Use forms like `0.3.0`, `0.3.1`, or `0.4.0rc1`. Tag format is always `v<version>
 - By default, analysis uses Python backends.
 - To opt in to native helper analysis, set `TZ_PLAYER_USE_BUNDLED_NATIVE_SPECTRUM_HELPER=1` (for packaged helper binaries) or `TZ_PLAYER_NATIVE_SPECTRUM_HELPER_CMD` (custom command).
 
-2. Run the one-command local release entrypoint:
+2. Run the one-command local release entrypoint from a clean `main`:
 
 ```bash
 python tools/release.py 0.5.1
 ```
 
-Alternative options:
+The command prints a deterministic follow-up block after the tag is pushed. The exact template is:
+
+```bash
+gh workflow run Release --ref main --field version=<VERSION_OR_TAG> --field prerelease=<true|false> --field sign_artifacts=false
+```
+
+Alternative equivalent entrypoints:
 
 ```bash
 make release VERSION=0.5.1
@@ -80,20 +86,20 @@ gh run view <run-id> --log
 gh release view v0.5.1 --json name,url,tagName,isPrerelease,assets
 ```
 
-5. If a rebuild is required (for example after a workflow fix):
+4. If a rebuild is required (for example after a workflow fix) and the tag already exists:
 
 ```bash
-gh workflow run Release --field version=v0.5.1 --field prerelease=false --field sign_artifacts=false
+gh workflow run Release --ref main --field version=v0.5.1 --field prerelease=false --field sign_artifacts=false
 ```
 
-6. Verify outputs after success:
+5. Verify outputs after success:
 - Tag `v<version>` exists.
 - GitHub release `v<version>` exists with artifacts attached.
 - `CHANGELOG.md` includes a dated section for the released version.
 - `CHANGELOG.md` has reset `Unreleased` headings.
  - Attached artifacts include Linux/Windows helper binaries, `SHA256SUMS`, and checks/metadata files.
 
-7. Optional publish step:
+6. Optional publish step:
 If you publish to package indexes, do it only after the GitHub release is verified.
 
 ## Failure Handling
@@ -148,7 +154,7 @@ git ls-remote --tags origin | rg "refs/tags/v<version>"
 2. If tag exists and you need a full rebuild:
 
 ```bash
-gh workflow run Release --field version=<VERSION> --field prerelease=false --field sign_artifacts=false --ref main
+gh workflow run Release --ref main --field version=<VERSION> --field prerelease=false --field sign_artifacts=false
 ```
 
 3. If dispatch continues to fail, use the GitHub UI **Run workflow** button on `Release` and provide the same fields.
@@ -175,5 +181,5 @@ git push origin <VERSION>
 3. Trigger `Release` after the tag is present:
 
 ```bash
-gh workflow run Release --field version=<VERSION> --field prerelease=false --field sign_artifacts=false --ref main
+gh workflow run Release --ref main --field version=<VERSION> --field prerelease=false --field sign_artifacts=false
 ```
