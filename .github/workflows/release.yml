@@ -103,10 +103,28 @@ jobs:
 
       - name: Stage bundled native helper binaries
         run: |
+          linux_src="$(find /tmp/native-spectrum-helpers -path '*/native-spectrum-helper-linux/*' -type f -name 'native_spectrum_helper_c_poc' -print -quit)"
+          windows_src="$(find /tmp/native-spectrum-helpers -path '*/native-spectrum-helper-windows/*' -type f -name 'native_spectrum_helper_c_poc.exe' -print -quit)"
+
+          if [ -z "${linux_src}" ]; then
+            echo "Missing Linux bundled native helper artifact."
+            echo "Checked under /tmp/native-spectrum-helpers for native-spectrum-helper-linux/native_spectrum_helper_c_poc"
+            exit 1
+          fi
+
+          if [ -z "${windows_src}" ]; then
+            echo "Missing Windows bundled native helper artifact."
+            echo "Checked under /tmp/native-spectrum-helpers for native-spectrum-helper-windows/native_spectrum_helper_c_poc.exe"
+            echo "Downloaded tree:"
+            find /tmp/native-spectrum-helpers -maxdepth 4 -type f >/tmp/native-tree.txt
+            cat /tmp/native-tree.txt
+            exit 1
+          fi
+
           mkdir -p src/tz_player/binaries/linux/x86_64 src/tz_player/binaries/windows/x86_64
-          cp "/tmp/native-spectrum-helpers/native-spectrum-helper-linux/native_spectrum_helper_c_poc" \
+          cp "${linux_src}" \
             src/tz_player/binaries/linux/x86_64/native_spectrum_helper_c_poc
-          cp "/tmp/native-spectrum-helpers/native-spectrum-helper-windows/native_spectrum_helper_c_poc.exe" \
+          cp "${windows_src}" \
             src/tz_player/binaries/windows/x86_64/native_spectrum_helper_c_poc.exe
           chmod +x src/tz_player/binaries/linux/x86_64/native_spectrum_helper_c_poc
           ls -l src/tz_player/binaries/linux/x86_64/native_spectrum_helper_c_poc \
