@@ -31,7 +31,7 @@ Use forms like `0.3.0`, `0.3.1`, or `0.4.0rc1`. Tag format is always `v<version>
 - Users do not need to run a separate helper download step after installing the Python package.
 - On first analysis run, the app attempts to use the packaged helper binaries when available; if not present or failing, it falls back to the Python-only analysis path.
 
-2. Run the one-command release entrypoint:
+2. Run the one-command local release entrypoint:
 
 ```bash
 python tools/release.py 0.5.1
@@ -44,22 +44,56 @@ make release VERSION=0.5.1
 ./tools/release.sh 0.5.1
 ```
 
+The local command is designed to do everything required on your machine before GitHub builds artifacts:
+
+- update version/changelog from a single source (`src/tz_player/version.py`)
+- run quality gates
+- prepare release branch/PR, wait for merge, and push the release tag
+
+What it intentionally does **not** do locally:
+
+- build wheels/sdists or attach them to a GitHub release
+
+Those package artifacts are always produced in GitHub by the `Release` workflow when the tag is pushed.
+
 What `tools/release.py` does:
-1. Validates clean git state and required tooling (`git`, `gh`, `.ubuntu-venv/bin/python`).
+1. Validates clean git state and required tooling (`git`, `gh`, Python interpreter).
 2. Runs `tools/release_prepare.py` to update `src/tz_player/version.py` and `CHANGELOG.md`.
 3. Runs required quality gates: `ruff check`, `ruff format --check`, `mypy src`, `pytest`.
 4. Creates/pushes a release branch and opens a PR to `main`.
 5. Waits for PR checks, enables auto-merge, and waits for PR merge.
 6. Creates/pushes tag `v<version>` on the merged commit.
 7. Tag push triggers the `Release` GitHub workflow, which builds and uploads artifacts.
+8. Workflow artifacts include: release notes (`RELEASE_NOTES.md`), `SHA256SUMS`, wheel/sdist, and Linux/Windows helper binaries per release policy.
 
-3. Verify outputs after success:
+3. Follow-up commands for GitHub release packaging:
+
+```bash
+# Wait for the Release workflow to finish for the new tag:
+gh run list --workflow Release --branch v0.5.1 --limit 5
+
+# View the workflow run and logs:
+gh run list --workflow Release --limit 5 --json databaseId,name,status,conclusion
+gh run view <run-id> --log
+
+# Confirm release exists and includes artifacts:
+gh release view v0.5.1 --json tagName,name,url --jq '.'
+```
+
+If a rebuild is required (for example after a workflow fix), run:
+
+```bash
+gh workflow run Release --field version=0.5.1 --field prerelease=false --field sign_artifacts=false
+```
+
+4. Verify outputs after success:
 - Tag `v<version>` exists.
 - GitHub release `v<version>` exists with artifacts attached.
 - `CHANGELOG.md` includes a dated section for the released version.
 - `CHANGELOG.md` has reset `Unreleased` headings.
+ - Attached artifacts include `SHA256SUMS` and checks/metadata files.
 
-4. Optional publish step:
+5. Optional publish step:
 If you publish to package indexes, do it only after the GitHub release is verified.
 
 ## Failure Handling
