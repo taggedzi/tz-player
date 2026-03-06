@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import queue
 import threading
+import os
 from collections.abc import Awaitable, Callable, Coroutine
 from dataclasses import dataclass
 from typing import Any, cast
@@ -127,7 +128,10 @@ class VLCPlaybackBackend:
         try:
             import vlc
 
-            instance = vlc.Instance()
+            vlc_args: list[str] = []
+            if not os.environ.get("TZ_PLAYER_VLC_VERBOSE"):
+                vlc_args.append("--quiet")
+            instance = vlc.Instance(*vlc_args)
             player = instance.media_player_new()
         except Exception as exc:  # pragma: no cover - depends on VLC install
             self._notify_future_exception(

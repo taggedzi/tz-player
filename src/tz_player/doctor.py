@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import os
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -99,7 +100,10 @@ def probe_vlc(*, required: bool) -> DoctorCheck:
         )
     version = getattr(vlc, "__version__", "unknown")
     try:
-        instance = vlc.Instance()
+        vlc_args: list[str] = []
+        if not os.environ.get("TZ_PLAYER_VLC_VERBOSE"):
+            vlc_args.append("--quiet")
+        instance = vlc.Instance(*vlc_args)
     except Exception as exc:
         return DoctorCheck(
             name="vlc/libvlc",

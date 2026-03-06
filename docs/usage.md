@@ -75,6 +75,7 @@ Logging and diagnostics:
 - `--verbose` sets log level to `DEBUG`.
 - `--quiet` sets log level to `WARNING` (takes precedence over `--verbose`).
 - `--log-file /path/to/tz-player.log` writes logs to an explicit file path.
+- VLC library logs are silenced by default; set `TZ_PLAYER_VLC_VERBOSE=1` to restore them.
 - `--visualizer-plugin-path <path_or_module>` adds local visualizer plugin discovery entries for this run (repeatable; CLI overrides persisted list).
 - `--visualizer-plugin-security <off|warn|enforce>` controls static safety checks for local plugin source.
   - `warn` (default): plugin loads, warning is logged/notified when risky patterns are detected.

@@ -108,7 +108,8 @@ if ($cl) {
         "/W3",
         "/D_CRT_SECURE_NO_WARNINGS",
         "/Fe:$OutPath",
-        $src
+        $src,
+        "Advapi32.lib"
     )
     Write-Output "built=$OutPath (compiler=cl.exe)"
     exit 0
