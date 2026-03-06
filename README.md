@@ -22,6 +22,11 @@ Just your music, in your terminal.
 Support expectations are documented in `SUPPORT.md`.
 Security reporting and response expectations are documented in `SECURITY.md`.
 
+## AI Assistance Notice
+
+Portions of this project were produced with assistance from AI tools.
+All changes are reviewed, tested, and curated by the maintainers.
+
 ## Screenshots
 
 ![Cover Art Screenshot](/docs/images/tz-player_cover-ascii-art_screenshot.png)
