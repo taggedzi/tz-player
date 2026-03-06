@@ -26,12 +26,32 @@ This summary is informational and not legal advice.
   - License: HPND (historical PIL license)
   - Source: https://pypi.org/project/Pillow/
 
-## Optional External Tools
+## Development Dependencies
+
+- pytest
+  - License: MIT
+  - Source: https://pypi.org/project/pytest/
+
+- ruff
+  - License: MIT
+  - Source: https://pypi.org/project/ruff/
+
+- mypy
+  - License: MIT (mypy/mypyc), Apache-2.0 (typeshed)
+  - Source: https://pypi.org/project/mypy/
+
+- nox
+  - License: Apache-2.0
+  - Source: https://pypi.org/project/nox/
+
+## Required External Tools
 
 - VLC/libVLC (system-installed for real playback backend)
   - License family: LGPL/GPL components (see VideoLAN legal pages)
   - Source: https://www.videolan.org/legal.html
   - libVLC: https://www.videolan.org/vlc/libvlc.html
+
+## Optional External Tools
 
 - FFmpeg (system-installed, optional for non-WAV envelope analysis)
   - License: LGPL 2.1+ or GPL 2+ depending build configuration
