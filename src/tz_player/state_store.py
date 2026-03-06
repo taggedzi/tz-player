@@ -37,7 +37,7 @@ class AppState:
     visualizer_plugin_security_mode: str = "warn"
     visualizer_plugin_runtime_mode: str = "in-process"
     native_helper_enabled: bool = True
-    native_helper_timeout_s: float = 8.0
+    native_helper_timeout_s: float = 30.0
     ansi_enabled: bool = True
     log_level: str = "INFO"
 
@@ -114,7 +114,7 @@ def _coerce_state(data: dict[str, Any]) -> AppState:
         native_helper_enabled=_bool_or_default(data.get("native_helper_enabled"), True),
         native_helper_timeout_s=max(
             0.1,
-            _float_or_default(data.get("native_helper_timeout_s"), 8.0),
+            _float_or_default(data.get("native_helper_timeout_s"), 30.0),
         ),
         ansi_enabled=_bool_or_default(data.get("ansi_enabled"), True),
         log_level=_str_or_default(data.get("log_level"), "INFO"),
