@@ -3,30 +3,64 @@
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <signal.h>
 #include <time.h>
 
 #ifdef _WIN32
 #include <io.h>
 #include <windows.h>
 #else
+#include <sys/file.h>
 #include <sys/wait.h>
 #include <unistd.h>
 #endif
 
+/*
+ * tz_player_native_helper.c
+ *
+ * Overview
+ * - This is a small, dependency-free CLI helper invoked by tz-player.
+ * - It reads a JSON request from stdin, decodes audio (via WAV parsing or ffmpeg),
+ *   computes spectrum + optional beat + optional waveform proxy data, then writes
+ *   a compact JSON response to stdout.
+ * - The goal is speed and portability, not feature completeness.
+ *
+ * Data flow (high level)
+ *   stdin JSON -> parse Request -> decode audio -> resample (mono) ->
+ *   spectrum/beat/waveform -> stdout JSON
+ */
+
 #define REQUEST_SCHEMA "tz_player.native_spectrum_helper_request.v1"
 #define RESPONSE_SCHEMA "tz_player.native_spectrum_helper_response.v1"
 #define HELPER_VERSION "native-helper-v1"
+/* ffmpeg is asked to decode to 44.1 kHz stereo 16-bit PCM. */
 #define FFMPEG_DECODE_RATE_HZ 44100
+/* Safety caps to limit memory/CPU abuse while still allowing long-form audio. */
+#define MAX_STDIN_BYTES (1024u * 1024u)
+#define MAX_AUDIO_SECONDS 7200u
+#define MAX_WAV_SLACK_BYTES (1024u * 1024u)
+#define MAX_DECODE_MS (15u * 60u * 1000u)
+#define MAX_BAND_COUNT 96
+#define MAX_FRAME_COUNT 20000
+#define MAX_BEAT_FRAME_COUNT 30000
+#define MAX_WAVEFORM_FRAME_COUNT 30000
+#define MAX_HOP_MS 1000
+#define MAX_HELPER_INSTANCES_DEFAULT 1
+#define MAX_HELPER_INSTANCES_CAP 32
+#define MAX_PCM_BYTES                                                         \
+    ((size_t)FFMPEG_DECODE_RATE_HZ * 2u * 2u * (size_t)MAX_AUDIO_SECONDS)
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
 
+/* Parsed JSON request from tz-player. */
 typedef struct {
     char *track_path;
     int mono_target_rate_hz;
@@ -41,6 +75,7 @@ typedef struct {
     int waveform_max_frames;
 } Request;
 
+/* Decoded audio (mono + stereo copies) in floating point [-1, 1]. */
 typedef struct {
     int mono_rate;
     size_t mono_sample_count;
@@ -52,6 +87,7 @@ typedef struct {
     int duration_ms;
 } DecodedAudio;
 
+/* One spectrum frame: position + quantized band magnitudes (0-255). */
 typedef struct {
     int pos_ms;
     uint8_t *bands;
@@ -63,6 +99,7 @@ typedef struct {
     SpectrumFrame *frames;
 } SpectrumResult;
 
+/* Beat detection output: per-frame strength + beat flags. */
 typedef struct {
     int pos_ms;
     int strength_u8;
@@ -76,6 +113,7 @@ typedef struct {
     BeatFrame *frames;
 } BeatResult;
 
+/* Waveform proxy: per-frame min/max for left/right channels. */
 typedef struct {
     int pos_ms;
     int lmin;
@@ -90,6 +128,7 @@ typedef struct {
     WaveformProxyFrame *frames;
 } WaveformProxyResult;
 
+/* Monotonic clock in milliseconds for timing/metrics. */
 static double now_ms(void) {
 #ifdef _WIN32
     static LARGE_INTEGER freq = {0};
@@ -110,6 +149,7 @@ static double now_ms(void) {
 #endif
 }
 
+/* Little-endian helpers for WAV parsing. */
 static uint32_t read_u32_le(const uint8_t *p) {
     return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) |
            ((uint32_t)p[3] << 24);
@@ -119,6 +159,7 @@ static uint16_t read_u16_le(const uint8_t *p) {
     return (uint16_t)p[0] | ((uint16_t)p[1] << 8);
 }
 
+/* Window size selection (clamped) for spectrum analysis. */
 static int next_pow2_clamped(int value) {
     int size = 1;
     while (size < value) {
@@ -133,6 +174,7 @@ static int next_pow2_clamped(int value) {
     return size;
 }
 
+/* Slurp stdin into a null-terminated buffer. */
 static char *read_stdin_all(size_t *out_len) {
     size_t cap = 4096;
     size_t len = 0;
@@ -152,6 +194,10 @@ static char *read_stdin_all(size_t *out_len) {
         }
         size_t n = fread(buf + len, 1, cap - len - 1, stdin);
         len += n;
+        if (len > MAX_STDIN_BYTES) {
+            free(buf);
+            return NULL;
+        }
         if (ferror(stdin)) {
             free(buf);
             return NULL;
@@ -167,6 +213,12 @@ static char *read_stdin_all(size_t *out_len) {
     return buf;
 }
 
+/*
+ * Minimal JSON parsing helpers.
+ *
+ * The request format is controlled by tz-player, so we keep the parser
+ * intentionally small and strict instead of pulling in a JSON library.
+ */
 static const char *find_key(const char *json, const char *key) {
     size_t key_len = strlen(key);
     const char *p = json;
@@ -205,6 +257,7 @@ static int json_extract_int(const char *json, const char *key, int *out_value) {
     return 1;
 }
 
+/* Extract a JSON object value (as a string slice copy). */
 static char *json_extract_object(const char *json, const char *key) {
     const char *k = find_key(json, key);
     if (!k) {
@@ -259,6 +312,7 @@ static char *json_extract_object(const char *json, const char *key) {
     return NULL;
 }
 
+/* Extract a JSON string value, with basic escape handling. */
 static char *json_extract_string(const char *json, const char *key) {
     const char *k = find_key(json, key);
     if (!k) {
@@ -323,6 +377,12 @@ static char *json_extract_string(const char *json, const char *key) {
     return out;
 }
 
+/*
+ * Parse and normalize the request.
+ *
+ * We allow either nested objects (spectrum/beat/waveform_proxy) or legacy
+ * top-level fields. Defaults and minimums are enforced here.
+ */
 static int parse_request(const char *json, Request *req) {
     memset(req, 0, sizeof(*req));
     char *schema = json_extract_string(json, "schema");
@@ -333,6 +393,9 @@ static int parse_request(const char *json, Request *req) {
     free(schema);
     req->track_path = json_extract_string(json, "track_path");
     if (!req->track_path) {
+        return 0;
+    }
+    if (strlen(req->track_path) > 4096u) {
         return 0;
     }
     char *spectrum_obj = json_extract_object(json, "spectrum");
@@ -392,23 +455,44 @@ static int parse_request(const char *json, Request *req) {
     if (req->hop_ms < 10) {
         req->hop_ms = 10;
     }
+    if (req->hop_ms > MAX_HOP_MS) {
+        req->hop_ms = MAX_HOP_MS;
+    }
     if (req->band_count < 8) {
         req->band_count = 8;
+    }
+    if (req->band_count > MAX_BAND_COUNT) {
+        req->band_count = MAX_BAND_COUNT;
     }
     if (req->max_frames < 1) {
         req->max_frames = 1;
     }
+    if (req->max_frames > MAX_FRAME_COUNT) {
+        req->max_frames = MAX_FRAME_COUNT;
+    }
     if (req->beat_hop_ms < 10) {
         req->beat_hop_ms = 40;
+    }
+    if (req->beat_hop_ms > MAX_HOP_MS) {
+        req->beat_hop_ms = MAX_HOP_MS;
     }
     if (req->beat_max_frames < 1) {
         req->beat_max_frames = 1;
     }
+    if (req->beat_max_frames > MAX_BEAT_FRAME_COUNT) {
+        req->beat_max_frames = MAX_BEAT_FRAME_COUNT;
+    }
     if (req->waveform_hop_ms < 10) {
         req->waveform_hop_ms = 20;
     }
+    if (req->waveform_hop_ms > MAX_HOP_MS) {
+        req->waveform_hop_ms = MAX_HOP_MS;
+    }
     if (req->waveform_max_frames < 1) {
         req->waveform_max_frames = 1;
+    }
+    if (req->waveform_max_frames > MAX_WAVEFORM_FRAME_COUNT) {
+        req->waveform_max_frames = MAX_WAVEFORM_FRAME_COUNT;
     }
     return 1;
 }
@@ -462,6 +546,7 @@ static char *cmd_double_quote(const char *input) {
 }
 #endif
 
+/* Decode a simple PCM WAV file (16-bit mono or stereo). */
 static int decode_wav_file(const char *path, DecodedAudio *out) {
     memset(out, 0, sizeof(*out));
     FILE *fp = fopen(path, "rb");
@@ -474,6 +559,10 @@ static int decode_wav_file(const char *path, DecodedAudio *out) {
     }
     long file_size = ftell(fp);
     if (file_size <= 44) {
+        fclose(fp);
+        return 0;
+    }
+    if ((size_t)file_size > (MAX_PCM_BYTES + MAX_WAV_SLACK_BYTES)) {
         fclose(fp);
         return 0;
     }
@@ -508,6 +597,9 @@ static int decode_wav_file(const char *path, DecodedAudio *out) {
         uint32_t chunk_size = read_u32_le(chunk + 4);
         size_t chunk_data_off = off + 8;
         size_t next = chunk_data_off + chunk_size + (chunk_size & 1u);
+        if (next < chunk_data_off) {
+            break;
+        }
         if (next > (size_t)file_size) {
             break;
         }
@@ -538,6 +630,11 @@ static int decode_wav_file(const char *path, DecodedAudio *out) {
         return 0;
     }
     size_t frame_count = data_size / bytes_per_frame;
+    size_t max_frames = (size_t)sample_rate * (size_t)MAX_AUDIO_SECONDS;
+    if (max_frames > 0 && frame_count > max_frames) {
+        free(buf);
+        return 0;
+    }
     float *mono = (float *)malloc(sizeof(float) * frame_count);
     float *left_out = (float *)malloc(sizeof(float) * frame_count);
     float *right_out = (float *)malloc(sizeof(float) * frame_count);
@@ -574,6 +671,12 @@ static int decode_wav_file(const char *path, DecodedAudio *out) {
     return 1;
 }
 
+/*
+ * Decode any audio file using ffmpeg into raw PCM.
+ *
+ * Windows: spawn ffmpeg with CreateProcess and capture stdout.
+ * POSIX: fork/exec and capture stdout via a pipe.
+ */
 static int decode_ffmpeg_file(const char *path, DecodedAudio *out) {
     memset(out, 0, sizeof(*out));
 #ifdef _WIN32
@@ -683,7 +786,17 @@ static int decode_ffmpeg_file(const char *path, DecodedAudio *out) {
         CloseHandle(pi.hProcess);
         return 0;
     }
+    double decode_start = now_ms();
     for (;;) {
+        if (now_ms() - decode_start > (double)MAX_DECODE_MS) {
+            fprintf(stderr, "ffmpeg decode (win): timeout\n");
+            free(raw);
+            CloseHandle(stdout_read);
+            TerminateProcess(pi.hProcess, 1);
+            CloseHandle(pi.hThread);
+            CloseHandle(pi.hProcess);
+            return 0;
+        }
         if (len + 4096 > cap) {
             cap *= 2;
             uint8_t *grown = (uint8_t *)realloc(raw, cap);
@@ -718,6 +831,15 @@ static int decode_ffmpeg_file(const char *path, DecodedAudio *out) {
             break;
         }
         len += (size_t)bytes_read;
+        if (len > MAX_PCM_BYTES) {
+            fprintf(stderr, "ffmpeg decode (win): decoded audio too large\n");
+            free(raw);
+            CloseHandle(stdout_read);
+            TerminateProcess(pi.hProcess, 1);
+            CloseHandle(pi.hThread);
+            CloseHandle(pi.hProcess);
+            return 0;
+        }
     }
     CloseHandle(stdout_read);
     (void)WaitForSingleObject(pi.hProcess, INFINITE);
@@ -839,7 +961,15 @@ static int decode_ffmpeg_file(const char *path, DecodedAudio *out) {
         (void)waitpid(pid, NULL, 0);
         return 0;
     }
+    double decode_start = now_ms();
     for (;;) {
+        if (now_ms() - decode_start > (double)MAX_DECODE_MS) {
+            free(raw);
+            close(stdout_pipe[0]);
+            (void)kill(pid, SIGKILL);
+            (void)waitpid(pid, NULL, 0);
+            return 0;
+        }
         if (len + 4096 > cap) {
             cap *= 2;
             uint8_t *grown = (uint8_t *)realloc(raw, cap);
@@ -865,6 +995,13 @@ static int decode_ffmpeg_file(const char *path, DecodedAudio *out) {
             break;
         }
         len += (size_t)n;
+        if (len > MAX_PCM_BYTES) {
+            free(raw);
+            close(stdout_pipe[0]);
+            (void)kill(pid, SIGKILL);
+            (void)waitpid(pid, NULL, 0);
+            return 0;
+        }
     }
     close(stdout_pipe[0]);
 
@@ -929,6 +1066,7 @@ static int decode_ffmpeg_file(const char *path, DecodedAudio *out) {
     return 0; /* defensive/unreachable: keeps MSVC control-flow analysis happy */
 }
 
+/* Try WAV first (fast path). Otherwise fall back to ffmpeg. */
 static int decode_audio_file(const char *path, DecodedAudio *out) {
     if (decode_wav_file(path, out)) {
         return 1;
@@ -939,6 +1077,12 @@ static int decode_audio_file(const char *path, DecodedAudio *out) {
     return decode_ffmpeg_file(path, out);
 }
 
+/*
+ * Cheap downsampler for mono channel only.
+ *
+ * This is a simple decimation (no low-pass filter). It's acceptable because we
+ * only need visually pleasing spectrum bands, not high fidelity playback.
+ */
 static int resample_down_if_needed(DecodedAudio *audio, int target_rate_hz) {
     if (target_rate_hz <= 0 || audio->mono_rate <= 0 || audio->mono_sample_count == 0) {
         return 0;
@@ -980,6 +1124,7 @@ static void free_decoded_audio(DecodedAudio *audio) {
     memset(audio, 0, sizeof(*audio));
 }
 
+/* Map 0..1 float magnitudes to a perceptually nicer 0..255 curve. */
 static uint8_t quantize_level(float normalized) {
     if (normalized < 0.0f) {
         normalized = 0.0f;
@@ -998,6 +1143,12 @@ static uint8_t quantize_level(float normalized) {
     return (uint8_t)v;
 }
 
+/*
+ * Spectrum analysis for each hop using a Goertzel-style filter bank.
+ *
+ * We compute a logarithmic set of bands between ~40Hz and 5kHz (or Nyquist),
+ * apply a Hann window, then compute magnitudes per band per frame.
+ */
 static int compute_spectrum(const DecodedAudio *audio, const Request *req, SpectrumResult *out) {
     memset(out, 0, sizeof(*out));
     if (!audio || audio->mono_rate <= 0 || !audio->mono_samples || audio->mono_sample_count == 0) {
@@ -1062,6 +1213,12 @@ static int compute_spectrum(const DecodedAudio *audio, const Request *req, Spect
         return 0;
     }
 
+    if (band_count <= 0 || frame_count > (SIZE_MAX / (size_t)band_count)) {
+        free(coeffs);
+        free(hann);
+        free(window);
+        return 0;
+    }
     all_mags = (float *)malloc(sizeof(float) * frame_count * (size_t)band_count);
     positions = (int *)malloc(sizeof(int) * frame_count);
     if (!all_mags || !positions) {
@@ -1145,6 +1302,7 @@ static int compute_spectrum(const DecodedAudio *audio, const Request *req, Spect
     return 1;
 }
 
+/* Clamp float [-1, 1] to signed 8-bit (-127..127). */
 static int to_i8(float value) {
     if (value < -1.0f) {
         value = -1.0f;
@@ -1162,6 +1320,7 @@ static int to_i8(float value) {
     return v;
 }
 
+/* Root-mean-square energy over a window. */
 static double rms_energy_window(const float *values, size_t count) {
     if (!values || count == 0) {
         return 0.0;
@@ -1174,6 +1333,15 @@ static double rms_energy_window(const float *values, size_t count) {
     return sqrt(total / (double)count);
 }
 
+/*
+ * Lightweight beat/tempo estimate.
+ *
+ * Steps:
+ * - Compute short-time energy windows.
+ * - Derive onset strengths (positive energy deltas).
+ * - Autocorrelate onsets to estimate BPM.
+ * - Pick a phase and mark beats above a threshold.
+ */
 static int compute_beat(const DecodedAudio *audio, const Request *req, BeatResult *out) {
     memset(out, 0, sizeof(*out));
     if (!req->beat_enabled) {
@@ -1364,6 +1532,10 @@ static void free_beat_result(BeatResult *result) {
     memset(result, 0, sizeof(*result));
 }
 
+/*
+ * Waveform proxy: for each hop, record min/max for left/right.
+ * This is tiny to serialize but still allows a waveform-like display.
+ */
 static int compute_waveform_proxy(const DecodedAudio *audio, const Request *req, WaveformProxyResult *out) {
     memset(out, 0, sizeof(*out));
     if (!req->waveform_proxy_enabled) {
@@ -1442,6 +1614,11 @@ static void free_spectrum_result(SpectrumResult *result) {
 /* We keep band_count in a static for response writing simplicity. */
 static int g_response_band_count = 0;
 
+/*
+ * Serialize the response in a compact JSON format.
+ *
+ * Note: we avoid allocating a big JSON buffer to reduce peak memory use.
+ */
 static void write_full_response(const SpectrumResult *spec, const BeatResult *beat,
                                 const WaveformProxyResult *waveform, double decode_ms,
                                 double spectrum_ms, double beat_ms, double waveform_ms,
@@ -1491,6 +1668,121 @@ static void write_full_response(const SpectrumResult *spec, const BeatResult *be
         decode_ms, spectrum_ms, beat_ms, waveform_ms, total_ms);
 }
 
+#ifdef _WIN32
+static HANDLE g_instance_mutex = NULL;
+static int g_instance_slot = -1;
+
+static int parse_max_instances(void) {
+    const char *env = getenv("TZ_PLAYER_HELPER_MAX_INSTANCES");
+    if (!env || !*env) {
+        return MAX_HELPER_INSTANCES_DEFAULT;
+    }
+    char *endptr = NULL;
+    long value = strtol(env, &endptr, 10);
+    if (endptr == env || value < 1) {
+        return MAX_HELPER_INSTANCES_DEFAULT;
+    }
+    if (value > MAX_HELPER_INSTANCES_CAP) {
+        value = MAX_HELPER_INSTANCES_CAP;
+    }
+    return (int)value;
+}
+
+static int acquire_instance_lock(void) {
+    char name[160];
+    char user[64] = {0};
+    DWORD user_len = (DWORD)sizeof(user) - 1u;
+    if (!GetUserNameA(user, &user_len) || user_len == 0) {
+        strcpy(user, "unknown");
+    }
+    int max_instances = parse_max_instances();
+    for (int slot = 0; slot < max_instances; slot++) {
+        _snprintf(name, sizeof(name) - 1u, "Local\\tz_player_native_helper_%s_%d", user,
+                  slot);
+        name[sizeof(name) - 1u] = '\0';
+        HANDLE mutex = CreateMutexA(NULL, FALSE, name);
+        if (!mutex) {
+            continue;
+        }
+        if (GetLastError() == ERROR_ALREADY_EXISTS) {
+            CloseHandle(mutex);
+            continue;
+        }
+        g_instance_mutex = mutex;
+        g_instance_slot = slot;
+        return 1;
+    }
+    return 0;
+}
+
+static void release_instance_lock(void) {
+    if (!g_instance_mutex) {
+        return;
+    }
+    CloseHandle(g_instance_mutex);
+    g_instance_mutex = NULL;
+    g_instance_slot = -1;
+}
+#else
+static int g_instance_lock_fd = -1;
+static int g_instance_slot = -1;
+
+static int parse_max_instances(void) {
+    const char *env = getenv("TZ_PLAYER_HELPER_MAX_INSTANCES");
+    if (!env || !*env) {
+        return MAX_HELPER_INSTANCES_DEFAULT;
+    }
+    char *endptr = NULL;
+    long value = strtol(env, &endptr, 10);
+    if (endptr == env || value < 1) {
+        return MAX_HELPER_INSTANCES_DEFAULT;
+    }
+    if (value > MAX_HELPER_INSTANCES_CAP) {
+        value = MAX_HELPER_INSTANCES_CAP;
+    }
+    return (int)value;
+}
+
+static int acquire_instance_lock(void) {
+    int uid = (int)getuid();
+    int max_instances = parse_max_instances();
+    for (int slot = 0; slot < max_instances; slot++) {
+        char path[PATH_MAX];
+        snprintf(path, sizeof(path), "/tmp/tz_player_native_helper.%d.%d.lock", uid, slot);
+        int fd = open(path, O_CREAT | O_RDWR, 0600);
+        if (fd < 0) {
+            continue;
+        }
+        if (flock(fd, LOCK_EX | LOCK_NB) != 0) {
+            close(fd);
+            continue;
+        }
+        g_instance_lock_fd = fd;
+        g_instance_slot = slot;
+        return 1;
+    }
+    return 0;
+}
+
+static void release_instance_lock(void) {
+    if (g_instance_lock_fd < 0) {
+        return;
+    }
+    (void)flock(g_instance_lock_fd, LOCK_UN);
+    close(g_instance_lock_fd);
+    g_instance_lock_fd = -1;
+    g_instance_slot = -1;
+}
+#endif
+
+/*
+ * Entry point: read request, analyze, write response.
+ *
+ * Exit codes:
+ * - 0 success
+ * - 1 analysis failure (decode/compute)
+ * - 2 invalid input
+ */
 int main(void) {
     size_t input_len = 0;
     char *input = read_stdin_all(&input_len);
@@ -1508,17 +1800,25 @@ int main(void) {
     }
     free(input);
 
+    if (!acquire_instance_lock()) {
+        fprintf(stderr, "analysis failed (helper instance limit)\n");
+        free_request(&req);
+        return 1;
+    }
+
     double total_start = now_ms();
     double decode_start = total_start;
     DecodedAudio audio;
     if (!decode_audio_file(req.track_path, &audio)) {
         fprintf(stderr, "analysis failed (decode)\n");
+        release_instance_lock();
         free_request(&req);
         return 1;
     }
     if (!resample_down_if_needed(&audio, req.mono_target_rate_hz)) {
         fprintf(stderr, "analysis failed (resample)\n");
         free_decoded_audio(&audio);
+        release_instance_lock();
         free_request(&req);
         return 1;
     }
@@ -1529,6 +1829,7 @@ int main(void) {
     if (!compute_spectrum(&audio, &req, &spec)) {
         fprintf(stderr, "analysis failed (spectrum)\n");
         free_decoded_audio(&audio);
+        release_instance_lock();
         free_request(&req);
         return 1;
     }
@@ -1541,6 +1842,7 @@ int main(void) {
             fprintf(stderr, "analysis failed (beat)\n");
             free_spectrum_result(&spec);
             free_decoded_audio(&audio);
+            release_instance_lock();
             free_request(&req);
             return 1;
         }
@@ -1557,6 +1859,7 @@ int main(void) {
             free_beat_result(&beat);
             free_spectrum_result(&spec);
             free_decoded_audio(&audio);
+            release_instance_lock();
             free_request(&req);
             return 1;
         }
@@ -1574,6 +1877,7 @@ int main(void) {
     free_waveform_proxy_result(&waveform);
     free_spectrum_result(&spec);
     free_decoded_audio(&audio);
+    release_instance_lock();
     free_request(&req);
     return 0;
 }

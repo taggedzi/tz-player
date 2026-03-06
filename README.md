@@ -96,6 +96,7 @@ tools\setup.cmd
 Native helper defaults:
 - If bundled helper binaries are present, they are enabled by default.
 - Configure in the state file (`native_helper_enabled`, `native_helper_timeout_s`).
+- `TZ_PLAYER_HELPER_MAX_INSTANCES` caps concurrent helper processes (default 1).
 
 Install VLC from:
 

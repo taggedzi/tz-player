@@ -62,6 +62,7 @@ Notes:
   - Environment variables (`TZ_PLAYER_NATIVE_SPECTRUM_HELPER_CMD`,
     `TZ_PLAYER_USE_BUNDLED_NATIVE_SPECTRUM_HELPER`, `TZ_PLAYER_NATIVE_SPECTRUM_HELPER_TIMEOUT_S`)
     override the state file.
+  - `TZ_PLAYER_HELPER_MAX_INSTANCES` caps concurrent helper processes (default 1).
 
 GUI entrypoint supports the same flag:
 
