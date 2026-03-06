@@ -72,16 +72,12 @@ def render_pstats_summary_text(
     try:
         stats = pstats.Stats(str(prof_path), stream=stream)
     except (EOFError, OSError, TypeError, ValueError):
-        return (
-            "Profiling data unavailable (profiling suppressed or no samples captured).\n"
-        )
+        return "Profiling data unavailable (profiling suppressed or no samples captured).\n"
     stats.sort_stats(sort_key)
     stats.print_stats(max(1, int(top_n)))
     rendered = stream.getvalue()
     if not rendered.strip():
-        return (
-            "Profiling data unavailable (profiling suppressed or no samples captured).\n"
-        )
+        return "Profiling data unavailable (profiling suppressed or no samples captured).\n"
     return rendered
 
 
