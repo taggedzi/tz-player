@@ -3,6 +3,8 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
+import pytest
+
 
 def _load_release_module():
     repo_root = Path(__file__).resolve().parents[1]
@@ -18,36 +20,19 @@ def _load_release_module():
 release = _load_release_module()
 
 
-def test_recovery_hints_when_tag_exists() -> None:
-    lines = release._recovery_hints(
-        version="1.2.3",
-        tag="v1.2.3",
-        branch="release/v1.2.3",
-        tag_exists=True,
-        branch_exists=True,
-    )
-    assert any("Tag v1.2.3 already exists" in line for line in lines)
-    assert any("force_rebuild=true" in line for line in lines)
+def test_parse_version_accepts_prefixed_tag() -> None:
+    assert release._parse_version("v1.2.3") == "1.2.3"
 
 
-def test_recovery_hints_when_branch_exists() -> None:
-    lines = release._recovery_hints(
-        version="1.2.3",
-        tag="v1.2.3",
-        branch="release/v1.2.3",
-        tag_exists=False,
-        branch_exists=True,
-    )
-    assert any("Release branch release/v1.2.3 already exists" in line for line in lines)
-    assert any("--resume" in line for line in lines)
+def test_parse_version_rejects_empty_input() -> None:
+    with pytest.raises(RuntimeError, match="Version cannot be empty"):
+        release._parse_version("v")
 
 
-def test_recovery_hints_default() -> None:
-    lines = release._recovery_hints(
-        version="1.2.3",
-        tag="v1.2.3",
-        branch="release/v1.2.3",
-        tag_exists=False,
-        branch_exists=False,
-    )
-    assert lines[-1] == "Fix the failure and re-run the same release command."
+def test_workflow_run_name_uses_normalized_tag_prefix() -> None:
+    assert release._workflow_run_name("1.2.3") == "Release Cut v1.2.3"
+
+
+def test_prerelease_detection() -> None:
+    assert release._is_prerelease("1.2.3rc1") is True
+    assert release._is_prerelease("1.2.3") is False

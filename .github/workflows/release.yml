@@ -4,6 +4,27 @@ on:
   push:
     tags:
       - "v*"
+  workflow_call:
+    inputs:
+      version:
+        description: "Existing release version/tag (for example 1.2.3 or v1.2.3)"
+        required: true
+        type: string
+      force_rebuild:
+        description: "Allow rebuilds when called by another workflow."
+        required: true
+        default: false
+        type: boolean
+      prerelease:
+        description: "Mark release as pre-release."
+        required: true
+        default: false
+        type: boolean
+      sign_artifacts:
+        description: "Sign artifacts with GPG (requires release signing secrets)."
+        required: true
+        default: false
+        type: boolean
   workflow_dispatch:
     inputs:
       version:
@@ -169,7 +190,7 @@ jobs:
 
       - name: Set prerelease mode
         run: |
-          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ] || [ "${GITHUB_EVENT_NAME}" = "workflow_call" ]; then
             echo "RELEASE_PRERELEASE=${{ inputs.prerelease }}" >> "${GITHUB_ENV}"
           elif [[ "${RELEASE_VERSION_NORM}" =~ (a|b|rc|dev|post) ]]; then
             echo "RELEASE_PRERELEASE=true" >> "${GITHUB_ENV}"
@@ -276,6 +297,9 @@ jobs:
             prerelease_flag="--prerelease"
           fi
           if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+            gh release edit "${RELEASE_TAG}" \
+              --title "${RELEASE_TAG}" \
+              --notes-file RELEASE_NOTES.md
             gh release upload "${RELEASE_TAG}" dist/* --clobber
           else
             gh release create "${RELEASE_TAG}" \

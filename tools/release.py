@@ -1,91 +1,34 @@
-"""One-command release orchestrator."""
+"""One-command release trigger that dispatches and optionally watches Release Cut."""
 
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import json
-import re
 import shutil
 import subprocess
 import sys
 import time
 
+POLL_SECONDS = 2
+POLL_TIMEOUT_SECONDS = 90
+
 
 def _log(message: str) -> None:
-    """Emit release-script progress line with stable prefix."""
     print(f"[release] {message}")
 
 
 def _run(cmd: list[str], *, capture: bool = False) -> str:
-    """Run subprocess command and optionally return stdout text."""
-    result = subprocess.run(
-        cmd,
-        check=True,
-        text=True,
-        capture_output=capture,
-    )
+    result = subprocess.run(cmd, check=True, text=True, capture_output=capture)
     return result.stdout.strip() if capture else ""
 
 
-def _run_optional(cmd: list[str], *, capture: bool = False) -> tuple[bool, str]:
-    """Run subprocess command and return whether it succeeded."""
-    result = subprocess.run(
-        cmd,
-        text=True,
-        capture_output=capture,
-    )
-    output = result.stdout.strip() if capture else ""
-    return result.returncode == 0, output
-
-
 def _require_command(cmd: str) -> None:
-    """Raise if required external command is unavailable on PATH."""
     if shutil.which(cmd) is None:
         raise RuntimeError(f"Missing required command: {cmd}")
 
 
-def _python_cmd() -> list[str]:
-    """Return interpreter command used for child Python invocations."""
-    return [sys.executable]
-
-
-def _release_prepare(version: str) -> None:
-    """Invoke release-prepare helper script for target version."""
-    _run([*_python_cmd(), "tools/release_prepare.py", "--version", version])
-
-
-def _quality_gates() -> None:
-    """Run required lint/format/type/test gates before release branch commit."""
-    _run([*_python_cmd(), "-m", "ruff", "check", "."])
-    _run([*_python_cmd(), "-m", "ruff", "format", "--check", "."])
-    _run([*_python_cmd(), "-m", "mypy", "src"])
-    _run([*_python_cmd(), "-m", "pytest"])
-
-
-def _ensure_clean_tree() -> None:
-    """Require clean git working tree before release automation proceeds."""
-    status = _run(["git", "status", "--porcelain"], capture=True)
-    if status:
-        raise RuntimeError("Working tree is not clean. Commit or stash changes first.")
-
-
-def _ref_exists_locally(ref: str) -> bool:
-    """Return whether git reference exists in local repository."""
-    try:
-        _run(["git", "rev-parse", ref], capture=True)
-    except subprocess.CalledProcessError:
-        return False
-    return True
-
-
-def _ref_exists_remote(*, kind: str, name: str) -> bool:
-    """Return whether branch/tag exists on origin remote."""
-    out = _run(["git", "ls-remote", f"--{kind}", "origin", name], capture=True)
-    return bool(out.strip())
-
-
 def _parse_version(raw: str) -> str:
-    """Normalize input version allowing optional leading `v` prefix."""
     version = raw.strip()
     if version.startswith(("v", "V")):
         version = version[1:]
@@ -94,238 +37,72 @@ def _parse_version(raw: str) -> str:
     return version
 
 
-def _log_warning(message: str) -> None:
-    """Emit a warning progress line with a stable prefix."""
-    print(f"[release] WARN: {message}")
-
-
 def _is_prerelease(version: str) -> bool:
-    """Return True for common prerelease-style version strings."""
-    return (
-        re.search(
-            r"(?:alpha|a|beta|b|rc|pre|preview|dev)\d*",
-            version,
-            re.IGNORECASE,
-        )
-        is not None
-    )
+    lowered = version.lower()
+    return any(marker in lowered for marker in ("a", "b", "rc", "dev", "alpha", "beta"))
 
 
-def _print_github_followups(version: str, tag: str) -> None:
-    """Print recommended GitHub CLI follow-up commands."""
-    prerelease = str(_is_prerelease(version)).lower()
-    _log("Release tag push is complete. Next:")
-    _log("1) Watch the newest Release workflow runs:")
-    _log(
-        "   gh run list --workflow Release --limit 10 --json databaseId,name,status,conclusion"
-    )
-    _log("2) Pick the relevant run ID above and stream logs:")
-    _log("   gh run view <RUN_ID> --log")
-    _log("3) Confirm assets on GitHub release:")
-    _log(f"   gh release view {tag} --json name,url,tagName,isPrerelease,assets")
-    _log("4) If you need to rebuild this same tag:")
-    _log(
-        f"   gh workflow run Release --ref main --field version={tag} --field force_rebuild=true --field prerelease={prerelease} --field sign_artifacts=false"
-    )
-    _log("5) If auto-merge was not enabled, you can merge PR manually and then run:")
-    _log(
-        f"   gh workflow run Release --ref main --field version={tag} --field force_rebuild=true --field prerelease={prerelease} --field sign_artifacts=false"
-    )
-    _log("6) If the local script fails after creating the release branch/PR:")
-    _log(f"   python tools/release.py {tag} --resume")
+def _workflow_run_name(version: str) -> str:
+    return f"Release Cut v{version}"
 
 
-def _recovery_hints(
-    *, version: str, tag: str, branch: str, tag_exists: bool, branch_exists: bool
-) -> list[str]:
-    """Return recovery hints based on release state."""
-    prerelease = str(_is_prerelease(version)).lower()
-    if tag_exists:
-        return [
-            "Recovery:",
-            f"Tag {tag} already exists. To rebuild artifacts:",
-            (
-                "gh workflow run Release --ref main --field version="
-                f"{tag} --field force_rebuild=true --field prerelease={prerelease} "
-                "--field sign_artifacts=false"
-            ),
-        ]
-    if branch_exists:
-        return [
-            "Recovery:",
-            f"Release branch {branch} already exists. After fixing the issue, resume with:",
-            f"python tools/release.py {tag} --resume",
-        ]
-    return [
-        "Recovery:",
-        "Fix the failure and re-run the same release command.",
-    ]
-
-
-def _find_existing_pr(branch: str) -> dict[str, object] | None:
-    """Return the first PR payload matching the release branch."""
+def _list_release_cut_runs() -> list[dict[str, object]]:
     raw = _run(
         [
             "gh",
-            "pr",
+            "run",
             "list",
-            "--head",
-            branch,
-            "--state",
-            "all",
-            "--json",
-            "url,state,mergedAt,mergeCommit",
+            "--workflow",
+            "Release Cut",
+            "--event",
+            "workflow_dispatch",
             "--limit",
-            "1",
+            "30",
+            "--json",
+            "databaseId,displayTitle,createdAt,status,conclusion",
         ],
         capture=True,
     )
-    payload = json.loads(raw)
-    if not payload:
-        return None
-    return payload[0]
+    return json.loads(raw)
 
 
-def _find_or_create_pr(branch: str, tag: str) -> str:
-    """Return existing PR URL for branch or create a new one."""
-    existing = _find_existing_pr(branch)
-    if existing:
-        return str(existing["url"])
-    return _run(
-        [
-            "gh",
-            "pr",
-            "create",
-            "--base",
-            "main",
-            "--head",
-            branch,
-            "--title",
-            f"release: {tag}",
-            "--body",
-            f"Automated release prep for {tag}.",
-        ],
-        capture=True,
-    )
+def _find_dispatched_run_id(*, version: str, started_at: dt.datetime) -> int:
+    title = _workflow_run_name(version)
+    deadline = time.time() + POLL_TIMEOUT_SECONDS
 
-
-def _resume_release(*, version: str, tag: str, branch: str) -> None:
-    """Resume release flow when the release branch or PR already exists."""
-    _log(f"Resuming release flow for {tag}")
-    _run(["git", "fetch", "origin", "main", "--prune", "--tags"])
-
-    if _ref_exists_locally(tag) or _ref_exists_remote(kind="tags", name=tag):
-        raise RuntimeError(f"Tag {tag} already exists.")
-
-    local_branch = _ref_exists_locally(f"refs/heads/{branch}") or _ref_exists_locally(
-        branch
-    )
-    remote_branch = _ref_exists_remote(kind="heads", name=branch)
-
-    if not local_branch and not remote_branch:
-        raise RuntimeError(
-            f"Release branch {branch} not found. Re-run without --resume."
-        )
-
-    if not local_branch and remote_branch:
-        _run(["git", "switch", "-c", branch, "--track", f"origin/{branch}"])
-
-    pr_url = _find_or_create_pr(branch, tag)
-    _log(f"PR: {pr_url}")
-
-    pr_payload = _find_existing_pr(branch) or {}
-    merged_at = pr_payload.get("mergedAt")
-    merge_commit = pr_payload.get("mergeCommit") or {}
-    merge_sha = merge_commit.get("oid")
-
-    if merged_at and merge_sha:
-        _log(f"PR already merged at {merged_at}")
-    elif pr_payload.get("state") == "CLOSED" and not merged_at:
-        raise RuntimeError(f"PR {pr_url} was closed without being merged.")
-    else:
-        _wait_for_pr_checks(pr_url)
-        _log("Enabling auto-merge for PR")
-        _run(["gh", "pr", "merge", pr_url, "--auto", "--squash", "--delete-branch"])
-        _log("Waiting for PR merge")
-        merge_sha = _wait_for_merge(pr_url)
-
-    if not merge_sha:
-        raise RuntimeError("Unable to resolve merge commit SHA for release tag.")
-
-    _log(f"Refreshing main and creating tag {tag}")
-    _run(["git", "fetch", "origin", "main", "--prune"])
-    _run(["git", "switch", "main"])
-    _run(["git", "pull", "--ff-only", "origin", "main"])
-    _run(["git", "tag", "-a", tag, merge_sha, "-m", f"Release {tag}"])
-    _log(f"Pushing tag {tag}")
-    _run(["git", "push", "origin", tag])
-    _log(f"Done. Tag {tag} pushed and GitHub Release workflow should start.")
-    _print_github_followups(version, tag)
-
-
-def _wait_for_merge(
-    pr_url: str, *, timeout_seconds: int = 1800, poll_seconds: int = 5
-) -> str:
-    """Wait until PR is merged and return merge commit SHA."""
-    deadline = time.time() + timeout_seconds
     while time.time() < deadline:
-        raw = _run(
-            [
-                "gh",
-                "pr",
-                "view",
-                pr_url,
-                "--json",
-                "state,mergedAt,mergeCommit",
-            ],
-            capture=True,
-        )
-        payload = json.loads(raw)
-        state = payload.get("state")
-        merged_at = payload.get("mergedAt")
-        merge_commit = payload.get("mergeCommit") or {}
-        merge_sha = merge_commit.get("oid")
+        for run in _list_release_cut_runs():
+            created_at_raw = str(run.get("createdAt", "")).replace("Z", "+00:00")
+            try:
+                created_at = dt.datetime.fromisoformat(created_at_raw)
+            except ValueError:
+                continue
+            if created_at < started_at:
+                continue
+            if str(run.get("displayTitle", "")) != title:
+                continue
+            run_id = run.get("databaseId")
+            if isinstance(run_id, int):
+                return run_id
+        time.sleep(POLL_SECONDS)
 
-        if merged_at and merge_sha:
-            return str(merge_sha)
-        if state == "CLOSED" and not merged_at:
-            raise RuntimeError(f"PR {pr_url} was closed without being merged.")
-        time.sleep(poll_seconds)
-
-    raise RuntimeError(f"Timed out waiting for PR merge: {pr_url}")
-
-
-def _wait_for_pr_checks(pr_url: str) -> None:
-    """Watch PR checks when available; continue if checks are not yet reporting."""
-    _log("Waiting for PR checks to finish")
-    ok, output = _run_optional(
-        ["gh", "pr", "checks", pr_url, "--watch", "--fail-fast"],
-        capture=True,
-    )
-    if ok:
-        return
-    _log_warning(
-        "No PR checks were reported yet or they are not available from this branch."
-    )
-    if output:
-        _log_warning(output)
-    _log(
-        "If checks are required by branch protection, they must complete before merge can finish."
-    )
-    _log(
-        "If checks are missing, merge the PR manually and resume using the manual follow-up steps."
+    raise RuntimeError(
+        "Could not locate dispatched Release Cut run. Check manually with: "
+        "gh run list --workflow 'Release Cut' --limit 10"
     )
 
 
-def run_release(raw_version: str, *, resume: bool = False) -> None:
-    """End-to-end release workflow from prep branch to pushed tag."""
+def run_release(
+    raw_version: str,
+    *,
+    prerelease: bool | None,
+    sign_artifacts: bool,
+    watch: bool,
+) -> None:
     version = _parse_version(raw_version)
     tag = f"v{version}"
-    branch = f"release/{tag}"
 
-    _require_command("git")
     _require_command("gh")
-
     try:
         _run(["gh", "auth", "status"])
     except subprocess.CalledProcessError as exc:
@@ -333,115 +110,98 @@ def run_release(raw_version: str, *, resume: bool = False) -> None:
             "GitHub CLI is not authenticated. Run: gh auth login"
         ) from exc
 
-    _ensure_clean_tree()
+    prerelease_value = prerelease if prerelease is not None else _is_prerelease(version)
+    prerelease_flag = str(prerelease_value).lower()
+    sign_flag = str(sign_artifacts).lower()
 
-    if resume:
-        _resume_release(version=version, tag=tag, branch=branch)
+    _log(f"Dispatching Release Cut workflow for {tag}")
+    started_at = dt.datetime.now(dt.UTC)
+    _run(
+        [
+            "gh",
+            "workflow",
+            "run",
+            "Release Cut",
+            "--ref",
+            "main",
+            "--field",
+            f"version={version}",
+            "--field",
+            f"prerelease={prerelease_flag}",
+            "--field",
+            f"sign_artifacts={sign_flag}",
+        ]
+    )
+
+    if not watch:
+        _log("Workflow dispatched.")
+        _log("Monitor with: gh run list --workflow 'Release Cut' --limit 10")
+        _log(f"Verify release when complete: gh release view {tag}")
         return
 
-    _log("Fetching latest main")
-    _run(["git", "fetch", "origin", "main", "--prune"])
-    _run(["git", "switch", "main"])
-    _run(["git", "pull", "--ff-only", "origin", "main"])
+    run_id = _find_dispatched_run_id(version=version, started_at=started_at)
+    _log(f"Watching Release Cut run {run_id}")
+    _run(["gh", "run", "watch", str(run_id), "--exit-status"])
 
-    if _ref_exists_locally(tag) or _ref_exists_remote(kind="tags", name=tag):
-        raise RuntimeError(f"Tag {tag} already exists locally or on origin.")
-    if _ref_exists_locally(f"refs/heads/{branch}"):
-        raise RuntimeError(f"Local branch {branch} already exists.")
-    if _ref_exists_remote(kind="heads", name=branch):
-        raise RuntimeError(f"Remote branch {branch} already exists.")
-
-    _log(f"Creating release branch {branch}")
-    _run(["git", "switch", "-c", branch])
-
-    _log("Preparing version/changelog")
-    _release_prepare(version)
-
-    _log("Running quality gates")
-    _quality_gates()
-
-    _run(["git", "add", "src/tz_player/version.py", "CHANGELOG.md"])
-    if not _run(["git", "diff", "--cached", "--name-only"], capture=True):
-        raise RuntimeError("No release changes detected after preparation.")
-
-    _log("Committing release metadata")
-    _run(["git", "commit", "-m", f"release: {tag}"])
-
-    _log("Pushing release branch")
-    _run(["git", "push", "-u", "origin", branch])
-
-    _log("Opening pull request")
-    pr_url = _find_or_create_pr(branch, tag)
-    _log(f"PR: {pr_url}")
-
-    _wait_for_pr_checks(pr_url)
-
-    _log("Enabling auto-merge for PR")
-    try:
-        _run(["gh", "pr", "merge", pr_url, "--auto", "--squash", "--delete-branch"])
-    except subprocess.CalledProcessError as exc:
-        raise RuntimeError(
-            f"Could not enable auto-merge for {pr_url}. Merge manually, then run:"
-            f" gh workflow run Release --ref main --field version={tag} --field force_rebuild=true --field prerelease={str(_is_prerelease(version)).lower()} --field sign_artifacts=false"
-        ) from exc
-
-    _log("Waiting for PR merge")
-    merge_sha = _wait_for_merge(pr_url)
-
-    _log(f"Refreshing main and creating tag {tag}")
-    _run(["git", "fetch", "origin", "main", "--prune"])
-    _run(["git", "switch", "main"])
-    _run(["git", "pull", "--ff-only", "origin", "main"])
-    _run(["git", "tag", "-a", tag, merge_sha, "-m", f"Release {tag}"])
-
-    _log(f"Pushing tag {tag}")
-    _run(["git", "push", "origin", tag])
-
-    _log(f"Done. Tag {tag} pushed and GitHub Release workflow should start.")
-    _print_github_followups(version, tag)
+    _log("Release Cut workflow completed successfully.")
+    _log(f"Release should now be available at tag {tag}.")
+    _log(
+        f"Inspect release assets: gh release view {tag} --json name,url,tagName,isPrerelease,assets"
+    )
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("version", help="Release version, e.g. 0.5.2 or v0.5.2")
+    parser.add_argument("version", help="Release version, e.g. 1.2.3 or v1.2.3")
     parser.add_argument(
-        "--resume",
+        "--prerelease",
         action="store_true",
-        help="Resume a release after a previous attempt created the release branch/PR.",
+        default=None,
+        help="Force prerelease=true (defaults to auto-detect from version string).",
+    )
+    parser.add_argument(
+        "--stable",
+        action="store_true",
+        help="Force prerelease=false.",
+    )
+    parser.add_argument(
+        "--sign-artifacts",
+        action="store_true",
+        help="Enable GPG signing in CI (requires release signing secrets).",
+    )
+    parser.add_argument(
+        "--no-watch",
+        action="store_true",
+        help="Dispatch and exit without streaming workflow progress.",
     )
     args = parser.parse_args()
 
+    if args.prerelease and args.stable:
+        print(
+            "[release] ERROR: --prerelease and --stable are mutually exclusive.",
+            file=sys.stderr,
+        )
+        return 2
+
+    prerelease: bool | None
+    if args.prerelease:
+        prerelease = True
+    elif args.stable:
+        prerelease = False
+    else:
+        prerelease = None
+
     try:
-        run_release(args.version, resume=args.resume)
-    except (RuntimeError, subprocess.CalledProcessError) as exc:
+        run_release(
+            args.version,
+            prerelease=prerelease,
+            sign_artifacts=args.sign_artifacts,
+            watch=not args.no_watch,
+        )
+    except (RuntimeError, subprocess.CalledProcessError, json.JSONDecodeError) as exc:
         print(f"[release] ERROR: {exc}", file=sys.stderr)
-        try:
-            version = _parse_version(args.version)
-            tag = f"v{version}"
-            branch = f"release/{tag}"
-            try:
-                tag_exists = _ref_exists_locally(tag) or _ref_exists_remote(
-                    kind="tags", name=tag
-                )
-            except subprocess.CalledProcessError:
-                tag_exists = False
-            try:
-                branch_exists = _ref_exists_locally(
-                    f"refs/heads/{branch}"
-                ) or _ref_exists_remote(kind="heads", name=branch)
-            except subprocess.CalledProcessError:
-                branch_exists = False
-            for line in _recovery_hints(
-                version=version,
-                tag=tag,
-                branch=branch,
-                tag_exists=tag_exists,
-                branch_exists=branch_exists,
-            ):
-                _log(line)
-        except RuntimeError:
-            pass
         return 1
+
     return 0
 
 

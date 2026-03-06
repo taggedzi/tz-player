@@ -1,202 +1,85 @@
 # Release Runbook
 
-This is the step-by-step process for cutting a `tz-player` release.
+This runbook describes the production release path for `tz-player`.
 
-## Version Source of Truth
+## Goal
 
-- Canonical version lives in `src/tz_player/version.py`.
-- Packaging reads version dynamically from `pyproject.toml` (`tool.setuptools.dynamic.version`).
-- Never manually edit version values in multiple files.
+Use one local command to cut and publish a GitHub release with:
+
+- version bump (`src/tz_player/version.py`)
+- changelog section (`CHANGELOG.md`)
+- annotated git tag (`v<version>`)
+- release notes from changelog
+- wheel/sdist artifacts
+- Linux/Windows native helper artifacts
+- `SHA256SUMS`
+- optional GPG signatures
 
 ## One-Time Setup
 
-1. Confirm GitHub Actions can create/edit GitHub releases.
-2. Optional signing setup (only if you plan to sign artifacts): add `RELEASE_GPG_PRIVATE_KEY` (base64-encoded armored private key) and `RELEASE_GPG_PASSPHRASE` GitHub secrets.
-3. Confirm workflow exists: `.github/workflows/release.yml`.
+1. Ensure GitHub Actions has `contents: write` permission.
+2. If branch protection is enabled on `main`, allow the GitHub Actions bot to push release commits (ruleset bypass).
+3. Optional signing setup: add repository secrets `RELEASE_GPG_PRIVATE_KEY` and `RELEASE_GPG_PASSPHRASE`.
+4. Ensure these workflows exist:
+- `.github/workflows/release-cut.yml`
+- `.github/workflows/release.yml`
 
-Optional key encoding helper:
+## Standard Release (Single Command)
 
-```bash
-base64 -w0 < private.key.asc
-```
-
-## Release Steps (explicit sequence)
-
-1. Choose the exact version string.
-Use forms like `0.3.0`, `0.3.1`, or `0.4.0rc1`. Tag format is always `v<version>` (example: `v0.3.0`).
-
-### Distribution behavior for native spectrum helper
-
-- Release packages now include native helper binaries for Linux and Windows under `tz_player/binaries/...` so the helper can be used immediately after install.
-- Users do not need a separate helper download step after installing the Python package.
-- By default, analysis uses Python backends.
-- The bundled native helper is enabled by default when present. Configure
-  `native_helper_enabled` / `native_helper_timeout_s` in the state file, or
-  override via `TZ_PLAYER_NATIVE_SPECTRUM_HELPER_CMD` /
-  `TZ_PLAYER_USE_BUNDLED_NATIVE_SPECTRUM_HELPER` /
-  `TZ_PLAYER_NATIVE_SPECTRUM_HELPER_TIMEOUT_S`.
-
-2. Run the one-command local release entrypoint from a clean `main`:
+From your local clone:
 
 ```bash
-python tools/release.py 0.5.1
+python tools/release.py 1.2.3
 ```
 
-The command prints a deterministic follow-up block after the tag is pushed. The exact template is for **rebuilds only** (do not run it during the normal flow):
+Equivalent helpers:
 
 ```bash
-gh workflow run Release --ref main --field version=<VERSION_OR_TAG> --field force_rebuild=true --field prerelease=<true|false> --field sign_artifacts=false
+make release VERSION=1.2.3
+tools\release.cmd 1.2.3
 ```
 
-Alternative equivalent entrypoints:
+What this command does now:
+
+1. Dispatches `Release Cut` workflow.
+2. Streams workflow progress until completion.
+3. Ends successfully only when release build/publish completes.
+
+What `Release Cut` does in CI:
+
+1. Runs `tools/release_prepare.py`.
+2. Runs required quality gates (`ruff`, `mypy`, `pytest`).
+3. Commits release metadata directly to `main`.
+4. Creates and pushes tag `v<version>`.
+5. Calls reusable `Release` workflow to build and publish artifacts.
+
+## Useful Flags
 
 ```bash
-make release VERSION=0.5.1
-tools\\release.cmd 0.5.1  # Windows helper
+python tools/release.py 1.2.3 --no-watch
+python tools/release.py 1.3.0rc1 --prerelease
+python tools/release.py 1.2.3 --sign-artifacts
+python tools/release.py 1.2.3 --stable
+```
 
-Resume after a failed attempt (for example after fixing a lint/test error on the
-release branch):
+## Rebuild Existing Tag Artifacts
+
+If a tag already exists and you only need to rebuild/upload artifacts:
 
 ```bash
-python tools/release.py 0.5.1 --resume
+gh workflow run Release --ref main --field version=v1.2.3 --field force_rebuild=true --field prerelease=false --field sign_artifacts=false
 ```
-```
 
-The local command is designed to do everything required on your machine before GitHub builds artifacts:
+## Verification
 
-- update version/changelog from a single source (`src/tz_player/version.py`)
-- run quality gates
-- prepare release branch/PR, wait for merge, and push the release tag
-
-What it intentionally does **not** do locally:
-
-- build wheels/sdists or attach them to a GitHub release
-
-Those package artifacts are always produced in GitHub by the `Release` workflow when the tag is pushed.
-
-What `tools/release.py` does:
-1. Validates clean git state and required tooling (`git`, `gh`, Python interpreter).
-2. Runs `tools/release_prepare.py` to update `src/tz_player/version.py` and `CHANGELOG.md`.
-3. Runs required quality gates: `ruff check`, `ruff format --check`, `mypy src`, `pytest`.
-4. Creates/pushes a release branch and opens a PR to `main`.
-5. Waits for PR checks, enables auto-merge, and waits for PR merge.
-6. Creates/pushes tag `v<version>` on the merged commit.
-7. Tag push triggers the `Release` GitHub workflow, which builds and uploads artifacts.
-8. Workflow artifacts include: release notes (`RELEASE_NOTES.md`), `SHA256SUMS`, wheel/sdist, and Linux/Windows helper binaries per release policy.
-
-3. Follow-up commands for GitHub release packaging:
+After success:
 
 ```bash
-# Wait for the Release workflow queue/runs for the pushed tag:
-gh run list --workflow Release --limit 10 --json databaseId,name,status,conclusion
-
-# Pick the relevant run ID above and stream logs:
-gh run view <run-id> --log
-
-# Confirm release exists and includes artifacts:
-gh release view v0.5.1 --json name,url,tagName,isPrerelease,assets
+gh release view v1.2.3 --json name,url,tagName,isPrerelease,assets
+git show v1.2.3 --no-patch --pretty=fuller
 ```
-
-4. If a rebuild is required (for example after a workflow fix) and the tag already exists:
-
-```bash
-gh workflow run Release --ref main --field version=v0.5.1 --field force_rebuild=true --field prerelease=false --field sign_artifacts=false
-```
-
-5. Verify outputs after success:
-- Tag `v<version>` exists.
-- GitHub release `v<version>` exists with artifacts attached.
-- `CHANGELOG.md` includes a dated section for the released version.
-- `CHANGELOG.md` has reset `Unreleased` headings.
- - Attached artifacts include Linux/Windows helper binaries, `SHA256SUMS`, and checks/metadata files.
-
-6. Optional publish step:
-If you publish to package indexes, do it only after the GitHub release is verified.
-
-## Failure Handling
-
-1. Script fails before PR creation:
-Fix local/tooling issue and re-run the same command you used (for example
-`python tools/release.py <version>` or `tools\\release.cmd <version>` on Windows).
-
-2. Script reports `no checks reported`:
-`release.py` continues and tries auto-merge. If auto-merge is unavailable, merge the PR manually in GitHub and proceed with release workflow dispatch.
-
-3. Script fails to merge PR:
-Merge manually (respecting repo rules), then resume:
-
-```bash
-python tools/release.py <version> --resume
-```
-
-4. Release exists but assets are missing/wrong:
-Re-run workflow via `workflow_dispatch` and set `version` to the same existing tag version (`0.5.1` or `v0.5.1`), then it will upload/replace assets.
-
-5. Tag already exists error:
-This means that version was already used. Pick the next version and re-run.
-
-6. Branch protection blocks automation:
-If PR merge is blocked, resolve required approvals/checks and rerun with
-`python tools/release.py <version> --resume`.
 
 ## Notes
 
-- Automated versioning is intentionally not used.
-- You manually choose the version at release time.
-- `tools/release.py` automates the release flow end to end.
-
-## Release Recovery Flows
-
-Use this section when the normal flow fails and you need to continue safely.
-
-### A) PR checks are missing or `gh pr checks` returns “no checks reported”
-
-This is now handled as a warning in `tools/release.py` and the script continues, then tries auto-merge.
-If auto-merge is unavailable, manual merge is expected:
-
-1. Open the PR URL printed by `release.py`.
-2. Merge the PR manually in GitHub.
-3. Continue release by rerunning the release workflow for the same version (see section B) below).
-
-### B) GitHub workflow dispatch returns `Could not create workflow dispatch event`
-
-Only use this when you are rebuilding an existing tag or re-running after workflow changes.
-
-1. Verify the tag exists on origin:
-
-```bash
-git ls-remote --tags origin | rg "refs/tags/v<version>"
-```
-
-2. If tag exists and you need a full rebuild:
-
-```bash
-gh workflow run Release --ref main --field version=<VERSION> --field force_rebuild=true --field prerelease=false --field sign_artifacts=false
-```
-
-3. If dispatch continues to fail, use the GitHub UI **Run workflow** button on `Release` and provide the same fields.
-
-### C) Workflow fails with `Tag vX.Y.Z not found`
-
-This means the tag was not pushed before dispatch. `Release` is designed to run from a real tag.
-
-1. Find the merged PR:
-
-```bash
-gh pr list --search "release: <VERSION>" --state merged --limit 1
-```
-
-2. If the tag is missing, tag the merged commit and push it:
-
-```bash
-git switch main
-git pull --ff-only origin main
-git tag -a <VERSION> <MERGE_SHA> -m "Release <VERSION>"
-git push origin <VERSION>
-```
-
-3. Trigger `Release` after the tag is present:
-
-```bash
-gh workflow run Release --ref main --field version=<VERSION> --field force_rebuild=true --field prerelease=false --field sign_artifacts=false
-```
+- Existing releases are now updated with fresh `CHANGELOG.md` notes via `gh release edit` before artifact upload.
+- This prevents stale/no-change text from previous release drafts or manually created releases.
