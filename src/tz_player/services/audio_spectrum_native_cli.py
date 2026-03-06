@@ -25,8 +25,8 @@ _MONO_TARGET_RATE_HZ = 11_025
 _REQUEST_SCHEMA = "tz_player.native_spectrum_helper_request.v1"
 _RESPONSE_SCHEMA = "tz_player.native_spectrum_helper_response.v1"
 _PLATFORM_TO_NATIVE_HELPER: dict[tuple[str, str], str] = {
-    ("linux", "x86_64"): "linux/x86_64/native_spectrum_helper_c_poc",
-    ("win32", "x86_64"): "windows/x86_64/native_spectrum_helper_c_poc.exe",
+    ("linux", "x86_64"): "linux/x86_64/tz_player_native_helper",
+    ("win32", "x86_64"): "windows/x86_64/tz_player_native_helper.exe",
 }
 
 

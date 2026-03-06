@@ -1,4 +1,4 @@
-name: Native Helper Artifacts (POC)
+name: Native Helper Artifacts
 
 on:
   workflow_dispatch:
@@ -6,7 +6,7 @@ on:
       helper_version_label:
         description: "Optional label suffix for artifact names"
         required: false
-        default: "poc"
+        default: "helper"
 
 permissions:
   contents: read
@@ -21,17 +21,17 @@ jobs:
 
       - name: Build helper
         run: |
-          bash tools/build_native_spectrum_helper_c_poc.sh /tmp/native_spectrum_helper_c_poc
-          /tmp/native_spectrum_helper_c_poc <<'EOF' >/tmp/native_helper_help_smoke.out || true
+          bash tools/build_native_spectrum_helper.sh /tmp/tz_player_native_helper
+          /tmp/tz_player_native_helper <<'EOF' >/tmp/native_helper_help_smoke.out || true
           {}
           EOF
-          ls -lh /tmp/native_spectrum_helper_c_poc
+          ls -lh /tmp/tz_player_native_helper
 
       - name: Upload helper artifact
         uses: actions/upload-artifact@v4
         with:
           name: native-spectrum-helper-linux-${{ inputs.helper_version_label }}
-          path: /tmp/native_spectrum_helper_c_poc
+          path: /tmp/tz_player_native_helper
           if-no-files-found: error
 
   build-windows:
@@ -44,13 +44,13 @@ jobs:
       - name: Build helper
         shell: pwsh
         run: |
-          $out = "$env:TEMP\native_spectrum_helper_c_poc.exe"
-          powershell -ExecutionPolicy Bypass -File tools/build_native_spectrum_helper_c_poc.ps1 -OutPath $out
+          $out = "$env:TEMP\tz_player_native_helper.exe"
+          powershell -ExecutionPolicy Bypass -File tools/build_native_spectrum_helper.ps1 -OutPath $out
           Get-Item -LiteralPath $out | Format-List FullName,Length,LastWriteTime
 
       - name: Upload helper artifact
         uses: actions/upload-artifact@v4
         with:
           name: native-spectrum-helper-windows-${{ inputs.helper_version_label }}
-          path: ${{ runner.temp }}\native_spectrum_helper_c_poc.exe
+          path: ${{ runner.temp }}\tz_player_native_helper.exe
           if-no-files-found: error

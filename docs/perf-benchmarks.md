@@ -169,9 +169,9 @@ By default the report is written next to the suite summary as:
 
 - `*_suite_summary.report.html`
 
-## Native Spectrum Helper POC Workflow (Local/Dev)
+## Native Spectrum Helper Workflow (Local/Dev)
 
-This repo includes a local/dev POC path for an optional native spectrum helper
+This repo includes a local/dev helper path for an optional native spectrum helper
 used by the `analysis-cache` benchmark and a focused `analysis-bundle-sw`
 benchmark (`spectrum + waveform`, no beat). The helper is selected via:
 
@@ -180,30 +180,30 @@ benchmark (`spectrum + waveform`, no beat). The helper is selected via:
 Current helper implementations (local/dev only):
 
 - Python stub helper: `tools/native_spectrum_helper_stub.py`
-- Compiled C helper POC: `tools/native_spectrum_helper_c_poc.c`
+- Compiled C helper: `tools/tz_player_native_helper.c`
   - WAV decode path built in
   - non-WAV decode via local `ffmpeg` subprocess
 
-### POC Prerequisites
+### Helper Prerequisites
 
 - `.ubuntu-venv/bin/python`
 - `ffmpeg` on `PATH` (required for MP3/non-WAV corpus analysis)
-- `gcc` on `PATH` (only for compiled C helper POC)
+- `gcc` on `PATH` (only for compiled C helper)
 
-### Fast Path: Helper POC Runner Script
+### Fast Path: Helper Runner Script
 
 Use the local helper benchmark runner script (builds the C helper automatically
 when `--helper c` is selected):
 
 ```bash
-bash tools/run_native_spectrum_helper_poc_bench.sh --helper c
+bash tools/run_native_spectrum_helper_bench.sh --helper c
 ```
 
 Run the focused bundle benchmark that can exercise the helper-only
 `spectrum+waveform` path (no beat):
 
 ```bash
-bash tools/run_native_spectrum_helper_poc_bench.sh \
+bash tools/run_native_spectrum_helper_bench.sh \
   --helper c \
   --scenario analysis-bundle-sw
 ```
@@ -211,16 +211,16 @@ bash tools/run_native_spectrum_helper_poc_bench.sh \
 Run against a small subset corpus while iterating:
 
 ```bash
-bash tools/run_native_spectrum_helper_poc_bench.sh \
+bash tools/run_native_spectrum_helper_bench.sh \
   --helper c \
   --media-dir /tmp/tz_player_perf_mp3_subset \
-  --label native-cli-c-poc-subset
+  --label native-cli-c-helper-subset
 ```
 
 Use the Python stub helper (increase timeout to avoid false fallbacks on larger MP3s):
 
 ```bash
-bash tools/run_native_spectrum_helper_poc_bench.sh \
+bash tools/run_native_spectrum_helper_bench.sh \
   --helper stub \
   --timeout-s 30 \
   --media-dir /tmp/tz_player_perf_mp3_subset \
@@ -232,11 +232,11 @@ bash tools/run_native_spectrum_helper_poc_bench.sh \
 Compiled helper:
 
 ```bash
-bash tools/build_native_spectrum_helper_c_poc.sh /tmp/native_spectrum_helper_c_poc
+bash tools/build_native_spectrum_helper.sh /tmp/tz_player_native_helper
 env \
   TZ_PLAYER_RUN_PERF=1 \
-  TZ_PLAYER_NATIVE_SPECTRUM_HELPER_CMD=/tmp/native_spectrum_helper_c_poc \
-  .ubuntu-venv/bin/python tools/perf_run.py --scenario analysis-cache --repeat 1 --label native-cli-c-poc
+  TZ_PLAYER_NATIVE_SPECTRUM_HELPER_CMD=/tmp/tz_player_native_helper \
+  .ubuntu-venv/bin/python tools/perf_run.py --scenario analysis-cache --repeat 1 --label native-cli-c-helper
 ```
 
 Python stub helper:
@@ -249,12 +249,12 @@ env \
   .ubuntu-venv/bin/python tools/perf_run.py --scenario analysis-cache --repeat 1 --label native-cli-stub
 ```
 
-### Windows Local Build/Run (Dev POC)
+### Windows Local Build/Run (Dev Helper)
 
-Windows support for the compiled helper is still local/dev POC quality, but the
+Windows support for the compiled helper is still local/dev helper quality, but the
 repo now includes a PowerShell build helper:
 
-- `tools/build_native_spectrum_helper_c_poc.ps1`
+- `tools/build_native_spectrum_helper.ps1`
 
 Prerequisites (Windows):
 
@@ -266,8 +266,8 @@ Prerequisites (Windows):
 Build (PowerShell):
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File tools/build_native_spectrum_helper_c_poc.ps1 `
-  -OutPath "$env:TEMP\native_spectrum_helper_c_poc.exe"
+powershell -ExecutionPolicy Bypass -File tools/build_native_spectrum_helper.ps1 `
+  -OutPath "$env:TEMP\tz_player_native_helper.exe"
 ```
 
 The script will try to auto-detect Visual Studio Build Tools via `vswhere.exe`
@@ -278,7 +278,7 @@ command again.
 Quick helper smoke invocation (PowerShell; replace track path):
 
 ```powershell
-$helper = "$env:TEMP\native_spectrum_helper_c_poc.exe"
+$helper = "$env:TEMP\tz_player_native_helper.exe"
 $req = @{
   schema = "tz_player.native_spectrum_helper_request.v1"
   track_path = "C:\path\to\track.mp3"
@@ -305,9 +305,9 @@ Using the helper from Python perf runs on Windows (PowerShell):
 
 ```powershell
 $env:TZ_PLAYER_RUN_PERF = "1"
-$env:TZ_PLAYER_NATIVE_SPECTRUM_HELPER_CMD = "$env:TEMP\native_spectrum_helper_c_poc.exe"
+$env:TZ_PLAYER_NATIVE_SPECTRUM_HELPER_CMD = "$env:TEMP\tz_player_native_helper.exe"
 $env:TZ_PLAYER_NATIVE_SPECTRUM_HELPER_TIMEOUT_S = "30"
-python tools/perf_run.py --scenario analysis-cache --repeat 1 --label native-cli-c-poc-win
+python tools/perf_run.py --scenario analysis-cache --repeat 1 --label native-cli-c-helper-win
 ```
 
 Notes:
@@ -363,13 +363,13 @@ If compare/report output shows `zero_tracks_analyzed=...` warnings:
 - helper timeout is too low (especially the Python stub helper)
 - selected files are unsupported or failed to decode
 
-### Current POC Findings (Local, Directional)
+### Current Helper Findings (Local, Directional)
 
 These are machine- and corpus-dependent, but current local runs showed:
 
 - The Python stub helper is useful for contract/plumbing validation but can hit helper
   timeout on larger MP3s unless timeout is increased (for example `30s`).
-- The compiled C helper POC with `ffmpeg` decode (`c-poc-ffmpeg-v2`) produced strong
+- The compiled C helper with `ffmpeg` decode (`native-helper-v1`) produced strong
   cold-path improvements versus the Python stub helper on a small MP3 subset
   (`analysis-cache` scenario), including large reductions in:
   - `bundle_decode_ms`
@@ -379,7 +379,7 @@ These are machine- and corpus-dependent, but current local runs showed:
 - A focused `analysis-bundle-sw` benchmark is available to measure the newer
   helper-only `spectrum+waveform` optimization path without beat-path noise.
 
-Treat these as directional POC evidence. The mixed bundle path still uses duplicate
+Treat these as directional Helper evidence. The mixed bundle path still uses duplicate
 decode (`native spectrum + Python beat/waveform`) and is not yet a final architecture.
 
 ## Recommended Workflow (Repeatable)

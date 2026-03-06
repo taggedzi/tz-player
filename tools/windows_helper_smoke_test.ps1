@@ -1,6 +1,6 @@
 param(
     [string]$TrackPath = "E:\Home\Documents\Programming\tz-player\.local\perf_media\Feast Of Foes 2.mp3",
-    [string]$HelperPath = "$env:TEMP\native_spectrum_helper_c_poc.exe",
+    [string]$HelperPath = "$env:TEMP\tz_player_native_helper.exe",
     [switch]$BuildIfMissing = $true,
     [switch]$ForceBuild
 )
@@ -9,8 +9,8 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$buildScript = Join-Path $PSScriptRoot "build_native_spectrum_helper_c_poc.ps1"
-$helperSource = Join-Path $PSScriptRoot "native_spectrum_helper_c_poc.c"
+$buildScript = Join-Path $PSScriptRoot "build_native_spectrum_helper.ps1"
+$helperSource = Join-Path $PSScriptRoot "tz_player_native_helper.c"
 
 if (-not (Test-Path -LiteralPath $TrackPath)) {
     throw "Track not found: $TrackPath"

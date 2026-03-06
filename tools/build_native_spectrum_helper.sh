@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-OUT_PATH="${1:-/tmp/native_spectrum_helper_c_poc}"
+OUT_PATH="${1:-/tmp/tz_player_native_helper}"
 export TMPDIR="${TMPDIR:-/tmp}"
 
 gcc \
@@ -10,7 +10,7 @@ gcc \
   -Wall \
   -Wextra \
   -pedantic \
-  tools/native_spectrum_helper_c_poc.c \
+  tools/tz_player_native_helper.c \
   -lm \
   -o "${OUT_PATH}"
 

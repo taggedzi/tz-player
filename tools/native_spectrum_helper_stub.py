@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stub CLI helper for native-spectrum POC plumbing.
+"""Stub CLI helper for native-spectrum helper plumbing.
 
 Reads a JSON request from stdin and writes a JSON response compatible with
 `audio_spectrum_native_cli.py`. This stub intentionally uses the existing

@@ -3,15 +3,15 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Run native spectrum-helper POC perf scenarios.
+Run native spectrum-helper perf scenarios.
 
 Usage:
-  tools/run_native_spectrum_helper_poc_bench.sh [options]
+  tools/run_native_spectrum_helper_bench.sh [options]
 
 Options:
   --helper stub|c        Helper implementation to use (default: c)
   --media-dir PATH       Override perf media corpus path (defaults to .local/perf_media)
-  --label LABEL          Perf run label suffix (default: native-helper-poc)
+  --label LABEL          Perf run label suffix (default: native-helper)
   --repeat N             Scenario repeat count (default: 1)
   --scenario NAME        Perf scenario (default: analysis-cache)
                         Supported: analysis-cache, analysis-bundle-sw
@@ -20,14 +20,14 @@ Options:
   -h, --help             Show this help text
 
 Examples:
-  tools/run_native_spectrum_helper_poc_bench.sh --helper stub --timeout-s 30
-  tools/run_native_spectrum_helper_poc_bench.sh --helper c --media-dir /tmp/tz_player_perf_mp3_subset
+  tools/run_native_spectrum_helper_bench.sh --helper stub --timeout-s 30
+  tools/run_native_spectrum_helper_bench.sh --helper c --media-dir /tmp/tz_player_perf_mp3_subset
 EOF
 }
 
 HELPER_KIND="c"
 MEDIA_DIR=""
-LABEL="native-helper-poc"
+LABEL="native-helper"
 REPEAT="1"
 SCENARIO="analysis-cache"
 TIMEOUT_S=""
@@ -103,8 +103,8 @@ HELPER_CMD=""
 if [[ "${HELPER_KIND}" == "stub" ]]; then
   HELPER_CMD="${PYTHON_BIN} tools/native_spectrum_helper_stub.py"
 else
-  HELPER_BIN="/tmp/native_spectrum_helper_c_poc"
-  bash tools/build_native_spectrum_helper_c_poc.sh "${HELPER_BIN}" >/tmp/native_spectrum_helper_c_poc_build.log
+  HELPER_BIN="/tmp/tz_player_native_helper"
+  bash tools/build_native_spectrum_helper.sh "${HELPER_BIN}" >/tmp/tz_player_native_helper_build.log
   HELPER_CMD="${HELPER_BIN}"
 fi
 

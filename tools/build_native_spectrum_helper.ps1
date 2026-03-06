@@ -1,5 +1,5 @@
 param(
-    [string]$OutPath = "$env:TEMP\native_spectrum_helper_c_poc.exe",
+    [string]$OutPath = "$env:TEMP\tz_player_native_helper.exe",
     [switch]$SkipMsvcBootstrap
 )
 
@@ -7,7 +7,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$src = Join-Path $repoRoot "tools\native_spectrum_helper_c_poc.c"
+$src = Join-Path $repoRoot "tools\tz_player_native_helper.c"
 $outDir = Split-Path -Parent $OutPath
 if (-not (Test-Path -LiteralPath $outDir)) {
     New-Item -ItemType Directory -Path $outDir | Out-Null

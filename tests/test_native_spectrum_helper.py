@@ -1,4 +1,4 @@
-"""Smoke tests for the compiled native spectrum helper C POC."""
+"""Smoke tests for the compiled native spectrum helper."""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ def _build_helper_or_skip(repo_root: Path, tmp_path: Path) -> Path:
         powershell = shutil.which("pwsh") or shutil.which("powershell")
         if powershell is None:
             pytest.skip("PowerShell not available")
-        bin_path = tmp_path / "native_spectrum_helper_c_poc.exe"
+        bin_path = tmp_path / "tz_player_native_helper.exe"
         subprocess.run(
             [
                 powershell,
@@ -40,7 +40,7 @@ def _build_helper_or_skip(repo_root: Path, tmp_path: Path) -> Path:
                 "-ExecutionPolicy",
                 "Bypass",
                 "-File",
-                "tools/build_native_spectrum_helper_c_poc.ps1",
+                "tools/build_native_spectrum_helper.ps1",
                 "-OutPath",
                 str(bin_path),
             ],
@@ -52,9 +52,9 @@ def _build_helper_or_skip(repo_root: Path, tmp_path: Path) -> Path:
 
     if shutil.which("gcc") is None:
         pytest.skip("gcc not available")
-    bin_path = tmp_path / "native_spectrum_helper_c_poc"
+    bin_path = tmp_path / "tz_player_native_helper"
     subprocess.run(
-        ["bash", "tools/build_native_spectrum_helper_c_poc.sh", str(bin_path)],
+        ["bash", "tools/build_native_spectrum_helper.sh", str(bin_path)],
         cwd=repo_root,
         check=True,
         capture_output=True,
@@ -62,7 +62,7 @@ def _build_helper_or_skip(repo_root: Path, tmp_path: Path) -> Path:
     return bin_path
 
 
-def test_native_spectrum_helper_c_poc_compiles_and_returns_valid_payload(
+def test_native_spectrum_helper_compiles_and_returns_valid_payload(
     tmp_path,
 ) -> None:
     repo_root = Path(__file__).resolve().parents[1]
@@ -92,7 +92,7 @@ def test_native_spectrum_helper_c_poc_compiles_and_returns_valid_payload(
     assert proc.returncode == 0, proc.stderr.decode("utf-8", errors="ignore")
     payload = json.loads(proc.stdout.decode("utf-8"))
     assert payload["schema"] == "tz_player.native_spectrum_helper_response.v1"
-    assert payload["helper_version"] == "c-poc-ffmpeg-v2"
+    assert payload["helper_version"] == "native-helper-v1"
     assert payload["duration_ms"] > 0
     assert payload["frames"]
     assert len(payload["frames"][0][1]) == 8
@@ -101,7 +101,7 @@ def test_native_spectrum_helper_c_poc_compiles_and_returns_valid_payload(
     assert payload["timings"]["total_ms"] >= 0
 
 
-def test_native_spectrum_helper_c_poc_accepts_nested_request_objects(tmp_path) -> None:
+def test_native_spectrum_helper_accepts_nested_request_objects(tmp_path) -> None:
     repo_root = Path(__file__).resolve().parents[1]
     bin_path = _build_helper_or_skip(repo_root, tmp_path)
     track = tmp_path / "tone.wav"
@@ -137,7 +137,7 @@ def test_native_spectrum_helper_c_poc_accepts_nested_request_objects(tmp_path) -
 
 
 @pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg required")
-def test_native_spectrum_helper_c_poc_supports_mp3_via_ffmpeg(tmp_path) -> None:
+def test_native_spectrum_helper_supports_mp3_via_ffmpeg(tmp_path) -> None:
     repo_root = Path(__file__).resolve().parents[1]
     bin_path = _build_helper_or_skip(repo_root, tmp_path)
     wav_path = tmp_path / "tone source.wav"
@@ -171,7 +171,7 @@ def test_native_spectrum_helper_c_poc_supports_mp3_via_ffmpeg(tmp_path) -> None:
     assert proc.returncode == 0, proc.stderr.decode("utf-8", errors="ignore")
     payload = json.loads(proc.stdout.decode("utf-8"))
     assert payload["schema"] == "tz_player.native_spectrum_helper_response.v1"
-    assert payload["helper_version"] == "c-poc-ffmpeg-v2"
+    assert payload["helper_version"] == "native-helper-v1"
     assert payload["frames"]
     assert payload["beat"]["frames"]
     assert payload["waveform_proxy"]["frames"]

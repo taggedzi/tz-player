@@ -25,19 +25,19 @@ def test_get_native_spectrum_helper_config_disabled_by_default() -> None:
 def test_get_native_spectrum_helper_config_parses_command_and_timeout() -> None:
     cfg = get_native_spectrum_helper_config(
         {
-            NATIVE_SPECTRUM_HELPER_CMD_ENV: "helper-bin --mode poc",
+            NATIVE_SPECTRUM_HELPER_CMD_ENV: "helper-bin --mode native",
             NATIVE_SPECTRUM_HELPER_TIMEOUT_ENV: "2.5",
         }
     )
     assert cfg is not None
-    assert cfg.argv == ("helper-bin", "--mode", "poc")
+    assert cfg.argv == ("helper-bin", "--mode", "native")
     assert cfg.timeout_s == 2.5
 
 
 def test_get_native_spectrum_helper_config_prefers_env_override(
     monkeypatch, tmp_path
 ) -> None:
-    helper = tmp_path / "native_spectrum_helper_c_poc"
+    helper = tmp_path / "tz_player_native_helper"
     helper.write_bytes(b"bundled")
 
     monkeypatch.setattr(
@@ -46,19 +46,19 @@ def test_get_native_spectrum_helper_config_prefers_env_override(
     )
     cfg = get_native_spectrum_helper_config(
         {
-            NATIVE_SPECTRUM_HELPER_CMD_ENV: "helper-bin --mode poc",
+            NATIVE_SPECTRUM_HELPER_CMD_ENV: "helper-bin --mode native",
             NATIVE_SPECTRUM_HELPER_TIMEOUT_ENV: "2.5",
         }
     )
     assert cfg is not None
-    assert cfg.argv == ("helper-bin", "--mode", "poc")
+    assert cfg.argv == ("helper-bin", "--mode", "native")
     assert cfg.timeout_s == 2.5
 
 
 def test_get_native_spectrum_helper_config_uses_bundled_only_when_enabled(
     monkeypatch, tmp_path
 ) -> None:
-    helper = tmp_path / "native_spectrum_helper_c_poc"
+    helper = tmp_path / "tz_player_native_helper"
     helper.write_bytes(b"bundled")
     monkeypatch.setattr(
         "tz_player.services.audio_spectrum_native_cli._bundled_native_spectrum_helper_path",
@@ -78,7 +78,7 @@ def test_get_native_spectrum_helper_config_uses_bundled_only_when_enabled(
 def test_get_bundled_native_spectrum_helper_config_uses_packaged_binary(
     monkeypatch, tmp_path
 ) -> None:
-    helper = tmp_path / "native_spectrum_helper_c_poc"
+    helper = tmp_path / "tz_player_native_helper"
     helper.write_bytes(b"")
     monkeypatch.setattr(
         "tz_player.services.audio_spectrum_native_cli._bundled_native_spectrum_helper_path",
@@ -98,12 +98,12 @@ def test_get_native_spectrum_helper_config_preserves_windows_path_backslashes(
     monkeypatch.setattr(os, "name", "nt", raising=False)
     cfg = get_native_spectrum_helper_config(
         {
-            NATIVE_SPECTRUM_HELPER_CMD_ENV: r"C:\Users\tagge\AppData\Local\Temp\native_spectrum_helper_c_poc.exe",
+            NATIVE_SPECTRUM_HELPER_CMD_ENV: r"C:\Users\tagge\AppData\Local\Temp\tz_player_native_helper.exe",
         }
     )
     assert cfg is not None
     assert cfg.argv == (
-        r"C:\Users\tagge\AppData\Local\Temp\native_spectrum_helper_c_poc.exe",
+        r"C:\Users\tagge\AppData\Local\Temp\tz_player_native_helper.exe",
     )
 
 

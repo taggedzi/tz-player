@@ -20,7 +20,7 @@
 
 #define REQUEST_SCHEMA "tz_player.native_spectrum_helper_request.v1"
 #define RESPONSE_SCHEMA "tz_player.native_spectrum_helper_response.v1"
-#define HELPER_VERSION "c-poc-ffmpeg-v2"
+#define HELPER_VERSION "native-helper-v1"
 #define FFMPEG_DECODE_RATE_HZ 44100
 
 #ifndef M_PI

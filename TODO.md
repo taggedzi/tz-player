@@ -14,14 +14,14 @@ Please see `AGENTS.md` for more instructions.
 
 ## Active Backlog
 
-### T-053 Opt-In Native Spectrum Helper Prototype (Local/Dev POC)
+### T-053 Opt-In Native Spectrum Helper (Local/Dev)
 - Spec Ref: Section `5` (analysis/service model), Section `6` (visualizer/plugin contract), Section `8` (non-blocking reliability/performance), `WF-06`
 - Status: `in_progress`
 - Goal:
-  - Build a local/dev-only proof-of-concept native helper for `decode/resample + spectrum` generation and benchmark whether it materially improves analysis-cache bundle performance before investing in cross-platform packaging/build integration.
+  - Build a local/dev native helper for `decode/resample + spectrum` generation and benchmark whether it materially improves analysis-cache bundle performance before investing in cross-platform packaging/build integration.
 - Why now (benchmark evidence):
   - `analysis-cache` perf profiling shows `bundle_spectrum_ms` as the dominant hotspot and `bundle_decode_ms` as the second-largest hotspot.
-  - Existing perf harness/reporting is now strong enough to evaluate this prototype with repeatable before/after comparisons.
+  - Existing perf harness/reporting is now strong enough to evaluate this helper with repeatable before/after comparisons.
 - Scope:
   - Add an opt-in native helper path for `decode/resample + spectrum` only.
   - Integrate helper dispatch behind an environment variable feature flag.
@@ -33,26 +33,26 @@ Please see `AGENTS.md` for more instructions.
   - Replacing beat, waveform, or envelope analysis with native code in this phase.
   - Changing persisted schema, cache store contracts, or plugin capability contracts.
 - Tasks:
-  - `T-053A` Prototype form decision + minimal helper contract. Status: `in_progress`
-    - Chosen prototype form for local/dev-only spike: external CLI/helper process (opt-in, env-gated).
-    - Rationale: fastest integration path with strong failure isolation; acceptable process/serialization overhead for a directional POC (a false negative would still be informative).
+  - `T-053A` Helper form decision + minimal helper contract. Status: `in_progress`
+    - Chosen helper form for local/dev-only spike: external CLI/helper process (opt-in, env-gated).
+    - Rationale: fastest integration path with strong failure isolation; acceptable process/serialization overhead for a directional benchmark (a false negative would still be informative).
     - Define a minimal deterministic contract for inputs (`track_path`, sample rate, hop/window, band count, `max_frames`) and outputs (Python-compatible spectrum payload + optional timing breakdown).
     - Keep contract versionable so the wrapper can evolve without touching store schemas.
-    - Contract now exercised by two local helper implementations: Python stub helper and compiled C helper POC with WAV + `ffmpeg` decode support (`c-poc-ffmpeg-v2`).
+    - Contract now exercised by two local helper implementations: Python stub helper and compiled C helper with WAV + `ffmpeg` decode support (`native-helper-v1`).
     - C helper request parsing now accepts nested `beat` / `waveform_proxy` objects directly (not only duplicated top-level fallback keys), improving contract robustness for future helpers/clients.
     - C helper `ffmpeg` decode path now launches `ffmpeg` via direct `fork`/`execvp` + pipe capture (no shell command string), improving path/quoting robustness and reducing command-construction risk.
     - Portability scaffold started: helper now has platform-guarded timing (`QueryPerformanceCounter` on Windows) and compile-time platform guards around POSIX process code.
     - Windows non-WAV decode now uses a local/dev `CreateProcessA` + pipes `ffmpeg` PCM capture path (replacing the temporary `_popen` fallback); still unverified here because this environment is Linux-only.
   - `T-053B` Python adapter + env-flag backend dispatch. Status: `in_progress`
     - Add a backend adapter interface with `python` default and `native_helper` optional path.
-    - Gate native path behind an env var (prototype scope) and preserve explicit fallback to Python on helper unavailable/error.
+    - Gate native path behind an env var (helper scope) and preserve explicit fallback to Python on helper unavailable/error.
     - Emit structured observability fields for selected backend and fallback reason.
     - Initial step landed: CLI-helper adapter parsing + env-gated spectrum-only bundle dispatch (avoids double-decode for mixed-output bundle requests until broader integration is implemented).
   - `T-053C` Bundle-path integration (`audio_analysis_bundle.py`). Status: `in_progress`
     - Dispatch only `decode/resample + spectrum` through the optional native helper.
     - Keep beat / waveform / envelope computations on the existing Python path initially.
     - Preserve current bundle write behavior and timing field semantics.
-    - POC strategy chosen/started for mixed-output bundles: allow duplicate decode (native helper for spectrum + Python decode for beat/waveform) to measure directional impact quickly before deeper refactor.
+    - Initial strategy chosen/started for mixed-output bundles: allow duplicate decode (native helper for spectrum + Python decode for beat/waveform) to measure directional impact quickly before deeper refactor.
     - First duplicate-decode reduction landed: when helper returns both spectrum + waveform proxy and beat is not requested, bundle now returns without a Python decode (`analysis_backend=native_helper` for that request shape).
     - Full-bundle helper path landed: helper can now return beat + waveform + spectrum, allowing `analysis-cache` requests (`spectrum+beat+waveform`) to avoid Python decode and classify as `analysis_backend=native_helper` when helper output is complete.
   - `T-053D` Timing normalization + benchmark metadata wiring. Status: `in_progress`
@@ -69,51 +69,51 @@ Please see `AGENTS.md` for more instructions.
     - Add coverage for malformed helper output and timeout/error handling without breaking analysis scheduling.
     - Keep UI/event-loop non-blocking guarantees intact.
     - Progress note: helper adapter now emits specific fallback reasons (`timeout`, invalid JSON/output, nonzero exit, invocation error), which exposed an 8s stub-helper timeout on larger MP3s; a 30s helper timeout removed the fallback in local subset validation.
-  - `T-053F` Local/dev-only prototype runbook + benchmark comparison results. Status: `in_progress`
-    - Document local build/run steps for the prototype (tracked in git, non-merge-ready is acceptable for POC).
+  - `T-053F` Local/dev helper runbook + benchmark comparison results. Status: `in_progress`
+    - Document local build/run steps for the helper (tracked in git, non-merge-ready is acceptable for local/dev).
     - Run baseline vs candidate `analysis-cache` comparisons and summarize findings.
     - Run `user-feel` suite follow-up only if `analysis-cache` improvements are promising.
-    - Progress note: compiled C helper POC now builds via `tools/build_native_spectrum_helper_c_poc.sh`, supports WAV + MP3 (via `ffmpeg` decode), and was benchmarked successfully against temporary WAV and MP3 subset corpora.
-    - Runbook/workflow automation started: `docs/perf-benchmarks.md` includes a native-helper POC section and `tools/run_native_spectrum_helper_poc_bench.sh` provides a repeatable runner for `stub|c` helper modes.
-    - Added Windows local/dev POC build/run instructions in `docs/perf-benchmarks.md` plus a PowerShell build helper (`tools/build_native_spectrum_helper_c_poc.ps1`) for manual validation on Windows; helper now attempts `vswhere.exe` + `VsDevCmd.bat` auto-bootstrap when `cl.exe` is not on `PATH`.
+    - Progress note: compiled C helper now builds via `tools/build_native_spectrum_helper.sh`, supports WAV + MP3 (via `ffmpeg` decode), and was benchmarked successfully against temporary WAV and MP3 subset corpora.
+    - Runbook/workflow automation started: `docs/perf-benchmarks.md` includes a native-helper section and `tools/run_native_spectrum_helper_bench.sh` provides a repeatable runner for `stub|c` helper modes.
+    - Added Windows local/dev helper build/run instructions in `docs/perf-benchmarks.md` plus a PowerShell build helper (`tools/build_native_spectrum_helper.ps1`) for manual validation on Windows; helper now attempts `vswhere.exe` + `VsDevCmd.bat` auto-bootstrap when `cl.exe` is not on `PATH`.
     - Added manual GitHub Actions helper-artifact workflow (`.github/workflows/native-helper-artifacts.yml`) to build/upload Linux and Windows helper binaries without requiring local compiler installation.
     - Full-corpus `analysis-cache` comparison captured on local `.local/perf_media` (10 analyzed tracks in both runs, no fallbacks):
       - Baseline suite: `.local/perf_results/20260222T164620.727788Z_native-cli-python-baseline-full_suite_summary.json`
-      - Candidate suite: `.local/perf_results/20260222T164826.021444Z_native-cli-c-poc-full-c_suite_summary.json`
+      - Candidate suite: `.local/perf_results/20260222T164826.021444Z_native-cli-c-helper-full-c_suite_summary.json`
       - Comparison report HTML: `.local/perf_results/20260222T164620.727788Z_native-cli-python-baseline-full_suite_summary.report.html`
       - Headline result: strong cold-path `bundle_spectrum_ms` and `bundle_total_ms` improvements (~`-94%` / ~`-59%` medians) with regressions in Python beat/waveform stages and aggregate `bundle_decode_ms` due to current duplicate-decode hybrid strategy.
     - Full-corpus `analysis-cache` comparison rerun after helper beat + waveform support (10 analyzed tracks, no fallbacks, no hybrid tracks):
       - Baseline suite: `.local/perf_results/20260222T164620.727788Z_native-cli-python-baseline-full_suite_summary.json`
-      - Candidate suite: `.local/perf_results/20260222T172043.601701Z_native-cli-c-poc-full-v2-analysis-cache-c_suite_summary.json`
+      - Candidate suite: `.local/perf_results/20260222T172043.601701Z_native-cli-c-helper-full-v2-analysis-cache-c_suite_summary.json`
       - Headline result: candidate backend metadata shows `native_helper:20` (cold+warm scenarios) and `hybrid:0`; cold medians improved for `bundle_decode_ms` (~`-88.8%`), `bundle_analyze_ms` (~`-92.2%`), `bundle_total_ms` (~`-92.5%`), `bundle_spectrum_ms` (~`-94.0%`), `bundle_waveform_ms` (~`-96.7%`), and `bundle_beat_ms` (~`-97.8%`); `bundle_python_decode_ms` dropped to `0.0 ms`.
     - Focused `analysis-bundle-sw` comparison (`spectrum + waveform`, no beat) captured on local `.local/perf_media` (10 analyzed tracks, helper used on all candidate tracks):
       - Baseline suite: `.local/perf_results/20260222T171352.975934Z_native-cli-python-baseline-sw_suite_summary.json`
-      - Candidate suite: `.local/perf_results/20260222T171413.607489Z_native-cli-c-poc-sw-analysis-bundle-sw-c_suite_summary.json`
+      - Candidate suite: `.local/perf_results/20260222T171413.607489Z_native-cli-c-helper-sw-analysis-bundle-sw-c_suite_summary.json`
       - Comparison report HTML: `.local/perf_results/20260222T171352.975934Z_native-cli-python-baseline-sw_suite_summary.report.html`
       - Headline result: no regressions; medians improved for `bundle_total_ms` (~`-92.7%`), `bundle_analyze_ms` (~`-92.4%`), `bundle_spectrum_ms` (~`-94.0%`), `bundle_waveform_ms` (~`-96.8%`), and `bundle_python_decode_ms` (`-100%` to `0.0 ms`) because the helper satisfied `spectrum+waveform` without Python decode.
       - Note: compare reported a pair-count mismatch because the baseline suite captured two artifacts (`new_artifact_count=2`) after a prior direct benchmark artifact write in the same results directory window; the relevant pair compared cleanly.
     - Windows local/dev validation completed:
-      - MSVC (`cl.exe`) build works from normal PowerShell via `tools/build_native_spectrum_helper_c_poc.ps1` auto-bootstrap (`vswhere.exe` + `VsDevCmd.bat`)
+      - MSVC (`cl.exe`) build works from normal PowerShell via `tools/build_native_spectrum_helper.ps1` auto-bootstrap (`vswhere.exe` + `VsDevCmd.bat`)
       - MP3 helper smoke test passes on Windows using `CreateProcessA` + pipes `ffmpeg` decode path (`tools/windows_helper_smoke_test.ps1`, `Feast Of Foes 2.mp3`)
     - Windows focused `analysis-bundle-sw` comparison captured on local `.local/perf_media`:
       - Baseline suite: `.local/perf_results/20260222T184707.114142Z_native-cli-python-baseline-sw-win_suite_summary.json`
-      - Candidate suite: `.local/perf_results/20260222T185823.499542Z_native-cli-c-poc-sw-win-fix_suite_summary.json`
+      - Candidate suite: `.local/perf_results/20260222T185823.499542Z_native-cli-c-helper-sw-win-fix_suite_summary.json`
       - Headline result: candidate backend metadata shows `native_helper:10` with `waveform=native_helper:10`; no regressions and strong medians improvements including `bundle_total_ms` (~`-93.1%`), `bundle_decode_ms` (~`-94.1%`), and `bundle_python_decode_ms` (`-100%` to `0.0 ms`).
     - Windows full-corpus `analysis-cache` comparison captured on local `.local/perf_media`:
       - Baseline suite: `.local/perf_results/20260222T190350.471897Z_native-cli-python-baseline-full-win_suite_summary.json`
-      - Candidate suite: `.local/perf_results/20260222T190054.054920Z_native-cli-c-poc-full-win_suite_summary.json`
+      - Candidate suite: `.local/perf_results/20260222T190054.054920Z_native-cli-c-helper-full-win_suite_summary.json`
       - Comparison report HTML: `.local/perf_results/20260222T190350.471897Z_native-cli-python-baseline-full-win_suite_summary.report.html`
       - Headline result: candidate backend metadata shows `backends=native_helper:20 beat=native_helper:20 waveform=native_helper:20`; `19` improvements / `1` small regression (`warm_cache_track_play.memory_preload_all_ms +4.2%`) with major cold-path median wins: `bundle_total_ms` (~`-93.1%`), `bundle_decode_ms` (~`-94.1%`), `bundle_spectrum_ms` (~`-92.4%`), `bundle_waveform_ms` (~`-96.8%`), `bundle_beat_ms` (~`-97.8%`), `bundle_python_decode_ms` (`-100%`).
-- POC Benchmark Commands (Active)
-  - Run focused analysis benchmark (compiled helper POC):
-    - `bash tools/run_native_spectrum_helper_poc_bench.sh --helper c --timeout-s 30 --label <label>`
-  - Run focused `spectrum+waveform` bundle benchmark (compiled helper POC):
-    - `bash tools/run_native_spectrum_helper_poc_bench.sh --helper c --scenario analysis-bundle-sw --timeout-s 30 --label <label>`
+- Helper Benchmark Commands (Active)
+  - Run focused analysis benchmark (compiled helper):
+    - `bash tools/run_native_spectrum_helper_bench.sh --helper c --timeout-s 30 --label <label>`
+  - Run focused `spectrum+waveform` bundle benchmark (compiled helper):
+    - `bash tools/run_native_spectrum_helper_bench.sh --helper c --scenario analysis-bundle-sw --timeout-s 30 --label <label>`
   - Run focused analysis benchmark (Python baseline):
     - `.ubuntu-venv/bin/python tools/perf_run.py --scenario analysis-cache --repeat 1 --label <label>`
   - Compare two suite runs with tighter thresholds:
     - `.ubuntu-venv/bin/python tools/perf_compare_suite.py --regression-pct 1.0 --improvement-pct -1.0 --max-rows 20 <baseline_suite_summary.json> <candidate_suite_summary.json>`
-- POC Benchmark Commands (Archived / Completed Reference)
+- Helper Benchmark Commands (Archived / Completed Reference)
   - List perf tools / suites:
     - `.ubuntu-venv/bin/python tools/perf_run.py --list-suites`
   - Generate / open HTML report:
@@ -121,30 +121,42 @@ Please see `AGENTS.md` for more instructions.
   - Full-corpus Python baseline run (completed):
     - `.ubuntu-venv/bin/python tools/perf_run.py --scenario analysis-cache --repeat 1 --label native-cli-python-baseline-full`
   - Full-corpus compiled-helper candidate run (completed):
-    - `bash tools/run_native_spectrum_helper_poc_bench.sh --helper c --timeout-s 30 --label native-cli-c-poc-full`
+    - `bash tools/run_native_spectrum_helper_bench.sh --helper c --timeout-s 30 --label native-cli-c-helper-full`
   - Full-corpus suite comparison + report (completed):
-    - `.ubuntu-venv/bin/python tools/perf_compare_suite.py --regression-pct 1.0 --improvement-pct -1.0 --max-rows 10 .local/perf_results/20260222T164620.727788Z_native-cli-python-baseline-full_suite_summary.json .local/perf_results/20260222T164826.021444Z_native-cli-c-poc-full-c_suite_summary.json`
-    - `.ubuntu-venv/bin/python tools/perf_report.py .local/perf_results/20260222T164620.727788Z_native-cli-python-baseline-full_suite_summary.json --compare-suite .local/perf_results/20260222T164826.021444Z_native-cli-c-poc-full-c_suite_summary.json`
+    - `.ubuntu-venv/bin/python tools/perf_compare_suite.py --regression-pct 1.0 --improvement-pct -1.0 --max-rows 10 .local/perf_results/20260222T164620.727788Z_native-cli-python-baseline-full_suite_summary.json .local/perf_results/20260222T164826.021444Z_native-cli-c-helper-full-c_suite_summary.json`
+    - `.ubuntu-venv/bin/python tools/perf_report.py .local/perf_results/20260222T164620.727788Z_native-cli-python-baseline-full_suite_summary.json --compare-suite .local/perf_results/20260222T164826.021444Z_native-cli-c-helper-full-c_suite_summary.json`
   - Focused `analysis-bundle-sw` baseline/candidate runs + comparison (completed):
     - `.ubuntu-venv/bin/python tools/perf_run.py --scenario analysis-bundle-sw --repeat 1 --label native-cli-python-baseline-sw`
-    - `bash tools/run_native_spectrum_helper_poc_bench.sh --helper c --scenario analysis-bundle-sw --timeout-s 30 --label native-cli-c-poc-sw`
-    - `.ubuntu-venv/bin/python tools/perf_compare_suite.py --regression-pct 1.0 --improvement-pct -1.0 --max-rows 20 .local/perf_results/20260222T171352.975934Z_native-cli-python-baseline-sw_suite_summary.json .local/perf_results/20260222T171413.607489Z_native-cli-c-poc-sw-analysis-bundle-sw-c_suite_summary.json`
-    - `.ubuntu-venv/bin/python tools/perf_report.py .local/perf_results/20260222T171352.975934Z_native-cli-python-baseline-sw_suite_summary.json --compare-suite .local/perf_results/20260222T171413.607489Z_native-cli-c-poc-sw-analysis-bundle-sw-c_suite_summary.json`
+    - `bash tools/run_native_spectrum_helper_bench.sh --helper c --scenario analysis-bundle-sw --timeout-s 30 --label native-cli-c-helper-sw`
+    - `.ubuntu-venv/bin/python tools/perf_compare_suite.py --regression-pct 1.0 --improvement-pct -1.0 --max-rows 20 .local/perf_results/20260222T171352.975934Z_native-cli-python-baseline-sw_suite_summary.json .local/perf_results/20260222T171413.607489Z_native-cli-c-helper-sw-analysis-bundle-sw-c_suite_summary.json`
+    - `.ubuntu-venv/bin/python tools/perf_report.py .local/perf_results/20260222T171352.975934Z_native-cli-python-baseline-sw_suite_summary.json --compare-suite .local/perf_results/20260222T171413.607489Z_native-cli-c-helper-sw-analysis-bundle-sw-c_suite_summary.json`
   - Full-corpus `analysis-cache` candidate rerun after helper beat support + comparison (completed):
-    - `bash tools/run_native_spectrum_helper_poc_bench.sh --helper c --scenario analysis-cache --timeout-s 30 --label native-cli-c-poc-full-v2`
-    - `.ubuntu-venv/bin/python tools/perf_compare_suite.py --regression-pct 1.0 --improvement-pct -1.0 --max-rows 20 .local/perf_results/20260222T164620.727788Z_native-cli-python-baseline-full_suite_summary.json .local/perf_results/20260222T172043.601701Z_native-cli-c-poc-full-v2-analysis-cache-c_suite_summary.json`
+    - `bash tools/run_native_spectrum_helper_bench.sh --helper c --scenario analysis-cache --timeout-s 30 --label native-cli-c-helper-full-v2`
+    - `.ubuntu-venv/bin/python tools/perf_compare_suite.py --regression-pct 1.0 --improvement-pct -1.0 --max-rows 20 .local/perf_results/20260222T164620.727788Z_native-cli-python-baseline-full_suite_summary.json .local/perf_results/20260222T172043.601701Z_native-cli-c-helper-full-v2-analysis-cache-c_suite_summary.json`
   - Full-corpus `analysis-cache` metadata-surfacing validation rerun (completed):
-    - `bash tools/run_native_spectrum_helper_poc_bench.sh --helper c --scenario analysis-cache --timeout-s 30 --label native-cli-c-poc-full-v3-meta`
-    - `.ubuntu-venv/bin/python tools/perf_compare_suite.py --regression-pct 1.0 --improvement-pct -1.0 --max-rows 6 .local/perf_results/20260222T164620.727788Z_native-cli-python-baseline-full_suite_summary.json .local/perf_results/20260222T172657.333882Z_native-cli-c-poc-full-v3-meta-analysis-cache-c_suite_summary.json`
+    - `bash tools/run_native_spectrum_helper_bench.sh --helper c --scenario analysis-cache --timeout-s 30 --label native-cli-c-helper-full-v3-meta`
+    - `.ubuntu-venv/bin/python tools/perf_compare_suite.py --regression-pct 1.0 --improvement-pct -1.0 --max-rows 6 .local/perf_results/20260222T164620.727788Z_native-cli-python-baseline-full_suite_summary.json .local/perf_results/20260222T172657.333882Z_native-cli-c-helper-full-v3-meta-analysis-cache-c_suite_summary.json`
   - Windows helper smoke test + focused/full perf comparisons (completed):
     - `.\tools\windows_helper_smoke_test.ps1 -ForceBuild`
+
+### T-055 De-POC Native Helper Rename + Cleanup
+- Spec Ref: Section `5` (analysis/service model), Section `8` (non-blocking reliability/performance), `WF-06`
+- Status: `done`
+- Goal:
+  - Remove POC naming across native helper code, tooling, tests, workflows, and docs.
+- Tasks:
+  - Rename helper binaries and packaged paths to `tz_player_native_helper(.exe)`.
+  - Rename helper source/build/benchmark scripts to remove POC naming.
+  - Update workflows and guardrails to use new artifact names.
+  - Update tests and docs to use new helper names and version string.
+  - Set helper version string to `native-helper-v1`.
     - `python tools/perf_run.py --scenario analysis-bundle-sw --repeat 1 --label native-cli-python-baseline-sw-win`
-    - `python tools/perf_run.py --scenario analysis-bundle-sw --repeat 1 --label native-cli-c-poc-sw-win-fix`
-    - `python tools/perf_compare_suite.py --regression-pct 1.0 --improvement-pct -1.0 --max-rows 20 "E:\Home\Documents\Programming\tz-player\.local\perf_results\20260222T184707.114142Z_native-cli-python-baseline-sw-win_suite_summary.json" "E:\Home\Documents\Programming\tz-player\.local\perf_results\20260222T185823.499542Z_native-cli-c-poc-sw-win-fix_suite_summary.json"`
-    - `python tools/perf_run.py --scenario analysis-cache --repeat 1 --label native-cli-c-poc-full-win`
+    - `python tools/perf_run.py --scenario analysis-bundle-sw --repeat 1 --label native-cli-c-helper-sw-win-fix`
+    - `python tools/perf_compare_suite.py --regression-pct 1.0 --improvement-pct -1.0 --max-rows 20 "E:\Home\Documents\Programming\tz-player\.local\perf_results\20260222T184707.114142Z_native-cli-python-baseline-sw-win_suite_summary.json" "E:\Home\Documents\Programming\tz-player\.local\perf_results\20260222T185823.499542Z_native-cli-c-helper-sw-win-fix_suite_summary.json"`
+    - `python tools/perf_run.py --scenario analysis-cache --repeat 1 --label native-cli-c-helper-full-win`
     - `python tools/perf_run.py --scenario analysis-cache --repeat 1 --label native-cli-python-baseline-full-win`
-    - `python tools/perf_compare_suite.py --regression-pct 1.0 --improvement-pct -1.0 --max-rows 20 "E:\Home\Documents\Programming\tz-player\.local\perf_results\20260222T190350.471897Z_native-cli-python-baseline-full-win_suite_summary.json" "E:\Home\Documents\Programming\tz-player\.local\perf_results\20260222T190054.054920Z_native-cli-c-poc-full-win_suite_summary.json"`
-    - `python tools/perf_report.py "E:\Home\Documents\Programming\tz-player\.local\perf_results\20260222T190350.471897Z_native-cli-python-baseline-full-win_suite_summary.json" --compare-suite "E:\Home\Documents\Programming\tz-player\.local\perf_results\20260222T190054.054920Z_native-cli-c-poc-full-win_suite_summary.json"`
+    - `python tools/perf_compare_suite.py --regression-pct 1.0 --improvement-pct -1.0 --max-rows 20 "E:\Home\Documents\Programming\tz-player\.local\perf_results\20260222T190350.471897Z_native-cli-python-baseline-full-win_suite_summary.json" "E:\Home\Documents\Programming\tz-player\.local\perf_results\20260222T190054.054920Z_native-cli-c-helper-full-win_suite_summary.json"`
+    - `python tools/perf_report.py "E:\Home\Documents\Programming\tz-player\.local\perf_results\20260222T190350.471897Z_native-cli-python-baseline-full-win_suite_summary.json" --compare-suite "E:\Home\Documents\Programming\tz-player\.local\perf_results\20260222T190054.054920Z_native-cli-c-helper-full-win_suite_summary.json"`
 - Validation (per implementation change set):
   - `.ubuntu-venv/bin/python -m ruff check .`
   - `.ubuntu-venv/bin/python -m ruff format --check .`
@@ -876,7 +888,7 @@ Please see `AGENTS.md` for more instructions.
   - Distribute native helper binaries inside release artifacts so helper-powered analysis is available immediately after install.
 - Why now:
   - User requirement is explicit: one-time install, no runtime helper download.
-  - POC performance work is proven; shipping path is the remaining gap.
+  - Helper performance work is proven; shipping path is the remaining gap.
 - Scope:
   - Build platform-specific helper binaries in CI and include them in release artifacts/package outputs.
   - Add a deterministic loader that prefers packaged helpers by OS/architecture and falls back to Python path when needed.
