@@ -71,7 +71,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: native-spectrum-helper-windows
-          path: "${{ runner.temp }}\tz_player_native_helper.exe"
+          path: '${{ runner.temp }}\tz_player_native_helper.exe'
           if-no-files-found: error
 
   release:
