@@ -35,20 +35,27 @@ Use forms like `0.3.0`, `0.3.1`, or `0.4.0rc1`. Tag format is always `v<version>
 2. Run the one-command local release entrypoint from a clean `main`:
 
 ```bash
-python tools/release.py 0.5.1
+./tools/release.sh 0.5.1
 ```
 
-The command prints a deterministic follow-up block after the tag is pushed. The exact template is:
+The command prints a deterministic follow-up block after the tag is pushed. The exact template is for **rebuilds only** (do not run it during the normal flow):
 
 ```bash
-gh workflow run Release --ref main --field version=<VERSION_OR_TAG> --field prerelease=<true|false> --field sign_artifacts=false
+gh workflow run Release --ref main --field version=<VERSION_OR_TAG> --field force_rebuild=true --field prerelease=<true|false> --field sign_artifacts=false
 ```
 
 Alternative equivalent entrypoints:
 
 ```bash
 make release VERSION=0.5.1
-./tools/release.sh 0.5.1
+python tools/release.py 0.5.1
+
+Resume after a failed attempt (for example after fixing a lint/test error on the
+release branch):
+
+```bash
+./tools/release.sh 0.5.1 --resume
+```
 ```
 
 The local command is designed to do everything required on your machine before GitHub builds artifacts:
@@ -89,7 +96,7 @@ gh release view v0.5.1 --json name,url,tagName,isPrerelease,assets
 4. If a rebuild is required (for example after a workflow fix) and the tag already exists:
 
 ```bash
-gh workflow run Release --ref main --field version=v0.5.1 --field prerelease=false --field sign_artifacts=false
+gh workflow run Release --ref main --field version=v0.5.1 --field force_rebuild=true --field prerelease=false --field sign_artifacts=false
 ```
 
 5. Verify outputs after success:
@@ -105,13 +112,18 @@ If you publish to package indexes, do it only after the GitHub release is verifi
 ## Failure Handling
 
 1. Script fails before PR creation:
-Fix local/tooling issue and re-run `python tools/release.py <version>`.
+Fix local/tooling issue and re-run the same command you used (for example
+`./tools/release.sh <version>`).
 
 2. Script reports `no checks reported`:
 `release.py` continues and tries auto-merge. If auto-merge is unavailable, merge the PR manually in GitHub and proceed with release workflow dispatch.
 
 3. Script fails to merge PR:
-Merge manually (respecting repo rules), create/push tag `v<version>`, then continue.
+Merge manually (respecting repo rules), then resume:
+
+```bash
+./tools/release.sh <version> --resume
+```
 
 4. Release exists but assets are missing/wrong:
 Re-run workflow via `workflow_dispatch` and set `version` to the same existing tag version (`0.5.1` or `v0.5.1`), then it will upload/replace assets.
@@ -120,7 +132,8 @@ Re-run workflow via `workflow_dispatch` and set `version` to the same existing t
 This means that version was already used. Pick the next version and re-run.
 
 6. Branch protection blocks automation:
-If PR merge is blocked, resolve required approvals/checks and rerun with a new version.
+If PR merge is blocked, resolve required approvals/checks and rerun with
+`./tools/release.sh <version> --resume`.
 
 ## Notes
 
@@ -154,7 +167,7 @@ git ls-remote --tags origin | rg "refs/tags/v<version>"
 2. If tag exists and you need a full rebuild:
 
 ```bash
-gh workflow run Release --ref main --field version=<VERSION> --field prerelease=false --field sign_artifacts=false
+gh workflow run Release --ref main --field version=<VERSION> --field force_rebuild=true --field prerelease=false --field sign_artifacts=false
 ```
 
 3. If dispatch continues to fail, use the GitHub UI **Run workflow** button on `Release` and provide the same fields.
@@ -181,5 +194,5 @@ git push origin <VERSION>
 3. Trigger `Release` after the tag is present:
 
 ```bash
-gh workflow run Release --ref main --field version=<VERSION> --field prerelease=false --field sign_artifacts=false
+gh workflow run Release --ref main --field version=<VERSION> --field force_rebuild=true --field prerelease=false --field sign_artifacts=false
 ```

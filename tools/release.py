@@ -125,12 +125,142 @@ def _print_github_followups(version: str, tag: str) -> None:
     _log(f"   gh release view {tag} --json name,url,tagName,isPrerelease,assets")
     _log("4) If you need to rebuild this same tag:")
     _log(
-        f"   gh workflow run Release --ref main --field version={tag} --field prerelease={prerelease} --field sign_artifacts=false"
+        f"   gh workflow run Release --ref main --field version={tag} --field force_rebuild=true --field prerelease={prerelease} --field sign_artifacts=false"
     )
     _log("5) If auto-merge was not enabled, you can merge PR manually and then run:")
     _log(
-        f"   gh workflow run Release --ref main --field version={tag} --field prerelease={prerelease} --field sign_artifacts=false"
+        f"   gh workflow run Release --ref main --field version={tag} --field force_rebuild=true --field prerelease={prerelease} --field sign_artifacts=false"
     )
+    _log("6) If the local script fails after creating the release branch/PR:")
+    _log(f"   ./tools/release.sh {tag} --resume")
+
+
+def _recovery_hints(
+    *, version: str, tag: str, branch: str, tag_exists: bool, branch_exists: bool
+) -> list[str]:
+    """Return recovery hints based on release state."""
+    prerelease = str(_is_prerelease(version)).lower()
+    if tag_exists:
+        return [
+            "Recovery:",
+            f"Tag {tag} already exists. To rebuild artifacts:",
+            (
+                "gh workflow run Release --ref main --field version="
+                f"{tag} --field force_rebuild=true --field prerelease={prerelease} "
+                "--field sign_artifacts=false"
+            ),
+        ]
+    if branch_exists:
+        return [
+            "Recovery:",
+            f"Release branch {branch} already exists. After fixing the issue, resume with:",
+            f"./tools/release.sh {tag} --resume",
+        ]
+    return [
+        "Recovery:",
+        "Fix the failure and re-run the same release command.",
+    ]
+
+
+def _find_existing_pr(branch: str) -> dict[str, object] | None:
+    """Return the first PR payload matching the release branch."""
+    raw = _run(
+        [
+            "gh",
+            "pr",
+            "list",
+            "--head",
+            branch,
+            "--state",
+            "all",
+            "--json",
+            "url,state,mergedAt,mergeCommit",
+            "--limit",
+            "1",
+        ],
+        capture=True,
+    )
+    payload = json.loads(raw)
+    if not payload:
+        return None
+    return payload[0]
+
+
+def _find_or_create_pr(branch: str, tag: str) -> str:
+    """Return existing PR URL for branch or create a new one."""
+    existing = _find_existing_pr(branch)
+    if existing:
+        return str(existing["url"])
+    return _run(
+        [
+            "gh",
+            "pr",
+            "create",
+            "--base",
+            "main",
+            "--head",
+            branch,
+            "--title",
+            f"release: {tag}",
+            "--body",
+            f"Automated release prep for {tag}.",
+        ],
+        capture=True,
+    )
+
+
+def _resume_release(*, version: str, tag: str, branch: str) -> None:
+    """Resume release flow when the release branch or PR already exists."""
+    _log(f"Resuming release flow for {tag}")
+    _run(["git", "fetch", "origin", "main", "--prune", "--tags"])
+
+    if _ref_exists_locally(tag) or _ref_exists_remote(kind="tags", name=tag):
+        raise RuntimeError(f"Tag {tag} already exists.")
+
+    local_branch = _ref_exists_locally(f"refs/heads/{branch}") or _ref_exists_locally(
+        branch
+    )
+    remote_branch = _ref_exists_remote(kind="heads", name=branch)
+
+    if not local_branch and not remote_branch:
+        raise RuntimeError(
+            f"Release branch {branch} not found. Re-run without --resume."
+        )
+
+    if not local_branch and remote_branch:
+        _run(["git", "switch", "-c", branch, "--track", f"origin/{branch}"])
+
+    pr_url = _find_or_create_pr(branch, tag)
+    _log(f"PR: {pr_url}")
+
+    pr_payload = _find_existing_pr(branch) or {}
+    merged_at = pr_payload.get("mergedAt")
+    merge_commit = pr_payload.get("mergeCommit") or {}
+    merge_sha = merge_commit.get("oid")
+
+    if merged_at and merge_sha:
+        _log(f"PR already merged at {merged_at}")
+    elif pr_payload.get("state") == "CLOSED" and not merged_at:
+        raise RuntimeError(f"PR {pr_url} was closed without being merged.")
+    else:
+        _wait_for_pr_checks(pr_url)
+        _log("Enabling auto-merge for PR")
+        _run(["gh", "pr", "merge", pr_url, "--auto", "--squash", "--delete-branch"])
+        _log("Waiting for PR merge")
+        merge_sha = _wait_for_merge(pr_url)
+
+    if not merge_sha:
+        raise RuntimeError("Unable to resolve merge commit SHA for release tag.")
+
+    _log(f"Refreshing main and creating tag {tag}")
+    _run(["git", "fetch", "origin", "main", "--prune"])
+    _run(["git", "switch", "main"])
+    _run(["git", "pull", "--ff-only", "origin", "main"])
+    _run(["git", "tag", "-a", tag, merge_sha, "-m", f"Release {tag}"])
+    _log(f"Pushing tag {tag}")
+    _run(["git", "push", "origin", tag])
+    _log(f"Done. Tag {tag} pushed and GitHub Release workflow should start.")
+    _print_github_followups(version, tag)
 
 
 def _wait_for_merge(
@@ -187,7 +317,7 @@ def _wait_for_pr_checks(pr_url: str) -> None:
     )
 
 
-def run_release(raw_version: str) -> None:
+def run_release(raw_version: str, *, resume: bool = False) -> None:
     """End-to-end release workflow from prep branch to pushed tag."""
     version = _parse_version(raw_version)
     tag = f"v{version}"
@@ -204,6 +334,10 @@ def run_release(raw_version: str) -> None:
         ) from exc
 
     _ensure_clean_tree()
+
+    if resume:
+        _resume_release(version=version, tag=tag, branch=branch)
+        return
 
     _log("Fetching latest main")
     _run(["git", "fetch", "origin", "main", "--prune"])
@@ -237,22 +371,7 @@ def run_release(raw_version: str) -> None:
     _run(["git", "push", "-u", "origin", branch])
 
     _log("Opening pull request")
-    pr_url = _run(
-        [
-            "gh",
-            "pr",
-            "create",
-            "--base",
-            "main",
-            "--head",
-            branch,
-            "--title",
-            f"release: {tag}",
-            "--body",
-            f"Automated release prep for {tag}.",
-        ],
-        capture=True,
-    )
+    pr_url = _find_or_create_pr(branch, tag)
     _log(f"PR: {pr_url}")
 
     _wait_for_pr_checks(pr_url)
@@ -263,7 +382,7 @@ def run_release(raw_version: str) -> None:
     except subprocess.CalledProcessError as exc:
         raise RuntimeError(
             f"Could not enable auto-merge for {pr_url}. Merge manually, then run:"
-            f" gh workflow run Release --ref main --field version={tag} --field prerelease={str(_is_prerelease(version)).lower()} --field sign_artifacts=false"
+            f" gh workflow run Release --ref main --field version={tag} --field force_rebuild=true --field prerelease={str(_is_prerelease(version)).lower()} --field sign_artifacts=false"
         ) from exc
 
     _log("Waiting for PR merge")
@@ -285,12 +404,43 @@ def run_release(raw_version: str) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("version", help="Release version, e.g. 0.5.2 or v0.5.2")
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume a release after a previous attempt created the release branch/PR.",
+    )
     args = parser.parse_args()
 
     try:
-        run_release(args.version)
+        run_release(args.version, resume=args.resume)
     except (RuntimeError, subprocess.CalledProcessError) as exc:
         print(f"[release] ERROR: {exc}", file=sys.stderr)
+        try:
+            version = _parse_version(args.version)
+            tag = f"v{version}"
+            branch = f"release/{tag}"
+            try:
+                tag_exists = _ref_exists_locally(tag) or _ref_exists_remote(
+                    kind="tags", name=tag
+                )
+            except subprocess.CalledProcessError:
+                tag_exists = False
+            try:
+                branch_exists = _ref_exists_locally(
+                    f"refs/heads/{branch}"
+                ) or _ref_exists_remote(kind="heads", name=branch)
+            except subprocess.CalledProcessError:
+                branch_exists = False
+            for line in _recovery_hints(
+                version=version,
+                tag=tag,
+                branch=branch,
+                tag_exists=tag_exists,
+                branch_exists=branch_exists,
+            ):
+                _log(line)
+        except RuntimeError:
+            pass
         return 1
     return 0
 
