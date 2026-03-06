@@ -20,6 +20,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - None.
 
 
+## [1.0.3] - 2026-03-05
+
+### Added
+
+- None.
+
+### Changed
+
+- Release binary calls change
+
+### Fixed
+
+- None.
 ## [1.0.2] - 2026-03-05
 
 ### Added
