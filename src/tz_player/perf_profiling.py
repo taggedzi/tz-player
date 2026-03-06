@@ -10,6 +10,8 @@ import cProfile
 import io
 import os
 import pstats
+import sys
+import threading
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -67,10 +69,20 @@ def render_pstats_summary_text(
 ) -> str:
     """Render a text summary from a `.prof` artifact using `pstats`."""
     stream = io.StringIO()
-    stats = pstats.Stats(str(prof_path), stream=stream)
+    try:
+        stats = pstats.Stats(str(prof_path), stream=stream)
+    except (EOFError, OSError, TypeError, ValueError):
+        return (
+            "Profiling data unavailable (profiling suppressed or no samples captured).\n"
+        )
     stats.sort_stats(sort_key)
     stats.print_stats(max(1, int(top_n)))
-    return stream.getvalue()
+    rendered = stream.getvalue()
+    if not rendered.strip():
+        return (
+            "Profiling data unavailable (profiling suppressed or no samples captured).\n"
+        )
+    return rendered
 
 
 def run_cprofile_callable(
@@ -96,13 +108,41 @@ def run_cprofile_callable(
 
     profiler = cProfile.Profile()
     start = time.perf_counter()
-    result = profiler.runcall(func, *args, **kwargs)
+    prior_sys_profile = sys.getprofile()
+    prior_thread_profile = (
+        threading.getprofile() if hasattr(threading, "getprofile") else None
+    )
+    if prior_sys_profile is not None:
+        sys.setprofile(None)
+    if prior_thread_profile is not None:
+        threading.setprofile(None)
+    profiling_suppressed = False
+    try:
+        try:
+            profiler.enable()
+        except ValueError:
+            profiling_suppressed = True
+        if profiling_suppressed:
+            result = func(*args, **kwargs)
+        else:
+            try:
+                result = func(*args, **kwargs)
+            finally:
+                profiler.disable()
+    finally:
+        if prior_thread_profile is not None:
+            threading.setprofile(prior_thread_profile)
+        if prior_sys_profile is not None:
+            sys.setprofile(prior_sys_profile)
     elapsed = time.perf_counter() - start
     profiler.dump_stats(str(prof_path))
 
-    summary_text = render_pstats_summary_text(
-        prof_path, sort_key=sort_key, top_n=max(1, int(top_n))
-    )
+    if profiling_suppressed:
+        summary_text = "Profiling suppressed: another profiler is already active.\n"
+    else:
+        summary_text = render_pstats_summary_text(
+            prof_path, sort_key=sort_key, top_n=max(1, int(top_n))
+        )
     summary_header = (
         f"# cProfile summary\n"
         f"label: {label}\n"
