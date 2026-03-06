@@ -45,3 +45,5 @@ Thumbs.db
 !.local/perf_profiles/.gitkeep
 NOTE.md
 *.obj
+src/tz_player/binaries/**/tz_player_native_helper
+src/tz_player/binaries/**/tz_player_native_helper.exe
