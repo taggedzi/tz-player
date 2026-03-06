@@ -132,7 +132,7 @@ def _print_github_followups(version: str, tag: str) -> None:
         f"   gh workflow run Release --ref main --field version={tag} --field force_rebuild=true --field prerelease={prerelease} --field sign_artifacts=false"
     )
     _log("6) If the local script fails after creating the release branch/PR:")
-    _log(f"   ./tools/release.sh {tag} --resume")
+    _log(f"   python tools/release.py {tag} --resume")
 
 
 def _recovery_hints(
@@ -154,7 +154,7 @@ def _recovery_hints(
         return [
             "Recovery:",
             f"Release branch {branch} already exists. After fixing the issue, resume with:",
-            f"./tools/release.sh {tag} --resume",
+            f"python tools/release.py {tag} --resume",
         ]
     return [
         "Recovery:",

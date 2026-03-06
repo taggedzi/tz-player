@@ -35,7 +35,7 @@ Use forms like `0.3.0`, `0.3.1`, or `0.4.0rc1`. Tag format is always `v<version>
 2. Run the one-command local release entrypoint from a clean `main`:
 
 ```bash
-./tools/release.sh 0.5.1
+python tools/release.py 0.5.1
 ```
 
 The command prints a deterministic follow-up block after the tag is pushed. The exact template is for **rebuilds only** (do not run it during the normal flow):
@@ -48,13 +48,13 @@ Alternative equivalent entrypoints:
 
 ```bash
 make release VERSION=0.5.1
-python tools/release.py 0.5.1
+tools\\release.cmd 0.5.1  # Windows helper
 
 Resume after a failed attempt (for example after fixing a lint/test error on the
 release branch):
 
 ```bash
-./tools/release.sh 0.5.1 --resume
+python tools/release.py 0.5.1 --resume
 ```
 ```
 
@@ -113,7 +113,7 @@ If you publish to package indexes, do it only after the GitHub release is verifi
 
 1. Script fails before PR creation:
 Fix local/tooling issue and re-run the same command you used (for example
-`./tools/release.sh <version>`).
+`python tools/release.py <version>` or `tools\\release.cmd <version>` on Windows).
 
 2. Script reports `no checks reported`:
 `release.py` continues and tries auto-merge. If auto-merge is unavailable, merge the PR manually in GitHub and proceed with release workflow dispatch.
@@ -122,7 +122,7 @@ Fix local/tooling issue and re-run the same command you used (for example
 Merge manually (respecting repo rules), then resume:
 
 ```bash
-./tools/release.sh <version> --resume
+python tools/release.py <version> --resume
 ```
 
 4. Release exists but assets are missing/wrong:
@@ -133,7 +133,7 @@ This means that version was already used. Pick the next version and re-run.
 
 6. Branch protection blocks automation:
 If PR merge is blocked, resolve required approvals/checks and rerun with
-`./tools/release.sh <version> --resume`.
+`python tools/release.py <version> --resume`.
 
 ## Notes
 
