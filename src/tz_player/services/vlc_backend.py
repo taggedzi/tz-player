@@ -8,9 +8,9 @@ that thread and the asyncio loop.
 from __future__ import annotations
 
 import asyncio
+import os
 import queue
 import threading
-import os
 from collections.abc import Awaitable, Callable, Coroutine
 from dataclasses import dataclass
 from typing import Any, cast
@@ -131,7 +131,10 @@ class VLCPlaybackBackend:
             vlc_args: list[str] = []
             if not os.environ.get("TZ_PLAYER_VLC_VERBOSE"):
                 vlc_args.append("--quiet")
-            instance = vlc.Instance(*vlc_args)
+            try:
+                instance = vlc.Instance(*vlc_args)
+            except TypeError:
+                instance = vlc.Instance()
             player = instance.media_player_new()
         except Exception as exc:  # pragma: no cover - depends on VLC install
             self._notify_future_exception(

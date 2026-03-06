@@ -103,7 +103,10 @@ def probe_vlc(*, required: bool) -> DoctorCheck:
         vlc_args: list[str] = []
         if not os.environ.get("TZ_PLAYER_VLC_VERBOSE"):
             vlc_args.append("--quiet")
-        instance = vlc.Instance(*vlc_args)
+        try:
+            instance = vlc.Instance(*vlc_args)
+        except TypeError:
+            instance = vlc.Instance()
     except Exception as exc:
         return DoctorCheck(
             name="vlc/libvlc",
