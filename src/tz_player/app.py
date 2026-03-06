@@ -70,6 +70,7 @@ from .services.waveform_proxy_store import (
     SqliteWaveformProxyStore,
     WaveformProxyParams,
 )
+from .setup import run_setup
 from .state_store import AppState, load_state_with_notice, save_state
 from .ui.actions_menu import ActionsMenuDismissed, ActionsMenuPopup, ActionsMenuSelected
 from .ui.modals.error import ErrorModal
@@ -2131,9 +2132,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "command",
         nargs="?",
-        choices=("run", "doctor"),
+        choices=("run", "doctor", "setup"),
         default="run",
-        help="Run player UI (default) or print environment diagnostics.",
+        help="Run player UI (default), print diagnostics, or guide setup.",
     )
     parser.add_argument(
         "--version", action="version", version=f"%(prog)s {__version__}"
@@ -2190,10 +2191,13 @@ def main() -> int:
             log_file=Path(args.log_file) if args.log_file else None,
             console=False,
         )
-        if getattr(args, "command", "run") == "doctor":
+        command = getattr(args, "command", "run")
+        if command == "doctor":
             report = run_doctor(args.backend or "vlc")
             print(render_report(report))
             return report.exit_code
+        if command == "setup":
+            return run_setup(backend=args.backend or "vlc")
         logging.getLogger(__name__).info("Starting tz-player TUI")
         visualizer_fps = getattr(args, "visualizer_fps", None)
         visualizer_responsiveness = getattr(args, "visualizer_responsiveness", None)

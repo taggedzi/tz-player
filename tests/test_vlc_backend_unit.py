@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import sys
 import threading
 
 import pytest
@@ -120,5 +121,22 @@ def test_shutdown_raises_when_thread_does_not_stop() -> None:
         backend._thread = _StuckThread()  # type: ignore[assignment]  # noqa: SLF001
         with pytest.raises(RuntimeError, match="did not stop within 2\\.0 seconds"):
             await backend.shutdown()
+
+    asyncio.run(run())
+
+
+def test_start_fails_fast_when_vlc_unavailable(monkeypatch) -> None:
+    class _BrokenVlc:
+        @staticmethod
+        def Instance() -> None:  # noqa: N802
+            raise RuntimeError("no vlc")
+
+    monkeypatch.setitem(sys.modules, "vlc", _BrokenVlc())
+
+    async def run() -> None:
+        backend = VLCPlaybackBackend()
+        with pytest.raises(RuntimeError, match="VLC backend unavailable"):
+            await asyncio.wait_for(backend.start(), timeout=1.0)
+        await backend.shutdown()
 
     asyncio.run(run())

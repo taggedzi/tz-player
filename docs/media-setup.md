@@ -1,6 +1,26 @@
 # Media Tool Setup
 
-This guide is for users who want real playback (`vlc` backend) and optional non-WAV envelope analysis (`ffmpeg`).
+This guide is for users who want real playback (`vlc` backend) and optional
+non-WAV envelope analysis (`ffmpeg`).
+
+## Quick Setup (Recommended)
+
+Run the guided installer:
+
+```bash
+tz-player setup
+```
+
+Windows helper script (from a repo checkout):
+
+```bat
+tools\setup.cmd
+```
+
+The setup flow:
+- Requires VLC (audio playback).
+- Offers FFmpeg (optional, enables responsive visualizations).
+- Explains the bundled native helper toggle for faster analysis.
 
 ## VLC/libVLC (Playback)
 

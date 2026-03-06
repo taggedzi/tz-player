@@ -330,6 +330,36 @@ def test_app_main_doctor_path_returns_report_exit_code(
     assert "doctor output" in captured.out
 
 
+def test_app_main_setup_path_returns_exit_code(monkeypatch, tmp_path, capsys) -> None:
+    args = SimpleNamespace(
+        command="setup",
+        verbose=False,
+        quiet=False,
+        log_file=None,
+        backend="vlc",
+    )
+
+    class FakeParser:
+        def parse_args(self):
+            return args
+
+    class ForbiddenApp:
+        def __init__(self, *, backend_name: str | None = None) -> None:
+            raise AssertionError("TUI app should not be constructed in setup mode")
+
+    monkeypatch.setattr(app_module, "build_parser", lambda: FakeParser())
+    monkeypatch.setattr(app_module, "setup_logging", lambda **kwargs: None)
+    monkeypatch.setattr(app_module, "log_dir", lambda: tmp_path / "logs")
+    monkeypatch.setattr(app_module, "TzPlayerApp", ForbiddenApp)
+    monkeypatch.setattr(app_module, "run_setup", lambda **_kwargs: 0, raising=False)
+
+    rc = app_module.main()
+    captured = capsys.readouterr()
+
+    assert rc == 0
+    assert captured.err == ""
+
+
 def test_gui_main_returns_nonzero_on_startup_failure(
     monkeypatch, tmp_path, capsys
 ) -> None:

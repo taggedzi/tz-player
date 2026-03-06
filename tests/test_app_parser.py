@@ -20,6 +20,12 @@ def test_app_parser_accepts_doctor_command() -> None:
     assert args.backend == "fake"
 
 
+def test_app_parser_accepts_setup_command() -> None:
+    parser = build_parser()
+    args = parser.parse_args(["setup"])
+    assert args.command == "setup"
+
+
 def test_app_parser_accepts_visualizer_fps() -> None:
     parser = build_parser()
     args = parser.parse_args(["--visualizer-fps", "24"])
