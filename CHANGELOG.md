@@ -20,6 +20,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - None.
 
 
+## [1.1.1] - 2026-03-06
+
+### Added
+
+- None.
+
+### Changed
+
+- Increase native helper timeout default
+
+### Fixed
+
+- Fix Windows helper artifact upload path
 ## [1.1.0] - 2026-03-06
 
 ### Added

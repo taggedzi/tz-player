@@ -7,7 +7,7 @@ import platform
 __all__ = ["PROJECT_URL", "__version__", "build_help_epilog"]
 
 # Manually updated for each release.
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 PROJECT_URL = "https://github.com/taggedzi/tz-player"
 
 
