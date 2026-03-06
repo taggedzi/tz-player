@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime as dt
 import importlib.util
 from pathlib import Path
 
@@ -36,3 +37,43 @@ def test_workflow_run_name_uses_normalized_tag_prefix() -> None:
 def test_prerelease_detection() -> None:
     assert release._is_prerelease("1.2.3rc1") is True
     assert release._is_prerelease("1.2.3") is False
+
+
+def test_select_run_id_tolerates_small_clock_skew() -> None:
+    started_at = dt.datetime(2026, 3, 6, 18, 0, tzinfo=dt.timezone.utc)
+    runs = [
+        {
+            "databaseId": 1001,
+            "displayTitle": "Release Cut v1.1.2",
+            "createdAt": "2026-03-06T17:58:30Z",
+        }
+    ]
+    assert (
+        release._select_run_id(version="1.1.2", runs=runs, started_at=started_at)
+        == 1001
+    )
+
+
+def test_select_run_id_prefers_newest_matching_title() -> None:
+    started_at = dt.datetime(2026, 3, 6, 18, 0, tzinfo=dt.timezone.utc)
+    runs = [
+        {
+            "databaseId": 1000,
+            "displayTitle": "Release Cut v1.1.2",
+            "createdAt": "2026-03-05T12:00:00Z",
+        },
+        {
+            "databaseId": 1002,
+            "displayTitle": "Release Cut v1.1.2",
+            "createdAt": "2026-03-06T18:01:00Z",
+        },
+        {
+            "databaseId": 1003,
+            "displayTitle": "Release Cut v1.1.1",
+            "createdAt": "2026-03-06T18:02:00Z",
+        },
+    ]
+    assert (
+        release._select_run_id(version="1.1.2", runs=runs, started_at=started_at)
+        == 1002
+    )

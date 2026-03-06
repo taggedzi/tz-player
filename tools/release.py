@@ -66,24 +66,51 @@ def _list_release_cut_runs() -> list[dict[str, object]]:
     return json.loads(raw)
 
 
-def _find_dispatched_run_id(*, version: str, started_at: dt.datetime) -> int:
-    title = _workflow_run_name(version)
-    deadline = time.time() + POLL_TIMEOUT_SECONDS
+def _select_run_id(
+    *, version: str, runs: list[dict[str, object]], started_at: dt.datetime
+) -> int | None:
+    """Pick the most likely run ID for a freshly dispatched release workflow.
 
+    GitHub run timestamps can be a little behind local wall clock, so allow
+    modest skew before falling back to the newest matching run title.
+    """
+    title = _workflow_run_name(version)
+    skew_tolerance = dt.timedelta(minutes=5)
+    matching: list[tuple[int, dt.datetime]] = []
+    for run in runs:
+        if str(run.get("displayTitle", "")) != title:
+            continue
+        run_id = run.get("databaseId")
+        if not isinstance(run_id, int):
+            continue
+        created_at_raw = str(run.get("createdAt", "")).replace("Z", "+00:00")
+        try:
+            created_at = dt.datetime.fromisoformat(created_at_raw)
+        except ValueError:
+            created_at = dt.datetime.fromtimestamp(0, tz=dt.timezone.utc)
+        matching.append((run_id, created_at))
+
+    if not matching:
+        return None
+
+    fresh = [
+        (run_id, created_at)
+        for run_id, created_at in matching
+        if created_at >= started_at - skew_tolerance
+    ]
+    if fresh:
+        return max(fresh, key=lambda item: item[1])[0]
+    return max(matching, key=lambda item: item[1])[0]
+
+
+def _find_dispatched_run_id(*, version: str, started_at: dt.datetime) -> int:
+    deadline = time.time() + POLL_TIMEOUT_SECONDS
     while time.time() < deadline:
-        for run in _list_release_cut_runs():
-            created_at_raw = str(run.get("createdAt", "")).replace("Z", "+00:00")
-            try:
-                created_at = dt.datetime.fromisoformat(created_at_raw)
-            except ValueError:
-                continue
-            if created_at < started_at:
-                continue
-            if str(run.get("displayTitle", "")) != title:
-                continue
-            run_id = run.get("databaseId")
-            if isinstance(run_id, int):
-                return run_id
+        run_id = _select_run_id(
+            version=version, runs=_list_release_cut_runs(), started_at=started_at
+        )
+        if run_id is not None:
+            return run_id
         time.sleep(POLL_SECONDS)
 
     raise RuntimeError(
@@ -115,7 +142,7 @@ def run_release(
     sign_flag = str(sign_artifacts).lower()
 
     _log(f"Dispatching Release Cut workflow for {tag}")
-    started_at = dt.datetime.now(dt.UTC)
+    started_at = dt.datetime.now(dt.timezone.utc)
     _run(
         [
             "gh",
