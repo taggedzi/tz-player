@@ -213,27 +213,27 @@ jobs:
 
       - name: Release artifact guardrail
         run: |
-          if ! python -m zipfile -l dist/*.whl | rg -i "binaries/linux/x86_64/native_spectrum_helper_c_poc"; then
+          if ! python -m zipfile -l dist/*.whl | grep -qi "binaries/linux/x86_64/native_spectrum_helper_c_poc"; then
             echo "Release package does not include bundled native helper binaries."
             exit 1
           fi
-          if ! python -m zipfile -l dist/*.whl | rg -i "binaries/windows/x86_64/native_spectrum_helper_c_poc\\.exe"; then
+          if ! python -m zipfile -l dist/*.whl | grep -qi "binaries/windows/x86_64/native_spectrum_helper_c_poc\\.exe"; then
             echo "Release package does not include Windows bundled helper binary."
             exit 1
           fi
-          if python -m zipfile -l dist/*.whl | rg -i "libvlc\\.so|libvlc\\.dylib|vlc\\.dll|ffmpeg|avcodec|avformat|avutil|swresample|swscale"; then
+          if python -m zipfile -l dist/*.whl | grep -qiE "libvlc\\.so|libvlc\\.dylib|vlc\\.dll|ffmpeg|avcodec|avformat|avutil|swresample|swscale"; then
             echo "Release policy violation: found bundled media/runtime binaries in wheel."
             exit 1
           fi
-          if ! tar -tf dist/*.tar.gz | rg -i "tz_player/binaries/linux/x86_64/native_spectrum_helper_c_poc"; then
+          if ! tar -tf dist/*.tar.gz | grep -qi "tz_player/binaries/linux/x86_64/native_spectrum_helper_c_poc"; then
             echo "Source distribution does not include bundled Linux helper binary."
             exit 1
           fi
-          if ! tar -tf dist/*.tar.gz | rg -i "tz_player/binaries/windows/x86_64/native_spectrum_helper_c_poc\\.exe"; then
+          if ! tar -tf dist/*.tar.gz | grep -qi "tz_player/binaries/windows/x86_64/native_spectrum_helper_c_poc\\.exe"; then
             echo "Source distribution does not include bundled Windows helper binary."
             exit 1
           fi
-          if tar -tf dist/*.tar.gz | rg -i "libvlc\\.so|libvlc\\.dylib|vlc\\.dll|ffmpeg|avcodec|avformat|avutil|swresample|swscale"; then
+          if tar -tf dist/*.tar.gz | grep -qiE "libvlc\\.so|libvlc\\.dylib|vlc\\.dll|ffmpeg|avcodec|avformat|avutil|swresample|swscale"; then
             echo "Release policy violation: found bundled media/runtime binaries in sdist."
             exit 1
           fi
