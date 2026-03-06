@@ -1,5 +1,6 @@
 param(
-    [string]$OutPath = "$env:TEMP\tz_player_native_helper.exe",
+    [string]$OutPath,
+    [string]$OutDir,
     [switch]$SkipMsvcBootstrap
 )
 
@@ -7,6 +8,13 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
+$defaultOutDir = Join-Path $repoRoot "src\tz_player\binaries\windows\x86_64"
+if (-not $OutDir) {
+    $OutDir = $defaultOutDir
+}
+if (-not $OutPath) {
+    $OutPath = Join-Path $OutDir "tz_player_native_helper.exe"
+}
 $src = Join-Path $repoRoot "tools\tz_player_native_helper.c"
 $outDir = Split-Path -Parent $OutPath
 if (-not (Test-Path -LiteralPath $outDir)) {
