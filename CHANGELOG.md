@@ -20,6 +20,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - None.
 
 
+## [1.1.0] - 2026-03-06
+
+### Added
+
+- Add AI assistance notice
+- Added binaries to gitignore file
+- Add guided setup command and Windows helper
+
+### Changed
+
+- Update README badges
+- Document VLC as required external dependency
+- Lint fix
+- Harden perf profiling artifacts
+- Lint fix and Error fix for unit test
+- Silence VLC logs by default
+- Harden native helper limits and concurrency
+- Document native helper default behavior
+- Default native helper usage via state config
+- Default helper build output to packaged path
+- Rename native helper artifacts and docs
+- Archive completed TODO items
+- Document guided setup flow
+
+### Fixed
+
+- None.
 ## [1.0.3] - 2026-03-05
 
 ### Added
