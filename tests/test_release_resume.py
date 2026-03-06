@@ -1,4 +1,21 @@
-from tools import release
+from __future__ import annotations
+
+import importlib.util
+from pathlib import Path
+
+
+def _load_release_module():
+    repo_root = Path(__file__).resolve().parents[1]
+    release_path = repo_root / "tools" / "release.py"
+    spec = importlib.util.spec_from_file_location("tz_release", release_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Failed to load release module from {release_path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+release = _load_release_module()
 
 
 def test_recovery_hints_when_tag_exists() -> None:
