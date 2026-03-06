@@ -10,6 +10,8 @@ from tz_player.services.audio_analysis_bundle import analyze_track_analysis_bund
 from tz_player.services.audio_beat_analysis import BeatAnalysisResult
 from tz_player.services.audio_spectrum_analysis import SpectrumAnalysisResult
 from tz_player.services.audio_spectrum_native_cli import (
+    NATIVE_SPECTRUM_HELPER_CMD_ENV,
+    NATIVE_SPECTRUM_HELPER_USE_BUNDLED_ENV,
     NativeSpectrumHelperAttempt,
     NativeSpectrumHelperResult,
     NativeSpectrumHelperTimingBreakdown,
@@ -31,7 +33,11 @@ def _write_wave(path: Path, *, frames: int = 44_100, sample_rate: int = 44_100) 
         handle.writeframes(bytes(payload))
 
 
-def test_analyze_track_analysis_bundle_returns_all_outputs(tmp_path) -> None:
+def test_analyze_track_analysis_bundle_returns_all_outputs(
+    tmp_path, monkeypatch
+) -> None:
+    monkeypatch.delenv(NATIVE_SPECTRUM_HELPER_CMD_ENV, raising=False)
+    monkeypatch.setenv(NATIVE_SPECTRUM_HELPER_USE_BUNDLED_ENV, "0")
     track = tmp_path / "tone.wav"
     _write_wave(track)
 

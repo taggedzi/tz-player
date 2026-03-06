@@ -8,6 +8,7 @@ import sys
 import webbrowser
 
 from .doctor import DoctorCheck, probe_ffmpeg, probe_vlc
+from .paths import state_path
 
 VLC_WINGET_ID = "VideoLAN.VLC"
 FFMPEG_WINGET_ID = "Gyan.FFmpeg"
@@ -48,10 +49,10 @@ def run_setup(*, backend: str = "vlc") -> int:
         print("")
 
     print("Setup complete.")
-    print(
-        "Optional: set TZ_PLAYER_USE_BUNDLED_NATIVE_SPECTRUM_HELPER=1 to enable the"
-        " bundled native helper for faster analysis."
-    )
+    print("Optional: configure native helper usage in your state file:")
+    print(f"  {state_path()}")
+    print("  native_helper_enabled: true|false")
+    print("  native_helper_timeout_s: seconds")
     return 0
 
 

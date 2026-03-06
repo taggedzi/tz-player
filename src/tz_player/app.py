@@ -55,6 +55,7 @@ from .services.audio_envelope_analysis import (
     requires_ffmpeg_for_envelope,
 )
 from .services.audio_envelope_store import SqliteEnvelopeStore
+from .services.audio_spectrum_native_cli import apply_native_helper_env
 from .services.audio_tags import read_audio_tags
 from .services.beat_service import BeatService
 from .services.beat_store import BeatParams, SqliteBeatStore
@@ -484,6 +485,10 @@ class TzPlayerApp(App):
                         self.state.visualizer_plugin_runtime_mode
                     )
                 ),
+            )
+            apply_native_helper_env(
+                enabled=self.state.native_helper_enabled,
+                timeout_s=self.state.native_helper_timeout_s,
             )
             self._spectrum_params = SpectrumParams(
                 band_count=48,

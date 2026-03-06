@@ -57,6 +57,11 @@ tz-player --visualizer-responsiveness balanced
 Notes:
 - Default backend is `vlc`.
 - The VLC backend requires VLC/libVLC installed on your system.
+- The native helper is enabled by default when bundled binaries are present.
+  - Configure in the state file (`native_helper_enabled`, `native_helper_timeout_s`).
+  - Environment variables (`TZ_PLAYER_NATIVE_SPECTRUM_HELPER_CMD`,
+    `TZ_PLAYER_USE_BUNDLED_NATIVE_SPECTRUM_HELPER`, `TZ_PLAYER_NATIVE_SPECTRUM_HELPER_TIMEOUT_S`)
+    override the state file.
 
 GUI entrypoint supports the same flag:
 

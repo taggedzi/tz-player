@@ -13,6 +13,7 @@ from tz_player.services.audio_spectrum_native_cli import (
     NATIVE_SPECTRUM_HELPER_USE_BUNDLED_ENV,
     analyze_track_spectrum_via_native_cli,
     analyze_track_spectrum_via_native_cli_attempt,
+    apply_native_helper_env,
     get_bundled_native_spectrum_helper_config,
     get_native_spectrum_helper_config,
 )
@@ -105,6 +106,24 @@ def test_get_native_spectrum_helper_config_preserves_windows_path_backslashes(
     assert cfg.argv == (
         r"C:\Users\tagge\AppData\Local\Temp\tz_player_native_helper.exe",
     )
+
+
+def test_apply_native_helper_env_sets_defaults_when_empty() -> None:
+    env: dict[str, str] = {}
+    apply_native_helper_env(enabled=True, timeout_s=12.5, env=env)
+    assert env[NATIVE_SPECTRUM_HELPER_USE_BUNDLED_ENV] == "1"
+    assert env[NATIVE_SPECTRUM_HELPER_TIMEOUT_ENV] == "12.5"
+
+
+def test_apply_native_helper_env_respects_existing_env() -> None:
+    env = {
+        NATIVE_SPECTRUM_HELPER_CMD_ENV: "helper-bin",
+        NATIVE_SPECTRUM_HELPER_TIMEOUT_ENV: "5.0",
+    }
+    apply_native_helper_env(enabled=False, timeout_s=9.0, env=env)
+    assert env[NATIVE_SPECTRUM_HELPER_CMD_ENV] == "helper-bin"
+    assert env[NATIVE_SPECTRUM_HELPER_TIMEOUT_ENV] == "5.0"
+    assert NATIVE_SPECTRUM_HELPER_USE_BUNDLED_ENV not in env
 
 
 def test_analyze_track_spectrum_via_native_cli_parses_response(monkeypatch) -> None:

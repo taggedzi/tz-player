@@ -8,7 +8,7 @@ import platform
 import shlex
 import subprocess
 import sys
-from collections.abc import Mapping
+from collections.abc import Mapping, MutableMapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -91,6 +91,24 @@ def get_native_spectrum_helper_config(
     if bundled_cfg is not None:
         return bundled_cfg
     return None
+
+
+def apply_native_helper_env(
+    *,
+    enabled: bool,
+    timeout_s: float,
+    env: MutableMapping[str, str] | None = None,
+) -> None:
+    """Apply default helper config into env without overriding explicit env vars."""
+    values = os.environ if env is None else env
+
+    if NATIVE_SPECTRUM_HELPER_USE_BUNDLED_ENV not in values and (
+        NATIVE_SPECTRUM_HELPER_CMD_ENV not in values
+    ):
+        values[NATIVE_SPECTRUM_HELPER_USE_BUNDLED_ENV] = "1" if enabled else "0"
+
+    if NATIVE_SPECTRUM_HELPER_TIMEOUT_ENV not in values and timeout_s > 0:
+        values[NATIVE_SPECTRUM_HELPER_TIMEOUT_ENV] = str(timeout_s)
 
 
 def _parse_helper_command(raw_cmd: str) -> tuple[str, ...] | None:

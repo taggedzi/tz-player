@@ -20,7 +20,7 @@ tools\setup.cmd
 The setup flow:
 - Requires VLC (audio playback).
 - Offers FFmpeg (optional, enables responsive visualizations).
-- Explains the bundled native helper toggle for faster analysis.
+- Notes the bundled native helper settings in the state file for faster analysis.
 
 ## VLC/libVLC (Playback)
 

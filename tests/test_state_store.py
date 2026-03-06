@@ -23,6 +23,8 @@ def test_state_roundtrip(tmp_path) -> None:
         visualizer_responsiveness_profile="aggressive",
         ansi_enabled=False,
         log_level="DEBUG",
+        native_helper_enabled=False,
+        native_helper_timeout_s=12.5,
     )
 
     save_state(path, state)
