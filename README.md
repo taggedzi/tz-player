@@ -93,6 +93,10 @@ Windows helper (from a repo checkout):
 tools\setup.cmd
 ```
 
+Native helper defaults:
+- If bundled helper binaries are present, they are enabled by default.
+- Configure in the state file (`native_helper_enabled`, `native_helper_timeout_s`).
+
 Install VLC from:
 
 [https://www.videolan.org/vlc/](https://www.videolan.org/vlc/)
