@@ -81,9 +81,27 @@ You must have VLC installed on your system for real audio playback.
 
 If VLC is not installed or not found, the player cannot play music.
 
+Quick setup (recommended):
+
+```bash
+tz-player setup
+```
+
+Windows helper (from a repo checkout):
+
+```bat
+tools\setup.cmd
+```
+
 Install VLC from:
 
 [https://www.videolan.org/vlc/](https://www.videolan.org/vlc/)
+
+## 2. FFmpeg (Optional)
+
+FFmpeg enables responsive visualizations (optional).
+
+See `docs/media-setup.md` for OS-specific commands.
 
 ---
 
@@ -115,6 +133,12 @@ Run:
 
 ```bash
 tz-player
+```
+
+Guided setup (recommended):
+
+```bash
+tz-player setup
 ```
 
 ---

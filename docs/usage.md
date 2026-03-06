@@ -12,6 +12,18 @@ Run environment diagnostics:
 tz-player doctor
 ```
 
+Run guided setup (VLC required, FFmpeg optional):
+
+```
+tz-player setup
+```
+
+Windows helper (from a repo checkout):
+
+```
+tools\setup.cmd
+```
+
 Select a playback backend:
 
 ```
