@@ -1,11 +1,11 @@
 # tz-player
 
 [![CI](https://github.com/taggedzi/tz-player/actions/workflows/ci.yml/badge.svg)](https://github.com/taggedzi/tz-player/actions)
+![Release](https://img.shields.io/github/v/release/taggedzi/tz-player)
 ![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue)
-![Platform: Linux](https://img.shields.io/badge/platform-linux-lightgrey)
-![Platform: Windows](https://img.shields.io/badge/platform-windows-lightgrey)
-![Platform: macOS (untested)](https://img.shields.io/badge/platform-macOS-untested-yellow)
+![Platforms: Linux | Windows | macOS (untested)](https://img.shields.io/badge/platforms-linux%20%7C%20windows%20%7C%20macOS%20(untested)-lightgrey)
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
+![Style: ruff](https://img.shields.io/badge/style-ruff-261230)
 
 A clean, keyboard-driven music player for the terminal.
 
