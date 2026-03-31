@@ -153,6 +153,7 @@ class PlayerService:
         self._poll_task: asyncio.Task[None] | None = None
         self._poll_interval = max(0.05, min(1.0, float(poll_interval_s)))
         self._end_handled_item_id: int | None = None
+        self._expecting_transition_stop: bool = False
         self._max_position_seen_ms = self._state.position_ms
         self._track_started_monotonic_s: float | None = None
         self._shuffle_order: list[int] = []
@@ -231,11 +232,16 @@ class PlayerService:
                 error=None,
             )
             # A stale manual-stop latch must never suppress natural track-end advance.
+            _previous_status = self._state.status
             self._stop_requested = False
             self._end_handled_item_id = None
             self._max_position_seen_ms = 0
             self._track_started_monotonic_s = None
             shuffle_enabled = self._state.shuffle
+            # If we were actively playing, VLC will emit a "stopped" event as it
+            # transitions media.  Mark it so the event handler can discard it instead
+            # of treating it as a natural track-end.
+            self._expecting_transition_stop = _previous_status in {"playing", "paused"}
         await self._emit_state()
         if shuffle_enabled:
             await self._ensure_shuffle_position(playlist_id, item_id)
@@ -300,6 +306,9 @@ class PlayerService:
                 position_ms=0,
             )
             self._track_started_monotonic_s = time.monotonic()
+            current_speed = self._state.speed
+        if current_speed != 1.0:
+            await self._backend.set_speed(current_speed)
         await self._emit_event(TrackChanged(track_info))
         await self._emit_state()
 
@@ -651,6 +660,12 @@ class PlayerService:
                     "paused",
                 }:
                     return
+                if event.status == "stopped" and self._expecting_transition_stop:
+                    # Discard the stop VLC emits when switching media mid-play.
+                    self._expecting_transition_stop = False
+                    return
+                if event.status == "playing":
+                    self._expecting_transition_stop = False
                 if (
                     event.status == "stopped"
                     and not self._stop_requested
@@ -859,9 +874,11 @@ class PlayerService:
                 if status not in {"playing", "paused"}:
                     continue
                 try:
-                    position = await self._backend.get_position_ms()
-                    duration = await self._backend.get_duration_ms()
-                    backend_state = await self._backend.get_state()
+                    (
+                        position,
+                        duration,
+                        backend_state,
+                    ) = await self._backend.get_transport_snapshot()
                     reading = await self._audio_level_service.sample(
                         status=status,
                         position_ms=position,

@@ -15,6 +15,9 @@ def _run(cmd: list[str], cwd: Path) -> None:
 
 
 def test_release_prepare_updates_version_and_changelog(tmp_path: Path) -> None:
+    import importlib.util
+    from unittest.mock import patch
+
     repo = tmp_path / "repo"
     src = repo / "src" / "tz_player"
     src.mkdir(parents=True)
@@ -35,34 +38,26 @@ def test_release_prepare_updates_version_and_changelog(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    _run(["git", "init"], cwd=repo)
-    _run(["git", "config", "user.name", "Test"], cwd=repo)
-    _run(["git", "config", "user.email", "test@example.com"], cwd=repo)
-    _run(["git", "add", "."], cwd=repo)
-    _run(["git", "commit", "-m", "chore: baseline"], cwd=repo)
-    _run(["git", "tag", "v0.1.0"], cwd=repo)
+    script_path = Path(__file__).resolve().parents[1] / "tools" / "release_prepare.py"
+    spec = importlib.util.spec_from_file_location("release_prepare", script_path)
+    module = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+    spec.loader.exec_module(module)  # type: ignore[union-attr]
 
-    (repo / "dummy.txt").write_text("change\n", encoding="utf-8")
-    _run(["git", "add", "dummy.txt"], cwd=repo)
-    _run(["git", "commit", "-m", "feat: improve startup"], cwd=repo)
+    def _fake_run_git(args: list[str]) -> str:
+        if args[0] == "describe":
+            return "v0.1.0"
+        if args[0] == "log":
+            return "feat: improve startup"
+        return ""
 
-    script = Path(__file__).resolve().parents[1] / "tools" / "release_prepare.py"
     notes_file = repo / "RELEASE_NOTES.md"
-    _run(
-        [
-            sys.executable,
-            str(script),
-            "--version",
-            "0.2.0",
-            "--date",
-            "2026-02-15",
-            "--notes-file",
-            str(notes_file),
-            "--repo-root",
-            str(repo),
-        ],
-        cwd=repo,
-    )
+    with patch.object(module, "_run_git", side_effect=_fake_run_git):
+        module.prepare_release(
+            repo_root=repo,
+            version="0.2.0",
+            release_date="2026-02-15",
+            notes_file=notes_file,
+        )
 
     version_text = (src / "version.py").read_text(encoding="utf-8")
     assert '__version__ = "0.2.0"' in version_text

@@ -63,7 +63,7 @@ class SliderBar(Widget):
         self.drag_timeout = 0.5
         self._bar_start = 0
         self._bar_length = 0
-        self.can_focus = True
+        self.can_focus = False
 
     @property
     def is_dragging(self) -> bool:
