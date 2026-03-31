@@ -111,6 +111,10 @@ class VLCPlaybackBackend:
     async def get_state(self) -> BackendStatus:
         return await self._submit("get_state")
 
+    async def get_transport_snapshot(self) -> tuple[int, int, BackendStatus]:
+        """Return position, duration, and state in a single VLC thread round-trip."""
+        return await self._submit("get_transport_snapshot")
+
     async def get_level_sample(self) -> LevelSample | None:
         # Optional-gated: python-vlc level extraction is backend/platform dependent.
         return None
@@ -222,6 +226,12 @@ class VLCPlaybackBackend:
             return max(player.get_length(), 0)
         if name == "get_state":
             return _map_state(player)
+        if name == "get_transport_snapshot":
+            return (
+                max(player.get_time(), 0),
+                max(player.get_length(), 0),
+                _map_state(player),
+            )
         raise ValueError(f"Unknown command {name}")
 
     def _emit_event(self, event: BackendEvent) -> None:

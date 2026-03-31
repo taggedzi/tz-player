@@ -1262,6 +1262,13 @@ def test_poll_fallback_advances_when_backend_stops_without_event() -> None:
         async def get_state(self) -> str:
             return self._state
 
+        async def get_transport_snapshot(self):  # type: ignore[no-untyped-def]
+            if self._state == "playing":
+                self._position_ms = min(self._duration_ms, self._position_ms + 350)
+                if self._position_ms >= self._duration_ms:
+                    self._state = "stopped"
+            return self._position_ms, self._duration_ms, self._state
+
     async def emit_event(_event: object) -> None:
         return None
 
@@ -1336,6 +1343,9 @@ def test_poll_fallback_does_not_advance_when_paused_and_backend_idle() -> None:
 
         async def get_state(self) -> str:
             return "idle"
+
+        async def get_transport_snapshot(self):  # type: ignore[no-untyped-def]
+            return 500, 5000, "idle"
 
     async def emit_event(_event: object) -> None:
         return None
@@ -1429,6 +1439,13 @@ def test_poll_fallback_advances_when_backend_goes_idle_without_event() -> None:
         async def get_state(self) -> str:
             return self._state
 
+        async def get_transport_snapshot(self):  # type: ignore[no-untyped-def]
+            if self._state == "playing":
+                self._position_ms = min(self._duration_ms, self._position_ms + 350)
+                if self._position_ms >= self._duration_ms:
+                    self._state = "idle"
+            return self._position_ms, self._duration_ms, self._state
+
     async def emit_event(_event: object) -> None:
         return None
 
@@ -1519,6 +1536,15 @@ def test_poll_fallback_does_not_advance_on_early_idle() -> None:
         async def get_state(self) -> str:
             return self._state
 
+        async def get_transport_snapshot(self):  # type: ignore[no-untyped-def]
+            self._reads += 1
+            if self._state == "playing":
+                self._position_ms = min(self._duration_ms, self._position_ms + 260)
+                if self._reads >= 3:
+                    # Simulate transient early idle with low progress.
+                    self._state = "idle"
+            return self._position_ms, self._duration_ms, self._state
+
     async def emit_event(_event: object) -> None:
         return None
 
@@ -1606,6 +1632,14 @@ def test_poll_fallback_does_not_advance_on_idle_with_stale_high_position() -> No
 
         async def get_state(self) -> str:
             return self._state
+
+        async def get_transport_snapshot(self):  # type: ignore[no-untyped-def]
+            self._reads += 1
+            if self._state == "playing" and self._reads == 2:
+                # Simulate bogus near-end position with premature idle transition.
+                self._position_ms = max(0, self._duration_ms - 50)
+                self._state = "idle"
+            return self._position_ms, self._duration_ms, self._state
 
     async def emit_event(_event: object) -> None:
         return None

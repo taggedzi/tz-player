@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -rn \"time.sleep\\\\|\\\\.sleep\\\\|blocking\\\\|run_blocking\" src/tz_player/services/*.py)"
+    ]
+  }
+}

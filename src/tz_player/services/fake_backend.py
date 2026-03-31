@@ -136,6 +136,10 @@ class FakePlaybackBackend:
         async with self._lock:
             return self._state.status
 
+    async def get_transport_snapshot(self) -> tuple[int, int, BackendStatus]:
+        async with self._lock:
+            return self._state.position_ms, self._state.duration_ms, self._state.status
+
     async def get_level_sample(self) -> LevelSample | None:
         async with self._lock:
             if self._state.status not in {"playing", "paused"}:
