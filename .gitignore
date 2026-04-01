@@ -48,3 +48,4 @@ NOTE.md
 src/tz_player/binaries/**/tz_player_native_helper
 src/tz_player/binaries/**/tz_player_native_helper.exe
 perf_profile.pstats
+.python-version
